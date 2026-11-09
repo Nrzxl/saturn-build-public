@@ -46,3 +46,9 @@ A Web ainda não sincroniza a coleção com Android porque um projeto Supabase S
 ## Por que o Android não ofereceu a 0.7?
 
 O APK gerado em Actions deste repositório é **debug**, não é uma versão com a assinatura Android permanente. O canal de produção `Nrzxl/saturn-downloads/update.json` permanece na 0.6.0 assinada até uma nova release de produção ser verificada e publicada. Nunca tente instalar o APK debug por cima da versão assinada e **não desinstale a versão atual**, pois isso pode apagar suas listas e avaliações locais.
+
+## Atualização assinada no Android sem GitHub Actions privado
+
+A rotina opcional [scripts/release_saturn_windows.ps1](scripts/release_saturn_windows.ps1) foi preparada para rodar **somente no Windows do proprietário** (Flutter, Android SDK, GitHub CLI e a keystore original). Ela verifica o certificado da versão assinada anterior, compila o APK com a mesma chave, valida o pacote e publica a versão no `saturn-downloads/update.json`.
+
+**Não é executada no GitHub Actions público e não envia a keystore ao GitHub.** A senha é solicitada localmente. Essa rotina ainda precisa ser homologada no Windows real antes de ser considerada um instalador de produção. Nunca use uma chave nova ou desinstale o app atual para tentar atualizar.
