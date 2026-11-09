@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SATURN">
+<defs>
+  <radialGradient id="bg"><stop stop-color="#432841"/><stop offset="1" stop-color="#1a1423"/></radialGradient>
+  <radialGradient id="planet" cx="28%" cy="24%"><stop stop-color="#e3b1b4"/><stop offset=".48" stop-color="#a05b83"/><stop offset="1" stop-color="#522b57"/></radialGradient>
+  <linearGradient id="orbit" x1="0%" y1="0%" x2="100%" y2="100%"><stop stop-color="#8b6486"/><stop offset=".45" stop-color="#e6c899"/><stop offset="1" stop-color="#c4a079"/></linearGradient>
+</defs>
+<rect width="512" height="512" rx="102" fill="url(#bg)"/>
+<g fill="#f6d6ad"><circle cx="120" cy="118" r="4"/><circle cx="392" cy="110" r="3"/><circle cx="411" cy="377" r="4"/><circle cx="103" cy="389" r="3"/></g>
+<ellipse cx="256" cy="260" rx="207" ry="71" transform="rotate(-23 256 260)" fill="none" stroke="url(#orbit)" stroke-width="14" opacity=".72"/>
+<circle cx="256" cy="254" r="105" fill="url(#planet)"/>
+<path d="M78 318 C169 390 354 374 439 195" fill="none" stroke="url(#orbit)" stroke-width="16" stroke-linecap="round"/>
+</svg>
