@@ -1970,6 +1970,13 @@ class _SaturnHomeState extends State<SaturnHome>
       (work) => !_isArchived(work) &&
           entry(work)['status'] == 'Em andamento',
     ).toList();
+    final watchlistTitles = allWorks.where((work) =>
+      !_isArchived(work) && work.kind != 'Livro' &&
+      currentWatchlist.contains(work.id)).toList(growable: false);
+    final bookshelfTitles = allWorks.where((work) =>
+      !_isArchived(work) && work.kind == 'Livro' &&
+      (currentWatchlist.contains(work.id) ||
+          entry(work)['status'] != null)).toList(growable: false);
     final ownCount = allWorks.where(
       (work) => !_isArchived(work) &&
           entry(work)['status'] != null,
@@ -1979,7 +1986,7 @@ class _SaturnHomeState extends State<SaturnHome>
         _cinematicHero(ownCount),
         _heading('Minha Watchlist'),
         _collectionSelectionToolbar(
-          allWorks.where((w) => currentWatchlist.contains(w.id)),
+          watchlistTitles,
           watchlist: true,
         ),
         Padding(
@@ -1992,8 +1999,7 @@ class _SaturnHomeState extends State<SaturnHome>
               color: Color(0xFFD7C0C7), fontSize: 12),
           ),
         ),
-        if (!allWorks.any((w) =>
-            w.kind != 'Livro' && currentWatchlist.contains(w.id)))
+        if (watchlistTitles.isEmpty)
           const Padding(
             padding: EdgeInsets.fromLTRB(18, 9, 18, 5),
             child: Text(
@@ -2001,11 +2007,20 @@ class _SaturnHomeState extends State<SaturnHome>
               style: TextStyle(color: Color(0xFFB5A1A9)),
             ),
           ),
-        ...allWorks
-            .where((w) => w.kind != 'Livro' &&
-                currentWatchlist.contains(w.id))
-            .take(8)
-            .map(_tile),
+        _rankedShelf(watchlistTitles,
+            shelfKey: 'saturn-home-watchlist-shelf'),
+        if (watchlistTitles.isNotEmpty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => setState(() {
+                tab = 2;
+                _collectionKind = 'Tudo';
+              }),
+              icon: const Icon(Icons.grid_view_rounded, size: 18),
+              label: const Text('Ver todas as capas'),
+            ),
+          ),
         _heading('Recomendações de filmes'),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 18),
@@ -2051,19 +2066,25 @@ class _SaturnHomeState extends State<SaturnHome>
               fontSize: 12, color: Color(0xFFB5A1A9)),
           ),
         ),
-        ...allWorks
-            .where((w) => w.kind == 'Livro' &&
-                (currentWatchlist.contains(w.id) ||
-                    entry(w)['status'] != null))
-            .take(7)
-            .map(_tile),
-        if (!allWorks.any((w) => w.kind == 'Livro' &&
-            (currentWatchlist.contains(w.id) ||
-                entry(w)['status'] != null)))
+        _rankedShelf(bookshelfTitles,
+            shelfKey: 'saturn-home-bookshelf-shelf'),
+        if (bookshelfTitles.isEmpty)
           const Padding(
             padding: EdgeInsets.fromLTRB(18, 9, 18, 5),
             child: Text('Sua estante está vazia. Adicione um livro para ler.',
               style: TextStyle(color: Color(0xFFB5A1A9))),
+          )
+        else
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => setState(() {
+                tab = 2;
+                _collectionKind = 'Livros';
+              }),
+              icon: const Icon(Icons.auto_stories_outlined, size: 18),
+              label: const Text('Abrir toda a estante'),
+            ),
           ),
         _heading('Livros para descobrir'),
         if (loadingRecommendations && recommendedBooks.isEmpty)
