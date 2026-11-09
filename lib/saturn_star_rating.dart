@@ -12,6 +12,8 @@ class SaturnStarRating extends StatelessWidget {
   final ValueChanged<double>? onChanged;
   final double size;
   final bool showValue;
+  /// Distinguishes an explicitly saved zero-star review from no rating.
+  final bool zeroIsRating;
 
   const SaturnStarRating({
     super.key,
@@ -19,6 +21,7 @@ class SaturnStarRating extends StatelessWidget {
     this.onChanged,
     this.size = 32,
     this.showValue = true,
+    this.zeroIsRating = false,
   });
 
   @override
@@ -60,7 +63,8 @@ class SaturnStarRating extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: 8),
             child: Text(
-              value == 0 ? 'Sem nota' : '${value.toStringAsFixed(1)} / 5',
+              value == 0 && !zeroIsRating
+                  ? 'Sem nota' : '${value.toStringAsFixed(1)} / 5',
               style: const TextStyle(
                 fontSize: 13,
                 color: Color(0xFFF2E8DF),

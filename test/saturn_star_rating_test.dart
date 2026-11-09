@@ -11,6 +11,15 @@ void main() {
     expect(starsFromLegacy(20), 5);
   });
 
+  testWidgets('Zero estrelas explícito não é confundido com sem nota',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(
+      body: SaturnStarRating(stars: 0, zeroIsRating: true),
+    )));
+    expect(find.text('0.0 / 5'), findsOneWidget);
+    expect(find.text('Sem nota'), findsNothing);
+  });
+
   testWidgets('Cinco estrelas permitem tocar em meia estrela', (tester) async {
     double result = -1;
     await tester.pumpWidget(MaterialApp(

@@ -3601,6 +3601,7 @@ class _SaturnHomeState extends State<SaturnHome>
                 const SizedBox(height: 7),
                 SaturnStarRating(
                   stars: starsFromLegacy(rating),
+                  zeroIsRating: ratingSet,
                   onChanged: (stars) => refresh(() {
                     rating = legacyFromStars(stars);
                     ratingSet = true;
