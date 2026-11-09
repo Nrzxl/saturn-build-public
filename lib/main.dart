@@ -155,8 +155,8 @@ class Work {
       };
 }
 
-// Catálogo inicial demonstrativo: dados locais, sem API ou disponibilidade de streaming.
-const works = <Work>[
+// Migration-only metadata for old demo items the user actually interacted with.
+const _legacyDemoWorks = <Work>[
   Work('movie_interstellar', 'Interestelar', 'Filme',
       'Uma jornada espacial sobre tempo, amor e sobrevivência.', 2014),
   Work('movie_pride', 'Orgulho e Preconceito', 'Filme',
@@ -235,10 +235,7 @@ class _SaturnHomeState extends State<SaturnHome>
   bool _selectingWorks = false;
   final Set<String> _selectedWorkIds = <String>{};
   Map<String, Map<String, String>> customTitleLinks = {};
-  List<Work> get allWorks => {
-    for (final work in works) work.id: work,
-    ...savedWorks,
-  }.values.toList(growable: false);
+  List<Work> get allWorks => savedWorks.values.toList(growable: false);
   Map<int, Set<String>> watchlists = {0: <String>{}, 1: <String>{}};
   Set<String> get currentWatchlist =>
       watchlists.putIfAbsent(profile, () => <String>{});
@@ -381,6 +378,16 @@ class _SaturnHomeState extends State<SaturnHome>
         );
         savedWorks = (storedCatalog as Map).map((key, value) =>
           MapEntry(key.toString(), Work.fromJson(Map<String, dynamic>.from(value as Map))));
+        // Never seed demo titles on fresh installs. Only keep previously
+        // referenced examples so no personal review disappears on upgrade.
+        for (final old in _legacyDemoWorks) {
+          final used = shared.contains(old.id) ||
+              watchlists.values.any((items) => items.contains(old.id)) ||
+              records.keys.any((key) => key.endsWith(':' + old.id)) ||
+              _ritualOps.values.any((row) =>
+                  row is Map && row['workId'] == old.id);
+          if (used) savedWorks.putIfAbsent(old.id, () => old);
+        }
         for (final index in watchlists.keys) {
           final previous = SaturnOrbitMerge.flagFromLegacyList(
             watchlists[index] ?? <String>{},
@@ -781,7 +788,7 @@ class _SaturnHomeState extends State<SaturnHome>
     }
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
-      if (work != null && !works.any((old) => old.id == work.id)) {
+      if (work != null && !savedWorks.containsKey(work.id)) {
         savedWorks[work.id] = work;
       }
       _ritualOps[SaturnOrbitRituals.nomination(period, person)] = {
@@ -820,7 +827,7 @@ class _SaturnHomeState extends State<SaturnHome>
     if (work.kind != 'Filme') return;
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
-      if (!works.any((old) => old.id == work.id)) {
+      if (!savedWorks.containsKey(work.id)) {
         savedWorks[work.id] = work;
       }
       _ritualOps[SaturnOrbitRituals.selection(period)] = {
@@ -971,13 +978,9 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   /// Each face reflects only that profile's reading assignments.
-  String _bookFace(int person) {
-    final now = DateTime.now();
-    if (!SaturnOrbitRituals.hasAssignedBooks(
-        _ritualOps, now, person: person)) return '';
-    return SaturnOrbitRituals.pendingBooks(
-      _ritualOps, records, person, now).isEmpty ? '😊' : '😢';
-  }
+  String _bookFace(int person) =>
+      SaturnOrbitRituals.readingFace(
+        _ritualOps, records, person, DateTime.now());
 
   @override
   Widget build(BuildContext context) {
@@ -1010,7 +1013,7 @@ class _SaturnHomeState extends State<SaturnHome>
             onPressed: _showUpdates,
           ),
           PopupMenuButton<int>(
-            tooltip: 'Trocar perfil demonstrativo',
+            tooltip: 'Meu perfil · alternar',
             initialValue: profile,
             onSelected: _setProfile,
             itemBuilder: (context) => [
@@ -1029,10 +1032,13 @@ class _SaturnHomeState extends State<SaturnHome>
                 children: [Text(profiles[profile]),
                   if (_bookFace(profile).isNotEmpty) ...[
                     const SizedBox(width: 6),
-                    Tooltip(message: _bookFace(profile) == '😢'
-                        ? 'Livro do mês pendente: leia e dê sua nota'
-                        : 'Leitura do mês concluída e avaliada',
-                      child: Text(_bookFace(profile))),
+                    Tooltip(
+                       message: _bookFace(profile) == '😢'
+                         ? 'Leitura de mês anterior em atraso'
+                         : _bookFace(profile) == '📖'
+                           ? 'Livro do mês em andamento · prazo até o fim do mês'
+                           : 'Leitura concluída e avaliada',
+                       child: Text(_bookFace(profile))),
                   ],
                 ])),
             ),
@@ -2145,13 +2151,13 @@ class _SaturnHomeState extends State<SaturnHome>
       records, person, selected.id);
     return Tooltip(
       message: finished
-          ? '${profiles[person]} concluiu a leitura e deu nota.'
-          : '${profiles[person]} ainda precisa ler e dar uma nota.',
+          ? 'Leitura concluída e avaliada.'
+          : 'Leitura do mês em andamento · o prazo ainda não terminou.',
       child: Chip(
-        avatar: Text(finished ? '😊' : '😢',
+        avatar: Text(finished ? '😊' : '📖',
           style: const TextStyle(fontSize: 17)),
-        label: Text('${profiles[person]}: '
-            '${finished ? 'Lido e avaliado' : 'Pendente'}'),
+        label: Text(profiles[person] +
+            (finished ? ': Lido e avaliado' : ': Em leitura')),
       ),
     );
   }
