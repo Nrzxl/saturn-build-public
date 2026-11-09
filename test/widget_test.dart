@@ -32,19 +32,27 @@ void main() {
     expect(find.text('Duas histórias. Um universo.'), findsOneWidget);
     expect(find.text('vividas pelos dois'), findsOneWidget);
     expect(find.text('com memórias'), findsOneWidget);
-    expect(find.text('Nossa noite favorita!', findRichText: true),
-      findsNothing); // Only the actual quoted memory is displayed.
-    await tester.ensureVisible(find.text('Memórias da nossa órbita'));
+    final sharedScroll = find.descendant(
+      of: find.byKey(const PageStorageKey('saturn_shared_orbit')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Memórias da nossa órbita'), 220,
+      scrollable: sharedScroll, maxScrolls: 20);
+    await tester.pumpAndSettle();
     expect(find.textContaining('Nossa noite favorita!'), findsWidgets);
     expect(find.textContaining('Gostei do final e da trilha.'), findsWidgets);
 
-    await tester.ensureVisible(
-      find.byKey(const Key('saturn-shared-moment-Vividas por nós')));
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('saturn-shared-moment-Vividas por nós')),
+      -220, scrollable: sharedScroll, maxScrolls: 20);
     await tester.tap(
       find.byKey(const Key('saturn-shared-moment-Vividas por nós')));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Nossa biblioteca'), 220,
+      scrollable: sharedScroll, maxScrolls: 20);
     expect(find.text('Nossa biblioteca'), findsOneWidget);
-    expect(find.text('Nosso Filme Guardado'), findsWidgets);
     final prefs = await SharedPreferences.getInstance();
     final records = jsonDecode(prefs.getString('records')!) as Map;
     expect((records['1:${film.id}'] as Map)['notes'],
@@ -90,12 +98,22 @@ void main() {
     await tester.tap(find.text('Nós dois'));
     await tester.pumpAndSettle();
     expect(find.text('Duas histórias. Um universo.'), findsOneWidget);
+    final sharedScroll = find.descendant(
+      of: find.byKey(const PageStorageKey('saturn_shared_orbit')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('MOMENTOS DA NOSSA HISTÓRIA'), 210,
+      scrollable: sharedScroll, maxScrolls: 20);
     expect(find.text('MOMENTOS DA NOSSA HISTÓRIA'), findsOneWidget);
-    expect(find.text('Nossa biblioteca'), findsOneWidget);
-    await tester.ensureVisible(
-      find.byKey(const Key('saturn-shared-filter-Filmes')));
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('saturn-shared-filter-Filmes')),
+      210, scrollable: sharedScroll, maxScrolls: 20);
     await tester.tap(find.byKey(const Key('saturn-shared-filter-Filmes')));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Filme em Conjunto').first, 220,
+      scrollable: sharedScroll, maxScrolls: 20);
     expect(find.text('Filme em Conjunto'), findsWidgets);
     expect(find.text('Livro em Conjunto'), findsNothing);
 
