@@ -2,6 +2,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:saturn_app/saturn_orbit_merge.dart';
 
 void main() {
+  test('Names and avatars for both partners merge independently', () {
+    final a = SaturnOrbitMerge.merge({
+      'profileOps': {
+        '0': {'name': 'Eu', 'avatar': '🪐', 'updatedAt': 100},
+        '1': {'name': 'Ela', 'avatar': '🌙', 'updatedAt': 110},
+      },
+    }, {
+      'profileOps': {
+        '1': {'name': 'Luna', 'avatar': '🌸', 'updatedAt': 200},
+      },
+    });
+    final names = a['profileOps'] as Map;
+    expect((names['0'] as Map)['avatar'], '🪐');
+    expect((names['1'] as Map)['name'], 'Luna');
+    expect((names['1'] as Map)['avatar'], '🌸');
+  });
+
+
   test('Merges personal records without overwriting newer offline edits', () {
     final local = {
       'records': {
