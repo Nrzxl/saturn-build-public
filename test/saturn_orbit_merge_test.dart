@@ -88,6 +88,44 @@ void main() {
         contains('openlibrary:/works/OL50W'));
   });
 
+  test('Cada indicação e escolha mensal sincronizam sem sobrescrever outra', () {
+    final merged = SaturnOrbitMerge.merge({
+      'ritualOps': {
+        'weekend:2026-11-14:nomination:0':
+            {'workId': 'filme-eu', 'updatedAt': 150},
+        'month:2026-11:selected':
+            {'workId': 'livro-anterior', 'updatedAt': 100},
+      },
+    }, {
+      'ritualOps': {
+        'weekend:2026-11-14:nomination:1':
+            {'workId': 'filme-ela', 'updatedAt': 210},
+        'month:2026-11:selected':
+            {'workId': 'livro-escolhido', 'updatedAt': 250},
+      },
+    });
+    final ops = merged['ritualOps'] as Map;
+    expect(ops, hasLength(3));
+    expect(ops['weekend:2026-11-14:nomination:0']['workId'], 'filme-eu');
+    expect(ops['weekend:2026-11-14:nomination:1']['workId'], 'filme-ela');
+    expect(ops['month:2026-11:selected']['workId'], 'livro-escolhido');
+  });
+
+  test('Tombstone de indicação antiga não ressuscita no modo offline', () {
+    final ops = SaturnOrbitMerge.merge({
+      'ritualOps': {
+        'month:2026-11:nomination:0':
+            {'workId': '', 'updatedAt': 350},
+      },
+    }, {
+      'ritualOps': {
+        'month:2026-11:nomination:0':
+            {'workId': 'livro-antigo', 'updatedAt': 300},
+      },
+    })['ritualOps'] as Map;
+    expect(ops['month:2026-11:nomination:0']['workId'], '');
+  });
+
   test('Canonical document comparison is independent of map order', () {
     expect(
       SaturnOrbitMerge.canonical({

@@ -20,6 +20,7 @@ import 'saturn_orbit_sync_sheet.dart';
 import 'saturn_premium_details.dart';
 import 'saturn_book_details.dart';
 import 'saturn_couple_insights.dart';
+import 'saturn_orbit_rituals.dart';
 import 'update_center.dart';
 
 bool _saturnCloudReady = false;
@@ -225,6 +226,7 @@ class _SaturnHomeState extends State<SaturnHome>
   Map<String, dynamic> _watchlistOps = {};
   Map<String, dynamic> _sharedOps = {};
   Map<String, dynamic> _archivedOps = {};
+  Map<String, dynamic> _ritualOps = {};
   SaturnOrbitCloud? _cloud;
   bool _cloudApplying = false;
   List<String> shared = [];
@@ -330,6 +332,8 @@ class _SaturnHomeState extends State<SaturnHome>
           jsonDecode(prefs.getString('saturn_shared_ops') ?? '{}');
       final storedArchivedOps =
           jsonDecode(prefs.getString('saturn_archived_ops') ?? '{}');
+      final storedRitualOps =
+          jsonDecode(prefs.getString('saturn_ritual_ops_v1') ?? '{}');
       final savedProfile = prefs.getInt('saturn_profile_index') ?? 0;
       final archived = prefs.getStringList('saturn_archived_v1') ?? <String>[];
       final storedShared = jsonDecode(prefs.getString('shared') ?? '[]');
@@ -346,6 +350,9 @@ class _SaturnHomeState extends State<SaturnHome>
         _archivedFromCollection = archived.toSet();
         _archivedOps = storedArchivedOps is Map
             ? Map<String, dynamic>.from(storedArchivedOps)
+            : <String, dynamic>{};
+        _ritualOps = storedRitualOps is Map
+            ? Map<String, dynamic>.from(storedRitualOps)
             : <String, dynamic>{};
         for (final id in archived) {
           _archivedOps.putIfAbsent(id, () => {
@@ -407,6 +414,7 @@ class _SaturnHomeState extends State<SaturnHome>
     await prefs.setString('saturn_watchlist_ops', jsonEncode(_watchlistOps));
     await prefs.setString('saturn_shared_ops', jsonEncode(_sharedOps));
     await prefs.setString('saturn_archived_ops', jsonEncode(_archivedOps));
+    await prefs.setString('saturn_ritual_ops_v1', jsonEncode(_ritualOps));
     await prefs.setStringList('saturn_archived_v1',
       _archivedFromCollection.toList(growable: false));
     if (!_cloudApplying) _cloud?.scheduleSync();
@@ -419,6 +427,7 @@ class _SaturnHomeState extends State<SaturnHome>
     'watchlistOps': _watchlistOps,
     'sharedOps': _sharedOps,
     'archivedOps': _archivedOps,
+    'ritualOps': _ritualOps,
     'catalogSaved': savedWorks.map(
       (key, work) => MapEntry(key, work.toJson())),
     'customTitleLinks': customTitleLinks,
@@ -436,6 +445,8 @@ class _SaturnHomeState extends State<SaturnHome>
           doc['sharedOps'] as Map? ?? {});
         _archivedOps = Map<String, dynamic>.from(
           doc['archivedOps'] as Map? ?? {});
+        _ritualOps = Map<String, dynamic>.from(
+          doc['ritualOps'] as Map? ?? {});
         _archivedFromCollection =
             SaturnOrbitMerge.activeFlags(_archivedOps).toSet();
         watchlists = {

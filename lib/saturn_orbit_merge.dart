@@ -106,6 +106,9 @@ class SaturnOrbitMerge {
       'archivedOps': _mergeStamped(
         local['archivedOps'], remote['archivedOps'],
       ),
+      'ritualOps': _mergeStamped(
+        local['ritualOps'], remote['ritualOps'],
+      ),
       'catalogSaved': _unionObjects(
         local['catalogSaved'], remote['catalogSaved'],
       ),
