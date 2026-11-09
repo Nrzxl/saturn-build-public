@@ -47,6 +47,8 @@ class SaturnOrbitCloud {
   SupabaseClient get client => Supabase.instance.client;
 
   String? orbitId;
+  /// Assigned from verified membership: creator is profile 0, partner 1.
+  int? memberProfileIndex;
   String? lastError;
   DateTime? lastSyncedAt;
   bool busy = false;
@@ -134,6 +136,12 @@ class SaturnOrbitCloud {
         .eq('orbit_id', nextOrbitId)
         .eq('user_id', uid);
     if (rows.isEmpty) throw StateError('Acesso à Órbita não autorizado.');
+    // saturn_orbits RLS only exposes its owner row. Verified members who
+    // are not owners are the partner profile. This does not grant anyone
+    // additional database privileges; it prevents accidental UI switching.
+    final owned = await client.from('saturn_orbits')
+        .select('owner_id').eq('id', nextOrbitId).maybeSingle();
+    memberProfileIndex = owned != null && owned['owner_id'] == uid ? 0 : 1;
     await _changes?.cancel();
     orbitId = nextOrbitId;
     _changes = client
@@ -226,6 +234,7 @@ class SaturnOrbitCloud {
     await _changes?.cancel();
     _changes = null;
     orbitId = null;
+    memberProfileIndex = null;
     await client.auth.signOut();
     onStatus();
   }
