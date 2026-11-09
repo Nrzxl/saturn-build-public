@@ -1051,13 +1051,16 @@ class _SaturnHomeState extends State<SaturnHome>
     final client = CatalogClient();
     final isbn = TextEditingController();
     final initial = client.bookEditions(parent.id);
+    var searchingIsbn = false;
+    String? error;
+    var page = 1;
+    var more = <CatalogEntry>[];
+    var loadingMore = false;
     try {
       return await showModalBottomSheet<Work>(
         context: context, isScrollControlled: true, useSafeArea: true,
         backgroundColor: const Color(0xFF241B29),
         builder: (sheet) => StatefulBuilder(builder: (ctx, repaint) {
-          var searchingIsbn = false;
-          String? error;
           Future<void> lookup() async {
             if (searchingIsbn) return;
             repaint(() => searchingIsbn = true);
@@ -1074,6 +1077,28 @@ class _SaturnHomeState extends State<SaturnHome>
                 error = 'Não foi possível buscar o ISBN. Tente novamente.');
             } finally {
               if (sheet.mounted) repaint(() => searchingIsbn = false);
+            }
+          }
+          Future<void> loadMore() async {
+            if (loadingMore || searchingIsbn) return;
+            redraw(() { loadingMore = true; error = null; });
+            try {
+              final found = await client.bookEditions(parent.id, page: page + 1);
+              if (!sheet.mounted) return;
+              redraw(() {
+                if (found.isNotEmpty) {
+                  page++;
+                  more = [...more, ...found];
+                } else {
+                  error = 'Não há mais edições catalogadas nesta obra.';
+                }
+                loadingMore = false;
+              });
+            } catch (_) {
+              if (sheet.mounted) redraw(() {
+                error = 'Falha ao carregar outras edições.';
+                loadingMore = false;
+              });
             }
           }
           return Padding(
@@ -1122,7 +1147,9 @@ class _SaturnHomeState extends State<SaturnHome>
                         return const Center(
                           child: CircularProgressIndicator(color: gold));
                       }
-                      final books = snapshot.data!;
+                      final books = <CatalogEntry>[
+                        ...snapshot.data!, ...more,
+                      ];
                       if (books.isEmpty) return const Center(
                         child: Text('Nenhuma edição catalogada. '
                           'Tente pesquisar pelo ISBN.'));
@@ -1143,9 +1170,18 @@ class _SaturnHomeState extends State<SaturnHome>
                         });
                     },
                   )),
-                  TextButton(
-                    onPressed: () => Navigator.pop(sheet, parent),
-                    child: const Text('Usar obra geral (sem volume)')),
+                  Row(children: [
+                    Expanded(child: TextButton.icon(
+                      onPressed: loadingMore ? null : loadMore,
+                      icon: loadingMore
+                          ? const SizedBox(width: 15, height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.expand_more),
+                      label: const Text('Mais edições'))),
+                    Expanded(child: TextButton(
+                      onPressed: () => Navigator.pop(sheet, parent),
+                      child: const Text('Obra geral'))),
+                  ]),
                 ],
               ),
             ),
