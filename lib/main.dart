@@ -1081,11 +1081,11 @@ class _SaturnHomeState extends State<SaturnHome>
           }
           Future<void> loadMore() async {
             if (loadingMore || searchingIsbn) return;
-            redraw(() { loadingMore = true; error = null; });
+            repaint(() { loadingMore = true; error = null; });
             try {
               final found = await client.bookEditions(parent.id, page: page + 1);
               if (!sheet.mounted) return;
-              redraw(() {
+              repaint(() {
                 if (found.isNotEmpty) {
                   page++;
                   more = [...more, ...found];
@@ -1095,7 +1095,7 @@ class _SaturnHomeState extends State<SaturnHome>
                 loadingMore = false;
               });
             } catch (_) {
-              if (sheet.mounted) redraw(() {
+              if (sheet.mounted) repaint(() {
                 error = 'Falha ao carregar outras edições.';
                 loadingMore = false;
               });
