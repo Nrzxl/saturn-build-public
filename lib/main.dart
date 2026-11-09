@@ -853,6 +853,212 @@ class _SaturnHomeState extends State<SaturnHome>
         ),
       );
 
+
+  /// Usa capas realmente retornadas pelo catálogo; sem título fictício no destaque.
+  Widget _cinematicHero(int ownCount) {
+    final Work? featured = recommendedMovies
+        .where((work) => work.posterUrl.startsWith('https://'))
+        .firstOrNull;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final spacious = constraints.maxWidth >= 680;
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: SizedBox(
+              height: spacious ? 310 : 345,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF57283D),
+                          Color(0xFF2C1D2E),
+                          night,
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (featured != null)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      width: spacious ? 345 : 230,
+                      child: Image.network(
+                        featured.posterUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stack) =>
+                            const SizedBox.shrink(),
+                      ),
+                    ),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Color(0xF5201829),
+                          Color(0xE3291D30),
+                          Color(0x99201827),
+                        ],
+                        stops: [0, 0.5, 1],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: spacious ? 35 : 22,
+                      vertical: spacious ? 29 : 23,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(children: [
+                          SaturnMark(size: 41),
+                          SizedBox(width: 12),
+                          Expanded(child: Text(
+                            'EVERY STORY HAS ITS ORBIT',
+                            style: TextStyle(
+                              color: gold, letterSpacing: 1.7,
+                              fontSize: 10, fontWeight: FontWeight.w600),
+                          )),
+                        ]),
+                        const Spacer(),
+                        Text(
+                          featured != null
+                              ? 'EM DESTAQUE · CATÁLOGO'
+                              : 'NOSSO UNIVERSO DE HISTÓRIAS',
+                          style: const TextStyle(
+                            fontSize: 10, color: gold,
+                            fontWeight: FontWeight.bold, letterSpacing: 2),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          featured?.title ?? 'Seu universo de histórias',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'serif', color: ivory,
+                            fontWeight: FontWeight.bold,
+                            fontSize: spacious ? 35 : 28, height: 1.12),
+                        ),
+                        const SizedBox(height: 9),
+                        Text(
+                          'Bem-vinda, ${profiles[profile]} • '
+                          '$ownCount na coleção • ${shared.length} na nossa órbita',
+                          maxLines: 2,
+                          style: const TextStyle(
+                            color: Color(0xFFE0CED6),
+                            fontSize: 12, height: 1.35),
+                        ),
+                        const SizedBox(height: 18),
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          FilledButton.icon(
+                            onPressed: () => setState(() => tab = 1),
+                            icon: const Icon(Icons.explore_outlined, size: 18),
+                            label: const Text('Descobrir histórias'),
+                          ),
+                          if (featured != null)
+                            OutlinedButton.icon(
+                              onPressed: () => _details(featured),
+                              icon: const Icon(Icons.info_outline, size: 18),
+                              label: const Text('Ver detalhes'),
+                            ),
+                        ]),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Trilhos horizontais para as sugestões e livros já entregues pelas APIs.
+  Widget _cinematicShelf(Iterable<Work> source) {
+    final titles = source.take(12).toList(growable: false);
+    if (titles.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 249,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 9, 16, 9),
+        scrollDirection: Axis.horizontal,
+        itemCount: titles.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 11),
+        itemBuilder: (context, index) {
+          final work = titles[index];
+          return SaturnHoverLift(
+            child: SizedBox(
+              width: 137,
+              child: Material(
+                color: const Color(0xFF251B27),
+                borderRadius: BorderRadius.circular(14),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => _details(work),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: 177,
+                        child: Stack(fit: StackFit.expand, children: [
+                          PosterThumbnail(
+                            work: work,
+                            width: double.infinity,
+                            height: double.infinity),
+                          Positioned(
+                            right: 3, top: 3,
+                            child: IconButton.filledTonal(
+                              tooltip: work.kind == 'Livro'
+                                  ? 'Quero ler' : 'Watchlist',
+                              onPressed: () => _toggleWatchlist(work),
+                              icon: Icon(
+                                _isWatchlisted(work)
+                                    ? Icons.bookmark_added
+                                    : Icons.bookmark_add_outlined,
+                                size: 17),
+                            ),
+                          ),
+                        ]),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 5, 8, 1),
+                        child: Text(work.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600,
+                            color: ivory, height: 1.12)),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          work.year > 0 ? '${work.kind} · ${work.year}' : work.kind,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFC5AAB6), fontSize: 10)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _start() {
     final continuing = allWorks.where(
       (work) => !_isArchived(work) &&
@@ -864,49 +1070,7 @@ class _SaturnHomeState extends State<SaturnHome>
     ).length;
     return ListView(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(22, 26, 20, 25),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(25),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF56233C), Color(0xFF2B1D31), night],
-              ),
-              border: Border.all(color: const Color(0x775E4553)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Center(child: SaturnMark(size: 89)),
-                const SizedBox(height: 14),
-                const Center(child: Text(
-                  'EVERY STORY HAS ITS ORBIT',
-                  style: TextStyle(
-                    color: gold, letterSpacing: 2.4, fontSize: 10,
-                  ),
-                )),
-                const SizedBox(height: 24),
-                Text('Bem-vinda ao seu universo, ${profiles[profile]}',
-                  style: const TextStyle(
-                    color: ivory, fontFamily: 'serif',
-                    fontSize: 26, fontWeight: FontWeight.bold, height: 1.2,
-                  )),
-                const SizedBox(height: 8),
-                Text('$ownCount histórias na sua coleção • ${shared.length} na nossa órbita',
-                  style: const TextStyle(color: Color(0xFFD9C2C7), fontSize: 12)),
-                const SizedBox(height: 14),
-                OutlinedButton.icon(
-                  onPressed: () => setState(() => tab = 1),
-                  icon: const Icon(Icons.auto_awesome, size: 17),
-                  label: const Text('Descobrir histórias'),
-                ),
-              ],
-            ),
-          ),
-        ),
+        _cinematicHero(ownCount),
         _heading('Minha Watchlist'),
         _collectionSelectionToolbar(
           allWorks.where((w) => currentWatchlist.contains(w.id)),
@@ -952,10 +1116,10 @@ class _SaturnHomeState extends State<SaturnHome>
             child: Text('Carregando sugestões de filmes...',
               style: TextStyle(color: Color(0xFFBFAEB8))),
           ),
-        ...recommendedMovies
-            .where((w) => !_isDone(w) && !currentWatchlist.contains(w.id))
-            .take(5)
-            .map(_tile),
+        _cinematicShelf(
+          recommendedMovies.where(
+            (w) => !_isDone(w) && !currentWatchlist.contains(w.id)),
+        ),
         if (!loadingRecommendations && recommendedMovies.isEmpty)
           const Padding(
             padding: EdgeInsets.all(16),
@@ -1002,7 +1166,7 @@ class _SaturnHomeState extends State<SaturnHome>
             child: Text('Buscando livros da Open Library...',
               style: TextStyle(color: Color(0xFFB5A1A9))),
           ),
-        ...recommendedBooks.take(5).map(_tile),
+        _cinematicShelf(recommendedBooks),
         if (!loadingRecommendations && recommendedBooks.isEmpty)
           const Padding(
             padding: EdgeInsets.all(16),
@@ -1381,11 +1545,26 @@ class _SaturnHomeState extends State<SaturnHome>
         builder: (ctx, refresh) => Padding(
           padding: EdgeInsets.fromLTRB(
               20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 28),
-          child: SingleChildScrollView(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 920),
+              child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(children: [
+                  const Icon(Icons.auto_awesome_rounded, color: gold, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(child: Text('FICHA DA HISTÓRIA',
+                    style: TextStyle(color: gold, letterSpacing: 1.7,
+                      fontSize: 11, fontWeight: FontWeight.bold))),
+                  IconButton(
+                    tooltip: 'Fechar detalhes',
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded, color: ivory)),
+                ]),
+                const SizedBox(height: 10),
                 if (w.kind != 'Livro' &&
                     SaturnNativeTrailer.canUseNative(
                       w.nativeTrailerUrl,
@@ -1838,6 +2017,8 @@ class _SaturnHomeState extends State<SaturnHome>
                 ),
               ],
             ),
+              ),
+            ),
           ),
         ),
       ),
@@ -1846,6 +2027,32 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 }
 
+
+
+/// Microanimação de mouse sem alterar o comportamento de toque no celular.
+class SaturnHoverLift extends StatefulWidget {
+  final Widget child;
+  const SaturnHoverLift({super.key, required this.child});
+
+  @override
+  State<SaturnHoverLift> createState() => _SaturnHoverLiftState();
+}
+
+class _SaturnHoverLiftState extends State<SaturnHoverLift> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _hovered = true),
+    onExit: (_) => setState(() => _hovered = false),
+    child: AnimatedScale(
+      scale: _hovered ? 1.022 : 1,
+      duration: const Duration(milliseconds: 165),
+      curve: Curves.easeOutCubic,
+      child: widget.child,
+    ),
+  );
+}
 
 class PosterThumbnail extends StatelessWidget {
   final Work work;
@@ -2455,7 +2662,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
 
   Widget _coverCard(Work work) {
     final loved = widget.isShared(work);
-    return Card(
+    return SaturnHoverLift(child: Card(
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
       color: const Color(0xFF2A202B),
@@ -2584,6 +2791,6 @@ class _CatalogExploreState extends State<CatalogExplore> {
           ],
         ),
       ),
-    );
+    ));
   }
 }

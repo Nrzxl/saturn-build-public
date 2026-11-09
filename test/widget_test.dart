@@ -5,6 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:saturn_app/main.dart';
 
 void main() {
+  testWidgets('Home preserva entrada de descoberta em vitrine cinematográfica',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    expect(find.text('EVERY STORY HAS ITS ORBIT'), findsOneWidget);
+    expect(find.text('Descobrir histórias'), findsOneWidget);
+    expect(find.text('Minha Watchlist'), findsOneWidget);
+  });
+
   testWidgets('Web desktop usa navegação lateral sem barra inferior',
       (tester) async {
     tester.view.devicePixelRatio = 1;
