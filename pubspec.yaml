@@ -1,0 +1,33 @@
+name: saturn_app
+description: SATURN - Nosso universo de historias
+publish_to: none
+version: 0.7.0+9
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.3.2
+  http: ^1.2.2
+  url_launcher: ^6.3.2
+  package_info_plus: ^9.0.1
+  share_plus: ^11.1.0
+  youtube_player_iframe: ^6.0.2
+  video_player: ^2.14.1
+  supabase_flutter: ^2.18.3
+
+# Keep AVFoundation on the last CocoaPods-compatible implementation for
+# the macOS-15 / Xcode toolchain used by GitHub Actions. Versions >=2.12.2
+# introduced Swift code using APIs not accepted by that compiler.
+# Remove after upgrading CI Xcode and verifying simulator + device builds.
+dependency_overrides:
+  video_player_avfoundation: 2.12.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

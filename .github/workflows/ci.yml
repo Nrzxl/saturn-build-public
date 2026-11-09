@@ -1,0 +1,85 @@
+name: SATURN Public Build
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: saturn-public-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android · teste e APK debug
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Código deste repositório
+        uses: actions/checkout@v4
+      - name: Java Android
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Flutter estável
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Preparar projeto Flutter
+        run: flutter create --platforms=android,web --org com.nrzxl --project-name saturn_app .
+      - name: Testes sem credenciais
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          flutter pub get
+          flutter analyze lib
+          flutter test --reporter expanded
+      - name: APK de DEBUG, não de produção
+        run: flutter build apk --debug
+      - name: Arquivar APK de teste
+        uses: actions/upload-artifact@v4
+        with:
+          name: saturn-android-debug
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  ios-simulator:
+    name: iOS · apenas simulador
+    runs-on: macos-15
+    timeout-minutes: 50
+    steps:
+      - name: Código deste repositório
+        uses: actions/checkout@v4
+      - name: Flutter estável
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Preparar projeto iOS
+        run: |
+          flutter create --platforms=ios --org com.nrzxl --project-name saturn_app .
+          flutter pub get
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('ios/Runner.xcodeproj/project.pbxproj')
+          data = p.read_text().replace('com.nrzxl.saturnApp', 'com.nrzxl.saturn')
+          if 'PRODUCT_BUNDLE_IDENTIFIER = com.nrzxl.saturn;' not in data:
+              raise SystemExit('Bundle id iOS invalido')
+          p.write_text(data)
+          PY
+      - name: Testes e build do simulador
+        run: |
+          flutter analyze lib
+          flutter test --reporter expanded
+          flutter build ios --simulator --debug --no-codesign
+      - name: Arquivar aplicativo de simulador
+        uses: actions/upload-artifact@v4
+        with:
+          name: saturn-ios-simulator
+          path: build/ios/iphonesimulator/Runner.app/
+          if-no-files-found: error
+          retention-days: 7
