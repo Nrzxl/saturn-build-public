@@ -29,12 +29,15 @@ class SaturnBookDetailsService {
   static final Map<String, Future<OpenLibraryWorkDetails?>> _cache = {};
 
   Future<OpenLibraryWorkDetails?> fetch(String workId) {
-    final match = RegExp(r'^openlibrary:/works/(OL[0-9]+W)$').firstMatch(workId);
+    final match = RegExp(
+      r'^openlibrary:/(works/OL[0-9]+W|books/OL[0-9]+M)$',
+    ).firstMatch(workId);
     if (match == null) return Future.value(null);
-    final id = match.group(1)!;
+    final path = match.group(1)!;
+    final id = path.replaceAll('/', ':');
     return _cache.putIfAbsent(id, () async {
       try {
-        final request = Uri.https('openlibrary.org', '/works/$id.json');
+        final request = Uri.https('openlibrary.org', '/$path.json');
         final response = await _client.get(request, headers: const {
           'Accept': 'application/json',
           'User-Agent': 'SATURNMobile/0.7 (private book discovery)',
@@ -61,8 +64,12 @@ class SaturnBookDetailsService {
         double? average;
         int? count;
         try {
+          if (path.startsWith('books/')) {
+            // No aggregate work score should be attributed to an edition.
+            throw const FormatException('No edition-level public rating');
+          }
           final ratings = await _client.get(
-            Uri.https('openlibrary.org', '/works/$id/ratings.json'),
+            Uri.https('openlibrary.org', '/$path/ratings.json'),
             headers: const {'Accept': 'application/json'},
           ).timeout(const Duration(seconds: 6));
           if (ratings.statusCode == 200) {
