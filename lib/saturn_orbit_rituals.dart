@@ -60,7 +60,9 @@ class SaturnOrbitRituals {
   static List<String> pendingBooks(Map<String, dynamic> ops,
       Map<String, dynamic> records, int person, DateTime now) {
     if (person != 0 && person != 1) return [];
-    final lastKey = nomination(monthPeriod(now), person);
+    // Only books from months that have ended are overdue.
+    final previousMonth = DateTime(now.year, now.month, 0);
+    final lastKey = nomination(monthPeriod(previousMonth), person);
     final pattern = RegExp(
         '^month:[0-9]{4}-[0-9]{2}:nomination:$person' + r'$');
     final keys = ops.keys.where((key) =>
@@ -86,6 +88,16 @@ class SaturnOrbitRituals {
     return ops.keys.any((key) =>
         pattern.hasMatch(key) && key.compareTo(lastKey) <= 0 &&
         workId(ops, key).isNotEmpty);
+  }
+
+  static String readingFace(Map<String, dynamic> ops,
+      Map<String, dynamic> records, int person, DateTime now) {
+    if (pendingBooks(ops, records, person, now).isNotEmpty) return '😢';
+    final current = workId(ops, nomination(monthPeriod(now), person));
+    if (current.isNotEmpty) {
+      return bookFinishedAndRated(records, person, current) ? '😊' : '📖';
+    }
+    return hasAssignedBooks(ops, now, person: person) ? '😊' : '';
   }
 
   static String weekendLabel(DateTime now) {

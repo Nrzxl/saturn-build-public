@@ -93,6 +93,36 @@ void main() {
       ops, {}, 1, today), ['livro-ela']);
   });
 
+  test('Livro do mês tem prazo até o último dia, sem emoji triste', () {
+    final ops = <String, dynamic>{
+      'month:2026-11:nomination:0': {
+        'workId': 'openlibrary:/books/OL100M', 'updatedAt': 20,
+      },
+    };
+    final before = DateTime(2026, 11, 30, 23, 59);
+    final after = DateTime(2026, 12, 1);
+    expect(SaturnOrbitRituals.pendingBooks(ops, {}, 0, before), isEmpty);
+    expect(SaturnOrbitRituals.readingFace(ops, {}, 0, before), '📖');
+    expect(SaturnOrbitRituals.pendingBooks(ops, {}, 0, after),
+      ['openlibrary:/books/OL100M']);
+    expect(SaturnOrbitRituals.readingFace(ops, {}, 0, after), '😢');
+    final records = <String, dynamic>{
+      '0:openlibrary:/books/OL100M': {'status': 'Lido', 'rating': 9},
+    };
+    expect(SaturnOrbitRituals.readingFace(ops, records, 0, after), '😊');
+    expect(SaturnOrbitRituals.readingFace(ops, records, 1, after), '');
+  });
+
+  test('Mudança de ano preserva prazo de dezembro', () {
+    final ops = <String, dynamic>{
+      'month:2026-12:nomination:1': {'workId': 'manga', 'updatedAt': 30},
+    };
+    expect(SaturnOrbitRituals.pendingBooks(
+      ops, {}, 1, DateTime(2026, 12, 31)), isEmpty);
+    expect(SaturnOrbitRituals.pendingBooks(
+      ops, {}, 1, DateTime(2027, 1, 1)), ['manga']);
+  });
+
   test('Sem livro escolhido, não há carinha triste; ignora meses futuros', () {
     final today = DateTime(2026, 11, 9);
     final ops = <String, dynamic>{
