@@ -227,6 +227,7 @@ class _SaturnHomeState extends State<SaturnHome>
   Map<String, dynamic> _sharedOps = {};
   Map<String, dynamic> _archivedOps = {};
   Map<String, dynamic> _ritualOps = {};
+  Map<String, dynamic> _profileOps = {};
   SaturnOrbitCloud? _cloud;
   bool _cloudApplying = false;
   List<String> shared = [];
@@ -245,6 +246,10 @@ class _SaturnHomeState extends State<SaturnHome>
   bool loadingRecommendations = false;
   int _filmRecommendationPage = 0;
   final profiles = ['Eu', 'Ela'];
+  final profileAvatars = ['🪐', '🌙'];
+  static const _avatarChoices = <String>[
+    '🪐', '🌙', '💫', '🌸', '⭐', '🦋', '📚', '🎬',
+  ];
   String _collectionKind = 'Tudo';
   String _sharedKind = 'Tudo';
   String _sharedMoment = 'Todas';
@@ -263,7 +268,14 @@ class _SaturnHomeState extends State<SaturnHome>
         readLocal: _orbitDocument,
         apply: _applyOrbitDocument,
         onStatus: () {
-          if (mounted) setState(() {});
+          if (!mounted) return;
+          final bound = _cloud?.connected == true
+              ? _cloud?.memberProfileIndex : null;
+          if (bound != null && bound != profile) {
+            _setProfile(bound);
+          } else {
+            setState(() {});
+          }
         },
       );
     }
@@ -331,6 +343,8 @@ class _SaturnHomeState extends State<SaturnHome>
           jsonDecode(prefs.getString('saturn_archived_ops') ?? '{}');
       final storedRitualOps =
           jsonDecode(prefs.getString('saturn_ritual_ops_v1') ?? '{}');
+      final storedProfileOps =
+          jsonDecode(prefs.getString('saturn_profile_ops_v1') ?? '{}');
       final savedProfile = prefs.getInt('saturn_profile_index') ?? 0;
       final archived = prefs.getStringList('saturn_archived_v1') ?? <String>[];
       final storedShared = jsonDecode(prefs.getString('shared') ?? '[]');
@@ -351,6 +365,10 @@ class _SaturnHomeState extends State<SaturnHome>
         _ritualOps = storedRitualOps is Map
             ? Map<String, dynamic>.from(storedRitualOps)
             : <String, dynamic>{};
+        _profileOps = storedProfileOps is Map
+            ? Map<String, dynamic>.from(storedProfileOps)
+            : <String, dynamic>{};
+        _applyProfileIdentity();
         for (final id in archived) {
           _archivedOps.putIfAbsent(id, () => {
             'present': true, 'updatedAt': 0,
@@ -422,6 +440,7 @@ class _SaturnHomeState extends State<SaturnHome>
     await prefs.setString('saturn_shared_ops', jsonEncode(_sharedOps));
     await prefs.setString('saturn_archived_ops', jsonEncode(_archivedOps));
     await prefs.setString('saturn_ritual_ops_v1', jsonEncode(_ritualOps));
+    await prefs.setString('saturn_profile_ops_v1', jsonEncode(_profileOps));
     await prefs.setStringList('saturn_archived_v1',
       _archivedFromCollection.toList(growable: false));
     if (!_cloudApplying) _cloud?.scheduleSync();
@@ -435,6 +454,7 @@ class _SaturnHomeState extends State<SaturnHome>
     'sharedOps': _sharedOps,
     'archivedOps': _archivedOps,
     'ritualOps': _ritualOps,
+    'profileOps': _profileOps,
     'catalogSaved': savedWorks.map(
       (key, work) => MapEntry(key, work.toJson())),
     'customTitleLinks': customTitleLinks,
@@ -454,6 +474,9 @@ class _SaturnHomeState extends State<SaturnHome>
           doc['archivedOps'] as Map? ?? {});
         _ritualOps = Map<String, dynamic>.from(
           doc['ritualOps'] as Map? ?? {});
+        _profileOps = Map<String, dynamic>.from(
+          doc['profileOps'] as Map? ?? {});
+        _applyProfileIdentity();
         _archivedFromCollection =
             SaturnOrbitMerge.activeFlags(_archivedOps).toSet();
         watchlists = {
@@ -521,9 +544,44 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Future<void> _setProfile(int next) async {
+    if (next < 0 || next >= profiles.length) return;
+    final bound = _cloud?.connected == true
+        ? _cloud?.memberProfileIndex : null;
+    if (bound != null && bound != next) return;
     setState(() => profile = next);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('saturn_profile_index', next);
+  }
+
+  void _applyProfileIdentity() {
+    for (var i = 0; i < profiles.length; i++) {
+      final row = _profileOps['$i'];
+      final name = row is Map ? (row['name'] ?? '').toString().trim() : '';
+      final avatar = row is Map ? (row['avatar'] ?? '').toString() : '';
+      profiles[i] = name.isEmpty ? (i == 0 ? 'Eu' : 'Ela')
+          : name.length > 26 ? name.substring(0, 26) : name;
+      profileAvatars[i] = _avatarChoices.contains(avatar) ? avatar
+          : (i == 0 ? '🪐' : '🌙');
+    }
+  }
+
+  Future<void> _updateProfileIdentity(
+      int person, String nameInput, String avatar) async {
+    final bound = _cloud?.connected == true
+        ? _cloud?.memberProfileIndex : null;
+    if (person < 0 || person >= profiles.length ||
+        (bound != null && bound != person)) return;
+    final name = nameInput.trim();
+    if (name.isEmpty || name.length > 26) return;
+    setState(() {
+      _profileOps['$person'] = {
+        'name': name, 'avatar': _avatarChoices.contains(avatar)
+            ? avatar : profileAvatars[person],
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      };
+      _applyProfileIdentity();
+    });
+    await _save();
   }
 
   Future<void> _setStreaming(StreamingService service, bool enabled) async {
