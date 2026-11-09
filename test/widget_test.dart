@@ -6,6 +6,53 @@ import 'package:saturn_app/main.dart';
 
 void main() {
 
+  testWidgets('Nossa Órbita apresenta progresso e memórias reais de cada perfil',
+      (tester) async {
+    final film = Work(
+      'tmdb:movie:2048', 'Nosso Filme Guardado', 'Filme',
+      'Uma lembrança compartilhada.', 2024, provider: 'TMDB');
+    SharedPreferences.setMockInitialValues({
+      'records': jsonEncode({
+        '0:${film.id}': {
+          'status': 'Concluído', 'rating': 8.0,
+          'notes': 'Gostei do final e da trilha.',
+        },
+        '1:${film.id}': {
+          'status': 'Concluído', 'rating': 10.0,
+          'notes': 'Nossa noite favorita!',
+        },
+      }),
+      'catalog_saved': jsonEncode({film.id: film.toJson()}),
+      'shared': jsonEncode([film.id]),
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nós dois'));
+    await tester.pumpAndSettle();
+    expect(find.text('Duas histórias. Um universo.'), findsOneWidget);
+    expect(find.text('vividas pelos dois'), findsOneWidget);
+    expect(find.text('com memórias'), findsOneWidget);
+    expect(find.text('Nossa noite favorita!', findRichText: true),
+      findsNothing); // Only the actual quoted memory is displayed.
+    await tester.ensureVisible(find.text('Memórias da nossa órbita'));
+    expect(find.textContaining('Nossa noite favorita!'), findsWidgets);
+    expect(find.textContaining('Gostei do final e da trilha.'), findsWidgets);
+
+    await tester.ensureVisible(
+      find.byKey(const Key('saturn-shared-moment-Vividas por nós')));
+    await tester.tap(
+      find.byKey(const Key('saturn-shared-moment-Vividas por nós')));
+    await tester.pumpAndSettle();
+    expect(find.text('Nossa biblioteca'), findsOneWidget);
+    expect(find.text('Nosso Filme Guardado'), findsWidgets);
+    final prefs = await SharedPreferences.getInstance();
+    final records = jsonDecode(prefs.getString('records')!) as Map;
+    expect((records['1:${film.id}'] as Map)['notes'],
+      'Nossa noite favorita!');
+    expect(jsonDecode(prefs.getString('shared')!), [film.id]);
+  });
+
+
   testWidgets('Filtros das coleções não alteram notas ou lista do casal',
       (tester) async {
     final film = Work('tmdb:movie:891', 'Filme em Conjunto',
@@ -42,11 +89,14 @@ void main() {
 
     await tester.tap(find.text('Nós dois'));
     await tester.pumpAndSettle();
-    expect(find.text('Filme em Conjunto'), findsOneWidget);
-    expect(find.text('Livro em Conjunto'), findsOneWidget);
+    expect(find.text('Duas histórias. Um universo.'), findsOneWidget);
+    expect(find.text('MOMENTOS DA NOSSA HISTÓRIA'), findsOneWidget);
+    expect(find.text('Nossa biblioteca'), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const Key('saturn-shared-filter-Filmes')));
     await tester.tap(find.byKey(const Key('saturn-shared-filter-Filmes')));
     await tester.pumpAndSettle();
-    expect(find.text('Filme em Conjunto'), findsOneWidget);
+    expect(find.text('Filme em Conjunto'), findsWidgets);
     expect(find.text('Livro em Conjunto'), findsNothing);
 
     final prefs = await SharedPreferences.getInstance();

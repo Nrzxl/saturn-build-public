@@ -19,6 +19,7 @@ import 'saturn_orbit_merge.dart';
 import 'saturn_orbit_sync_sheet.dart';
 import 'saturn_premium_details.dart';
 import 'saturn_book_details.dart';
+import 'saturn_couple_insights.dart';
 import 'update_center.dart';
 
 bool _saturnCloudReady = false;
@@ -247,6 +248,7 @@ class _SaturnHomeState extends State<SaturnHome>
   final profiles = ['Eu', 'Ela'];
   String _collectionKind = 'Tudo';
   String _sharedKind = 'Tudo';
+  String _sharedMoment = 'Todas';
   static const _collectionTypes = <String, String>{
     'Tudo': '', 'Filmes': 'Filme', 'Séries': 'Série',
     'Doramas': 'Dorama', 'Animes': 'Anime', 'Livros': 'Livro',
@@ -1560,28 +1562,290 @@ class _SaturnHomeState extends State<SaturnHome>
     ]);
   }
 
-  Widget _shared() {
-    final all = allWorks.where((w) => shared.contains(w.id)).toList();
-    final items = _filteredCollection(all, true);
-    return ListView(children: [
-      _collectionHeader(true, all.length),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: Text(
+
+  Widget _orbitMetric(String label, int count, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0x8D211825),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0x775F4054)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, color: gold, size: 17),
+        const SizedBox(width: 8),
+        Text('$count', style: const TextStyle(
+          color: ivory, fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(width: 7),
+        Text(label, style: const TextStyle(
+          color: Color(0xFFDED0D9), fontSize: 11)),
+      ]),
+    );
+  }
+
+  /// Editorial summary of the shared IDs, never a claim of remote sync.
+  Widget _sharedUniverseHero(SaturnCoupleInsights insights) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 11),
+      padding: const EdgeInsets.fromLTRB(21, 21, 21, 23),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: const Color(0x776F4B61)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF632B49), Color(0xFF342139), night],
+        ),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const SaturnMark(size: 41),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('NOSSA ÓRBITA',
+            style: TextStyle(color: gold, letterSpacing: 2.2,
+              fontSize: 11, fontWeight: FontWeight.bold))),
+          const Icon(Icons.favorite_rounded,
+            color: Color(0xFFE9A8BD), size: 23),
+        ]),
+        const SizedBox(height: 18),
+        const Text('Duas histórias. Um universo.',
+          style: TextStyle(
+            fontFamily: 'serif', fontSize: 27, height: 1.12,
+            fontWeight: FontWeight.bold, color: ivory)),
+        const SizedBox(height: 7),
+        const Text(
+          'Filmes, séries e leituras que fazem parte da trajetória de vocês.',
+          style: TextStyle(
+            color: Color(0xFFE4CCD5), fontSize: 12, height: 1.4)),
+        const SizedBox(height: 17),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _orbitMetric('histórias', insights.ids.length,
+            Icons.auto_stories_outlined),
+          _orbitMetric('vividas pelos dois', insights.completedTogether,
+            Icons.check_circle_outline_rounded),
+          _orbitMetric('em andamento', insights.inProgress,
+            Icons.timelapse_rounded),
+          _orbitMetric('com memórias', insights.memories,
+            Icons.favorite_border_rounded),
+        ]),
+        const SizedBox(height: 16),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          FilledButton.icon(
+            onPressed: () => setState(() => tab = 1),
+            icon: const Icon(Icons.explore_outlined, size: 18),
+            label: const Text('Descobrir juntos')),
+          OutlinedButton.icon(
+            onPressed: _showOrbitSync,
+            icon: Icon(_cloud?.connected == true
+                ? Icons.cloud_done_outlined
+                : Icons.cloud_off_outlined, size: 18),
+            label: Text(_cloud?.connected == true
+                ? 'Órbita conectada' : 'Sincronização'),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Text(
           _cloud?.connected == true
-              ? 'Nossa coleção compartilhada entre os aparelhos conectados.'
-              : 'Coleção de vocês neste aparelho. Ative a nuvem para '
-                'sincronizar Android e iPhone.',
-          style: const TextStyle(color: Color(0xFFD6C4CE)))),
-      _collectionFilters(true),
-      _collectionSelectionToolbar(items, sharedList: true),
-      _collectionContents(items),
-      if (items.isEmpty)
-        Padding(padding: const EdgeInsets.all(16),
-          child: Text(all.isEmpty
-              ? 'Ainda não há histórias na lista de vocês.'
-              : 'Nenhuma história desta categoria em Nossa Órbita.')),
-    ]);
+              ? 'Perfis conectados à Nossa Órbita.'
+              : 'Estas memórias estão neste aparelho. Para aparecerem no '
+                'outro celular, a sincronização precisa ser configurada.',
+          style: const TextStyle(
+            color: Color(0xFFDAC6CF), fontSize: 11, height: 1.35),
+        ),
+      ]),
+    );
+  }
+
+  Widget _sharedMomentFilters() {
+    const choices = [
+      'Todas', 'Para descobrir', 'Em andamento', 'Vividas por nós',
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 3, 16, 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('MOMENTOS DA NOSSA HISTÓRIA',
+          style: TextStyle(color: gold, fontSize: 11,
+            letterSpacing: 1.4, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        Wrap(spacing: 7, runSpacing: 6, children: [
+          for (final choice in choices)
+            ChoiceChip(
+              key: Key('saturn-shared-moment-$choice'),
+              label: Text(choice),
+              selected: _sharedMoment == choice,
+              selectedColor: wine,
+              onSelected: (_) => setState(() {
+                _sharedMoment = choice;
+                _selectingWorks = false;
+                _selectedWorkIds.clear();
+              }),
+            ),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _sharedPersonLine(String name, int person, Work work,
+      SaturnCoupleInsights insights) {
+    final record = insights.profile(person, work.id);
+    final rated = record['rating'];
+    final stars = rated is num && rated > 0
+        ? ' • ★ ${starsFromLegacy(rated).toStringAsFixed(1)}'
+        : '';
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Text(
+        '$name: ${insights.profileStatus(
+          person, work.id, book: work.kind == 'Livro')}$stars',
+        maxLines: 2, overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFFE5D1DB), fontSize: 11, height: 1.25),
+      ),
+    );
+  }
+
+  Widget _sharedFeatured(Work work, SaturnCoupleInsights insights) {
+    final complete = insights.finishedTogether(work.id);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 7, 16, 9),
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        color: const Color(0xFF281E2D),
+        child: InkWell(
+          onTap: () => _details(work),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(complete
+                    ? 'UMA HISTÓRIA QUE JÁ VIVEMOS'
+                    : 'UMA HISTÓRIA PARA VIVER JUNTOS',
+                  style: const TextStyle(color: gold, fontSize: 10,
+                    letterSpacing: 1.6, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  PosterThumbnail(work: work, width: 103, height: 145),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(work.title, maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontFamily: 'serif',
+                          color: ivory, fontSize: 21,
+                          fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 5),
+                      Text('${work.kind} • ${work.year > 0 ? work.year : 'Ano não informado'}',
+                        style: const TextStyle(
+                          color: gold, fontSize: 11)),
+                      const SizedBox(height: 7),
+                      _sharedPersonLine(profiles[0], 0, work, insights),
+                      _sharedPersonLine(profiles[1], 1, work, insights),
+                      const SizedBox(height: 10),
+                      const Text('Abrir história e resenhas',
+                        style: TextStyle(
+                          color: Color(0xFFD1B7C5),
+                          fontSize: 11, decoration: TextDecoration.underline)),
+                    ],
+                  )),
+                ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sharedMemoryCard(Work work, SaturnCoupleInsights insights) {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 9),
+      color: const Color(0xFF251C28),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: () => _details(work),
+        child: Padding(
+          padding: const EdgeInsets.all(13),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            PosterThumbnail(work: work, width: 62, height: 88),
+            const SizedBox(width: 12),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(work.title, maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ivory, fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                for (var person = 0; person < 2; person++)
+                  if ((insights.profile(person, work.id)['notes'] ?? '')
+                      .toString().trim().isNotEmpty) ...[
+                    Text(profiles[person],
+                      style: const TextStyle(
+                        color: gold, fontSize: 10,
+                        fontWeight: FontWeight.bold)),
+                    Text(
+                      '“${insights.profile(person, work.id)['notes'].toString().trim()}”',
+                      maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFE6D6DF),
+                        fontSize: 11, height: 1.35)),
+                    const SizedBox(height: 4),
+                  ],
+              ],
+            )),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _shared() {
+    final all = allWorks.where((work) => shared.contains(work.id)).toList();
+    final insights = SaturnCoupleInsights(
+        all.map((work) => work.id), records);
+    final byType = _filteredCollection(all, true);
+    final items = byType.where(
+      (work) => insights.matches(work.id, _sharedMoment),
+    ).toList(growable: false);
+    final featured = items.where(
+      (work) => !insights.finishedTogether(work.id),
+    ).lastOrNull ?? items.lastOrNull;
+    final memories = items.where(
+      (work) => insights.hasMemory(work.id),
+    ).take(3).toList(growable: false);
+    return ListView(
+      key: const PageStorageKey('saturn_shared_orbit'),
+      children: [
+        _sharedUniverseHero(insights),
+        _sharedMomentFilters(),
+        _collectionFilters(true),
+        if (featured != null)
+          _sharedFeatured(featured, insights),
+        if (memories.isNotEmpty) ...[
+          _heading('Memórias da nossa órbita'),
+          ...memories.map((work) => _sharedMemoryCard(work, insights)),
+        ],
+        _heading('Nossa biblioteca'),
+        _collectionSelectionToolbar(items, sharedList: true),
+        _collectionContents(items),
+        if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
+            child: Text(
+              all.isEmpty
+                  ? 'Ainda não há histórias na lista de vocês. '
+                    'Descubram algo e adicionem à Nossa Órbita.'
+                  : 'Não há histórias neste recorte. '
+                    'Experimente outro tipo ou momento.',
+              style: const TextStyle(
+                color: Color(0xFFD8C3CE), fontSize: 13),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _stats() {
