@@ -584,6 +584,149 @@ class _SaturnHomeState extends State<SaturnHome>
     await _save();
   }
 
+
+  Future<void> _showProfileSettings() async {
+    final person = profile;
+    final name = TextEditingController(text: profiles[person]);
+    var avatar = profileAvatars[person];
+    try {
+      await showModalBottomSheet<void>(
+        context: context, isScrollControlled: true, useSafeArea: true,
+        backgroundColor: const Color(0xFF261B2B),
+        builder: (modal) => StatefulBuilder(builder: (ctx, redraw) {
+          final completed = records.entries.where((row) =>
+              row.key.startsWith(person.toString() + ':') &&
+              row.value is Map &&
+              ['Concluído', 'Assistido', 'Lido']
+                .contains((row.value as Map)['status'])).length;
+          final reviewed = records.entries.where((row) =>
+              row.key.startsWith(person.toString() + ':') &&
+              row.value is Map &&
+              (row.value as Map)['rating'] is num).length;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              19, 18, 19, MediaQuery.of(ctx).viewInsets.bottom + 22),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('SEU UNIVERSO',
+                    style: TextStyle(color: gold, letterSpacing: 2,
+                      fontSize: 11)),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    CircleAvatar(
+                      radius: 36, backgroundColor: const Color(0xFF543047),
+                      child: Text(avatar,
+                        style: const TextStyle(fontSize: 36))),
+                    const SizedBox(width: 14),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(profiles[person], maxLines: 2,
+                          style: const TextStyle(fontFamily: 'serif',
+                            fontSize: 25, color: ivory,
+                            fontWeight: FontWeight.bold)),
+                        Text(_cloud?.connected == true
+                            ? 'Perfil vinculado à sua conta SATURN'
+                            : 'Perfil local · conecte a Nossa Órbita',
+                          style: const TextStyle(
+                            color: Color(0xFFC9B4C0), fontSize: 11)),
+                      ],
+                    )),
+                  ]),
+                  const SizedBox(height: 20),
+                  Row(children: [
+                    Expanded(child: _profileMetric(
+                      'Concluídos', completed.toString())),
+                    const SizedBox(width: 8),
+                    Expanded(child: _profileMetric(
+                      'Minhas notas', reviewed.toString())),
+                    const SizedBox(width: 8),
+                    Expanded(child: _profileMetric(
+                      'Minha lista',
+                      (watchlists[person]?.length ?? 0).toString())),
+                  ]),
+                  const SizedBox(height: 20),
+                  const Text('COMO QUER SER CHAMADO(A)?',
+                    style: TextStyle(color: gold, fontSize: 11,
+                      letterSpacing: 1.1)),
+                  const SizedBox(height: 9),
+                  TextField(
+                    key: const Key('saturn-profile-name'),
+                    controller: name, maxLength: 26,
+                    decoration: const InputDecoration(
+                      hintText: 'Seu nome ou apelido',
+                      prefixIcon: Icon(Icons.badge_outlined),
+                      border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 9),
+                  const Text('ESCOLHA SEU SÍMBOLO',
+                    style: TextStyle(color: gold, fontSize: 11,
+                      letterSpacing: 1.1)),
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 7, runSpacing: 8, children: [
+                    for (final choice in _avatarChoices)
+                      ChoiceChip(
+                        label: Text(choice,
+                          style: const TextStyle(fontSize: 24)),
+                        selected: avatar == choice,
+                        onSelected: (_) => redraw(() => avatar = choice),
+                      ),
+                  ]),
+                  const SizedBox(height: 19),
+                  SizedBox(width: double.infinity,
+                    child: FilledButton.icon(
+                      key: const Key('saturn-profile-save'),
+                      onPressed: name.text.trim().isEmpty
+                          ? null : () {
+                        _updateProfileIdentity(person, name.text, avatar);
+                        Navigator.pop(modal);
+                      },
+                      icon: const Icon(Icons.check),
+                      label: const Text('Salvar meu perfil'),
+                    )),
+                  const SizedBox(height: 13),
+                  const Divider(color: Color(0x665B4353)),
+                  const SizedBox(height: 8),
+                  Text('NA NOSSA ÓRBITA: ' +
+                    profiles[1 - person] + ' ' + profileAvatars[1 - person],
+                    style: const TextStyle(
+                      color: Color(0xFFC8B4C0), fontSize: 12)),
+                  if (_cloud?.connected == true)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text('Cada conta edita seu próprio perfil. '
+                        'As histórias e memórias continuam compartilhadas.',
+                        style: TextStyle(
+                          color: Color(0xFFBBA9B6), fontSize: 11)),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }),
+      );
+    } finally {
+      name.dispose();
+    }
+  }
+
+  Widget _profileMetric(String label, String value) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFF36243A),
+      borderRadius: BorderRadius.circular(13)),
+    child: Column(children: [
+      Text(value, style: const TextStyle(
+        color: gold, fontSize: 20, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 4),
+      Text(label, style: const TextStyle(
+        color: Color(0xFFE0CDD6), fontSize: 10)),
+    ]),
+  );
+
   Future<void> _setStreaming(StreamingService service, bool enabled) async {
     setState(() {
       if (enabled) {
@@ -1237,36 +1380,64 @@ class _SaturnHomeState extends State<SaturnHome>
             onPressed: _showUpdates,
           ),
           PopupMenuButton<int>(
-            tooltip: 'Meu perfil · alternar',
+            tooltip: 'Perfis · personalizar',
             initialValue: profile,
-            onSelected: _setProfile,
+            onSelected: (value) {
+              if (value == 99) {
+                _showProfileSettings();
+              } else {
+                _setProfile(value);
+              }
+            },
             itemBuilder: (context) => [
               for (var i = 0; i < profiles.length; i++)
-                PopupMenuItem(
-                    value: i, child: Row(mainAxisSize: MainAxisSize.min,
-                      children: [Text('Perfil: ${profiles[i]}'),
-                        if (_bookFace(i).isNotEmpty) ...[
-                          const SizedBox(width: 8), Text(_bookFace(i)),
-                        ],
-                      ])),
+                PopupMenuItem<int>(
+                  value: i,
+                  enabled: _cloud?.connected != true ||
+                      _cloud?.memberProfileIndex == i,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(profileAvatars[i],
+                      style: const TextStyle(fontSize: 19)),
+                    const SizedBox(width: 8),
+                    Text(profiles[i]),
+                    if (_bookFace(i).isNotEmpty) ...[
+                      const SizedBox(width: 8), Text(_bookFace(i)),
+                    ],
+                  ]),
+                ),
+              const PopupMenuDivider(),
+              const PopupMenuItem<int>(
+                value: 99,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.edit_outlined, color: gold, size: 18),
+                  SizedBox(width: 8), Text('Personalizar meu perfil'),
+                ]),
+              ),
             ],
             child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Chip(label: Row(mainAxisSize: MainAxisSize.min,
-                children: [Text(profiles[profile]),
+              padding: const EdgeInsets.all(9),
+              child: Chip(
+                avatar: Text(profileAvatars[profile],
+                  style: const TextStyle(fontSize: 18)),
+                label: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(profiles[profile],
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
                   if (_bookFace(profile).isNotEmpty) ...[
                     const SizedBox(width: 6),
                     Tooltip(
-                       message: _bookFace(profile) == '😢'
-                         ? 'Leitura de mês anterior em atraso'
-                         : _bookFace(profile) == '📖'
-                           ? 'Livro do mês em andamento · prazo até o fim do mês'
-                           : 'Leitura concluída e avaliada',
-                       child: Text(_bookFace(profile))),
+                      message: _bookFace(profile) == '😢'
+                        ? 'Leitura de mês anterior em atraso'
+                        : _bookFace(profile) == '📖'
+                          ? 'Livro do mês em andamento · prazo até o fim do mês'
+                          : 'Leitura concluída e avaliada',
+                      child: Text(_bookFace(profile)),
+                    ),
                   ],
-                ])),
+                ]),
+              ),
             ),
           ),
+
         ],
       ),
       body: SafeArea(
