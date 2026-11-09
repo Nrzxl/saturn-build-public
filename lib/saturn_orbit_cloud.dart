@@ -16,10 +16,10 @@ class SaturnCloudConfig {
   static const configuredPublishableKey =
       String.fromEnvironment('SATURN_SUPABASE_PUBLISHABLE_KEY');
 
-  static const url = configuredUrl.isNotEmpty
+  static String get url => configuredUrl.isNotEmpty
       ? configuredUrl
       : 'https://uiyjeiddnirdhquapkic.supabase.co';
-  static const publishableKey = configuredPublishableKey.isNotEmpty
+  static String get publishableKey => configuredPublishableKey.isNotEmpty
       ? configuredPublishableKey
       : 'sb_publishable_wcYGG68bSWSYPrOwRAHb5g_bB7nFJDB';
 
