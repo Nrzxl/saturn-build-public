@@ -1451,28 +1451,43 @@ class _SaturnHomeState extends State<SaturnHome>
                 ]),
               ),
             ],
-            child: Padding(
-              padding: const EdgeInsets.all(9),
-              child: Chip(
-                avatar: Text(profileAvatars[profile],
-                  style: const TextStyle(fontSize: 18)),
-                label: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(profiles[profile],
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                  if (_bookFace(profile).isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Tooltip(
-                      message: _bookFace(profile) == '😢'
-                        ? 'Leitura de mês anterior em atraso'
-                        : _bookFace(profile) == '📖'
-                          ? 'Livro do mês em andamento · prazo até o fim do mês'
-                          : 'Leitura concluída e avaliada',
-                      child: Text(_bookFace(profile)),
+            child: desktop
+                ? Padding(
+                    padding: const EdgeInsets.all(9),
+                    child: Chip(
+                      avatar: Text(profileAvatars[profile],
+                        style: const TextStyle(fontSize: 18)),
+                      label: Row(mainAxisSize: MainAxisSize.min, children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 108),
+                          child: Text(profiles[profile],
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600))),
+                        if (_bookFace(profile).isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Text(_bookFace(profile)),
+                        ],
+                      ]),
                     ),
-                  ],
-                ]),
-              ),
-            ),
+                  )
+                : SizedBox(
+                    width: 46, height: 46,
+                    child: Stack(children: [
+                      Center(child: CircleAvatar(
+                        radius: 18,
+                        backgroundColor: const Color(0xFF4A2B40),
+                        child: Text(profileAvatars[profile],
+                          style: const TextStyle(fontSize: 21)),
+                      )),
+                      if (_bookFace(profile).isNotEmpty)
+                        Positioned(
+                          right: 0, bottom: 0,
+                          child: Text(_bookFace(profile),
+                            style: const TextStyle(fontSize: 15)),
+                        ),
+                    ]),
+                  ),
           ),
 
         ],
