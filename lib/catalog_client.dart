@@ -471,6 +471,831 @@ class CatalogClient {
     'Literatura brasileira': 'brazilian_literature',
   };
 
+
+  /// Open Library works group editions together. Track actual books/volumes
+  /// using edition OL...M IDs; fetch only when a user opens the selector.
+  Future<List<CatalogEntry>> bookEditions(String workId, {int page = 1}) async {
+    final match = RegExp(r'^openlibrary:/works/(OL[0-9]+W)
+    String query, {
+    int page = 1,
+    String? subject,
+  }) async {
+    final clean = query.trim();
+    final search = (subject == null || subject.isEmpty)
+        ? clean
+        : '$clean subject:$subject';
+    final data = await _get(Uri.https('openlibrary.org', '/search.json', {
+      'q': search,
+      'limit': '60',
+      'page': '${page.clamp(1, 150)}',
+      'fields': 'key,title,author_name,cover_i,first_publish_year,'
+          'isbn,edition_count,language',
+    }));
+    if (data is! Map || data['docs'] is! List) return [];
+    final result = <CatalogEntry>[];
+    for (final item in data['docs'] as List) {
+      if (item is! Map) continue;
+      final key = (item['key'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (key.isEmpty || title.isEmpty || !key.startsWith('/works/')) continue;
+      final authors = item['author_name'];
+      final author = authors is List && authors.isNotEmpty
+          ? authors.first.toString() : '';
+      final rawIsbns = item['isbn'];
+      final isbn = rawIsbns is List
+          ? rawIsbns.map((id) => id.toString()).firstWhere(
+              (id) => RegExp(r'^[0-9Xx-]{10,17}$').hasMatch(id),
+              orElse: () => '',
+            )
+          : '';
+      final editions = item['edition_count'] is num
+          ? (item['edition_count'] as num).toInt() : 0;
+      final cover = item['cover_i'];
+      result.add(CatalogEntry(
+        id: 'openlibrary:$key',
+        title: title,
+        kind: 'Livro',
+        description: [
+          if (author.isNotEmpty) 'Autor(a): $author',
+          if (isbn.isNotEmpty) 'ISBN: $isbn',
+          if (editions > 0) 'Edições catalogadas: $editions',
+        ].join(' · '),
+        year: item['first_publish_year'] is num
+            ? (item['first_publish_year'] as num).toInt()
+            : 0,
+        posterUrl: cover is num
+            ? 'https://covers.openlibrary.org/b/id/${cover.toInt()}-M.jpg'
+            : '',
+        creator: author,
+        provider: 'Open Library',
+        detailUrl: 'https://openlibrary.org$key',
+      ));
+    }
+    return result;
+  }
+
+  Future<List<CatalogEntry>> _discoverBooks(int page, {String? subject}) async {
+    final subjects = bookSubjects.values.toList(growable: false);
+    final number = page.clamp(1, 300).toInt();
+    final chosen = subject == null || subject.isEmpty
+        ? subjects[(number - 1) % subjects.length]
+        : subject;
+    final subjectPage = subject == null || subject.isEmpty
+        ? (number - 1) ~/ subjects.length
+        : number - 1;
+    final data = await _get(Uri.https(
+      'openlibrary.org',
+      '/subjects/$chosen.json',
+      {'limit': '60', 'offset': '${subjectPage * 60}'},
+    ));
+    if (data is! Map || data['works'] is! List) return [];
+    final result = <CatalogEntry>[];
+    for (final item in data['works'] as List) {
+      if (item is! Map) continue;
+      final key = (item['key'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (!key.startsWith('/works/') || title.isEmpty) continue;
+      final cover = item['cover_id'];
+      final authors = item['authors'];
+      final author = authors is List && authors.isNotEmpty && authors.first is Map
+          ? ((authors.first as Map)['name'] ?? '').toString()
+          : '';
+      final category = bookSubjects.entries
+          .where((entry) => entry.value == chosen)
+          .map((entry) => entry.key)
+          .firstOrNull ?? chosen;
+      result.add(CatalogEntry(
+        id: 'openlibrary:$key',
+        title: title,
+        kind: 'Livro',
+        description: [
+          if (author.isNotEmpty) 'Autor(a): $author',
+          'Categoria: $category',
+        ].join(' · '),
+        year: item['first_publish_year'] is num
+            ? (item['first_publish_year'] as num).toInt()
+            : 0,
+        posterUrl: cover is num
+            ? 'https://covers.openlibrary.org/b/id/${cover.toInt()}-M.jpg'
+            : '',
+        creator: author,
+        provider: 'Open Library',
+        detailUrl: 'https://openlibrary.org$key',
+      ));
+    }
+    return result;
+  }
+
+  static const _animeFields = r'''
+      id
+      title { romaji english native }
+      description(asHtml: false)
+      startDate { year }
+      coverImage { large extraLarge }
+      siteUrl
+      externalLinks { site url }
+    ''';
+
+  Future<List<CatalogEntry>> _anime({String? query, int page = 1}) async {
+    final gql = r'''
+      query ($page: Int!, $search: String) {
+        Page(page: $page, perPage: 24) {
+          media(type: ANIME, isAdult: false, search: $search,
+                sort: [POPULARITY_DESC]) {
+            MEDIA_FIELDS
+          }
+        }
+      }
+    '''.replaceFirst('MEDIA_FIELDS', _animeFields);
+    final response = await _post(
+      Uri.https('graphql.anilist.co', '/'),
+      {'query': gql, 'variables': {'page': page, 'search': query}},
+    );
+    if (response is! Map || response['data'] is! Map) return [];
+    final data = response['data'] as Map;
+    if (data['Page'] is! Map || (data['Page'] as Map)['media'] is! List) {
+      return [];
+    }
+    final items = (data['Page'] as Map)['media'] as List;
+    final result = <CatalogEntry>[];
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final id = raw['id'];
+      if (id == null) continue;
+      final titleMap = raw['title'];
+      final title = titleMap is Map
+          ? (titleMap['english'] ?? titleMap['romaji'] ?? titleMap['native'] ?? '').toString()
+          : '';
+      if (title.isEmpty) continue;
+      final cover = raw['coverImage'];
+      final published = raw['startDate'];
+      result.add(CatalogEntry(
+        id: 'anilist:$id',
+        title: title,
+        kind: 'Anime',
+        description: _strip((raw['description'] ?? '').toString()),
+        year: published is Map && published['year'] is num
+            ? (published['year'] as num).toInt() : 0,
+        posterUrl: cover is Map
+            ? (cover['extraLarge'] ?? cover['large'] ?? '').toString() : '',
+        creator: '',
+        provider: 'AniList',
+        detailUrl: (raw['siteUrl'] ?? '').toString(),
+        streamingLinks: extractOfficialTitleLinks(raw['externalLinks']),
+      ));
+    }
+    return result;
+  }
+
+  static int _year(String value) {
+    final match = RegExp(r'^\d{4}').firstMatch(value);
+    return match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
+  }
+
+  static String _strip(String value) => value
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+).firstMatch(workId);
+    if (match == null) return [];
+    final number = page.clamp(1, 100).toInt();
+    final path = '/works/' + match.group(1)! + '/editions.json';
+    final data = await _get(Uri.https('openlibrary.org', path, {
+      'limit': '50', 'offset': ((number - 1) * 50).toString(),
+    }));
+    if (data is! Map || data['entries'] is! List) return [];
+    final found = <CatalogEntry>[];
+    for (final raw in data['entries'] as List) {
+      if (raw is Map) {
+        final entry = _editionEntry(raw);
+        if (entry != null) found.add(entry);
+      }
+    }
+    return _unique(found);
+  }
+
+  /// ISBN points to the exact printing, rather than an umbrella work.
+  Future<CatalogEntry?> editionByIsbn(String input) async {
+    final isbn = input.replaceAll(RegExp(r'[^0-9Xx]'), '').toUpperCase();
+    if (!RegExp(r'^(?:[0-9]{13}|[0-9]{9}[0-9X])
+    String query, {
+    int page = 1,
+    String? subject,
+  }) async {
+    final clean = query.trim();
+    final search = (subject == null || subject.isEmpty)
+        ? clean
+        : '$clean subject:$subject';
+    final data = await _get(Uri.https('openlibrary.org', '/search.json', {
+      'q': search,
+      'limit': '60',
+      'page': '${page.clamp(1, 150)}',
+      'fields': 'key,title,author_name,cover_i,first_publish_year,'
+          'isbn,edition_count,language',
+    }));
+    if (data is! Map || data['docs'] is! List) return [];
+    final result = <CatalogEntry>[];
+    for (final item in data['docs'] as List) {
+      if (item is! Map) continue;
+      final key = (item['key'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (key.isEmpty || title.isEmpty || !key.startsWith('/works/')) continue;
+      final authors = item['author_name'];
+      final author = authors is List && authors.isNotEmpty
+          ? authors.first.toString() : '';
+      final rawIsbns = item['isbn'];
+      final isbn = rawIsbns is List
+          ? rawIsbns.map((id) => id.toString()).firstWhere(
+              (id) => RegExp(r'^[0-9Xx-]{10,17}$').hasMatch(id),
+              orElse: () => '',
+            )
+          : '';
+      final editions = item['edition_count'] is num
+          ? (item['edition_count'] as num).toInt() : 0;
+      final cover = item['cover_i'];
+      result.add(CatalogEntry(
+        id: 'openlibrary:$key',
+        title: title,
+        kind: 'Livro',
+        description: [
+          if (author.isNotEmpty) 'Autor(a): $author',
+          if (isbn.isNotEmpty) 'ISBN: $isbn',
+          if (editions > 0) 'Edições catalogadas: $editions',
+        ].join(' · '),
+        year: item['first_publish_year'] is num
+            ? (item['first_publish_year'] as num).toInt()
+            : 0,
+        posterUrl: cover is num
+            ? 'https://covers.openlibrary.org/b/id/${cover.toInt()}-M.jpg'
+            : '',
+        creator: author,
+        provider: 'Open Library',
+        detailUrl: 'https://openlibrary.org$key',
+      ));
+    }
+    return result;
+  }
+
+  Future<List<CatalogEntry>> _discoverBooks(int page, {String? subject}) async {
+    final subjects = bookSubjects.values.toList(growable: false);
+    final number = page.clamp(1, 300).toInt();
+    final chosen = subject == null || subject.isEmpty
+        ? subjects[(number - 1) % subjects.length]
+        : subject;
+    final subjectPage = subject == null || subject.isEmpty
+        ? (number - 1) ~/ subjects.length
+        : number - 1;
+    final data = await _get(Uri.https(
+      'openlibrary.org',
+      '/subjects/$chosen.json',
+      {'limit': '60', 'offset': '${subjectPage * 60}'},
+    ));
+    if (data is! Map || data['works'] is! List) return [];
+    final result = <CatalogEntry>[];
+    for (final item in data['works'] as List) {
+      if (item is! Map) continue;
+      final key = (item['key'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (!key.startsWith('/works/') || title.isEmpty) continue;
+      final cover = item['cover_id'];
+      final authors = item['authors'];
+      final author = authors is List && authors.isNotEmpty && authors.first is Map
+          ? ((authors.first as Map)['name'] ?? '').toString()
+          : '';
+      final category = bookSubjects.entries
+          .where((entry) => entry.value == chosen)
+          .map((entry) => entry.key)
+          .firstOrNull ?? chosen;
+      result.add(CatalogEntry(
+        id: 'openlibrary:$key',
+        title: title,
+        kind: 'Livro',
+        description: [
+          if (author.isNotEmpty) 'Autor(a): $author',
+          'Categoria: $category',
+        ].join(' · '),
+        year: item['first_publish_year'] is num
+            ? (item['first_publish_year'] as num).toInt()
+            : 0,
+        posterUrl: cover is num
+            ? 'https://covers.openlibrary.org/b/id/${cover.toInt()}-M.jpg'
+            : '',
+        creator: author,
+        provider: 'Open Library',
+        detailUrl: 'https://openlibrary.org$key',
+      ));
+    }
+    return result;
+  }
+
+  static const _animeFields = r'''
+      id
+      title { romaji english native }
+      description(asHtml: false)
+      startDate { year }
+      coverImage { large extraLarge }
+      siteUrl
+      externalLinks { site url }
+    ''';
+
+  Future<List<CatalogEntry>> _anime({String? query, int page = 1}) async {
+    final gql = r'''
+      query ($page: Int!, $search: String) {
+        Page(page: $page, perPage: 24) {
+          media(type: ANIME, isAdult: false, search: $search,
+                sort: [POPULARITY_DESC]) {
+            MEDIA_FIELDS
+          }
+        }
+      }
+    '''.replaceFirst('MEDIA_FIELDS', _animeFields);
+    final response = await _post(
+      Uri.https('graphql.anilist.co', '/'),
+      {'query': gql, 'variables': {'page': page, 'search': query}},
+    );
+    if (response is! Map || response['data'] is! Map) return [];
+    final data = response['data'] as Map;
+    if (data['Page'] is! Map || (data['Page'] as Map)['media'] is! List) {
+      return [];
+    }
+    final items = (data['Page'] as Map)['media'] as List;
+    final result = <CatalogEntry>[];
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final id = raw['id'];
+      if (id == null) continue;
+      final titleMap = raw['title'];
+      final title = titleMap is Map
+          ? (titleMap['english'] ?? titleMap['romaji'] ?? titleMap['native'] ?? '').toString()
+          : '';
+      if (title.isEmpty) continue;
+      final cover = raw['coverImage'];
+      final published = raw['startDate'];
+      result.add(CatalogEntry(
+        id: 'anilist:$id',
+        title: title,
+        kind: 'Anime',
+        description: _strip((raw['description'] ?? '').toString()),
+        year: published is Map && published['year'] is num
+            ? (published['year'] as num).toInt() : 0,
+        posterUrl: cover is Map
+            ? (cover['extraLarge'] ?? cover['large'] ?? '').toString() : '',
+        creator: '',
+        provider: 'AniList',
+        detailUrl: (raw['siteUrl'] ?? '').toString(),
+        streamingLinks: extractOfficialTitleLinks(raw['externalLinks']),
+      ));
+    }
+    return result;
+  }
+
+  static int _year(String value) {
+    final match = RegExp(r'^\d{4}').firstMatch(value);
+    return match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
+  }
+
+  static String _strip(String value) => value
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+).hasMatch(isbn)) return null;
+    final raw = await _get(Uri.https(
+      'openlibrary.org', '/isbn/' + isbn + '.json'));
+    return raw is Map ? _editionEntry(raw) : null;
+  }
+
+  static CatalogEntry? _editionEntry(Map<dynamic, dynamic> raw) {
+    final key = (raw['key'] ?? '').toString();
+    if (!RegExp(r'^/books/OL[0-9]+M
+    String query, {
+    int page = 1,
+    String? subject,
+  }) async {
+    final clean = query.trim();
+    final search = (subject == null || subject.isEmpty)
+        ? clean
+        : '$clean subject:$subject';
+    final data = await _get(Uri.https('openlibrary.org', '/search.json', {
+      'q': search,
+      'limit': '60',
+      'page': '${page.clamp(1, 150)}',
+      'fields': 'key,title,author_name,cover_i,first_publish_year,'
+          'isbn,edition_count,language',
+    }));
+    if (data is! Map || data['docs'] is! List) return [];
+    final result = <CatalogEntry>[];
+    for (final item in data['docs'] as List) {
+      if (item is! Map) continue;
+      final key = (item['key'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (key.isEmpty || title.isEmpty || !key.startsWith('/works/')) continue;
+      final authors = item['author_name'];
+      final author = authors is List && authors.isNotEmpty
+          ? authors.first.toString() : '';
+      final rawIsbns = item['isbn'];
+      final isbn = rawIsbns is List
+          ? rawIsbns.map((id) => id.toString()).firstWhere(
+              (id) => RegExp(r'^[0-9Xx-]{10,17}$').hasMatch(id),
+              orElse: () => '',
+            )
+          : '';
+      final editions = item['edition_count'] is num
+          ? (item['edition_count'] as num).toInt() : 0;
+      final cover = item['cover_i'];
+      result.add(CatalogEntry(
+        id: 'openlibrary:$key',
+        title: title,
+        kind: 'Livro',
+        description: [
+          if (author.isNotEmpty) 'Autor(a): $author',
+          if (isbn.isNotEmpty) 'ISBN: $isbn',
+          if (editions > 0) 'Edições catalogadas: $editions',
+        ].join(' · '),
+        year: item['first_publish_year'] is num
+            ? (item['first_publish_year'] as num).toInt()
+            : 0,
+        posterUrl: cover is num
+            ? 'https://covers.openlibrary.org/b/id/${cover.toInt()}-M.jpg'
+            : '',
+        creator: author,
+        provider: 'Open Library',
+        detailUrl: 'https://openlibrary.org$key',
+      ));
+    }
+    return result;
+  }
+
+  Future<List<CatalogEntry>> _discoverBooks(int page, {String? subject}) async {
+    final subjects = bookSubjects.values.toList(growable: false);
+    final number = page.clamp(1, 300).toInt();
+    final chosen = subject == null || subject.isEmpty
+        ? subjects[(number - 1) % subjects.length]
+        : subject;
+    final subjectPage = subject == null || subject.isEmpty
+        ? (number - 1) ~/ subjects.length
+        : number - 1;
+    final data = await _get(Uri.https(
+      'openlibrary.org',
+      '/subjects/$chosen.json',
+      {'limit': '60', 'offset': '${subjectPage * 60}'},
+    ));
+    if (data is! Map || data['works'] is! List) return [];
+    final result = <CatalogEntry>[];
+    for (final item in data['works'] as List) {
+      if (item is! Map) continue;
+      final key = (item['key'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (!key.startsWith('/works/') || title.isEmpty) continue;
+      final cover = item['cover_id'];
+      final authors = item['authors'];
+      final author = authors is List && authors.isNotEmpty && authors.first is Map
+          ? ((authors.first as Map)['name'] ?? '').toString()
+          : '';
+      final category = bookSubjects.entries
+          .where((entry) => entry.value == chosen)
+          .map((entry) => entry.key)
+          .firstOrNull ?? chosen;
+      result.add(CatalogEntry(
+        id: 'openlibrary:$key',
+        title: title,
+        kind: 'Livro',
+        description: [
+          if (author.isNotEmpty) 'Autor(a): $author',
+          'Categoria: $category',
+        ].join(' · '),
+        year: item['first_publish_year'] is num
+            ? (item['first_publish_year'] as num).toInt()
+            : 0,
+        posterUrl: cover is num
+            ? 'https://covers.openlibrary.org/b/id/${cover.toInt()}-M.jpg'
+            : '',
+        creator: author,
+        provider: 'Open Library',
+        detailUrl: 'https://openlibrary.org$key',
+      ));
+    }
+    return result;
+  }
+
+  static const _animeFields = r'''
+      id
+      title { romaji english native }
+      description(asHtml: false)
+      startDate { year }
+      coverImage { large extraLarge }
+      siteUrl
+      externalLinks { site url }
+    ''';
+
+  Future<List<CatalogEntry>> _anime({String? query, int page = 1}) async {
+    final gql = r'''
+      query ($page: Int!, $search: String) {
+        Page(page: $page, perPage: 24) {
+          media(type: ANIME, isAdult: false, search: $search,
+                sort: [POPULARITY_DESC]) {
+            MEDIA_FIELDS
+          }
+        }
+      }
+    '''.replaceFirst('MEDIA_FIELDS', _animeFields);
+    final response = await _post(
+      Uri.https('graphql.anilist.co', '/'),
+      {'query': gql, 'variables': {'page': page, 'search': query}},
+    );
+    if (response is! Map || response['data'] is! Map) return [];
+    final data = response['data'] as Map;
+    if (data['Page'] is! Map || (data['Page'] as Map)['media'] is! List) {
+      return [];
+    }
+    final items = (data['Page'] as Map)['media'] as List;
+    final result = <CatalogEntry>[];
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final id = raw['id'];
+      if (id == null) continue;
+      final titleMap = raw['title'];
+      final title = titleMap is Map
+          ? (titleMap['english'] ?? titleMap['romaji'] ?? titleMap['native'] ?? '').toString()
+          : '';
+      if (title.isEmpty) continue;
+      final cover = raw['coverImage'];
+      final published = raw['startDate'];
+      result.add(CatalogEntry(
+        id: 'anilist:$id',
+        title: title,
+        kind: 'Anime',
+        description: _strip((raw['description'] ?? '').toString()),
+        year: published is Map && published['year'] is num
+            ? (published['year'] as num).toInt() : 0,
+        posterUrl: cover is Map
+            ? (cover['extraLarge'] ?? cover['large'] ?? '').toString() : '',
+        creator: '',
+        provider: 'AniList',
+        detailUrl: (raw['siteUrl'] ?? '').toString(),
+        streamingLinks: extractOfficialTitleLinks(raw['externalLinks']),
+      ));
+    }
+    return result;
+  }
+
+  static int _year(String value) {
+    final match = RegExp(r'^\d{4}').firstMatch(value);
+    return match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
+  }
+
+  static String _strip(String value) => value
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+).hasMatch(key)) return null;
+    final base = (raw['title'] ?? '').toString().trim();
+    if (base.isEmpty) return null;
+    final extras = <String>[];
+    for (final field in ['subtitle', 'volume', 'edition_name']) {
+      final value = (raw[field] ?? '').toString().trim();
+      if (value.isNotEmpty && !base.toLowerCase().contains(value.toLowerCase())
+          && !extras.any((x) => x.toLowerCase() == value.toLowerCase())) {
+        extras.add(value);
+      }
+    }
+    final title = [base, ...extras].join(' · ');
+    final isbnList = <String>[
+      if (raw['isbn_13'] is List)
+        for (final v in raw['isbn_13'] as List) v.toString(),
+      if (raw['isbn_10'] is List)
+        for (final v in raw['isbn_10'] as List) v.toString(),
+    ];
+    final isbn = isbnList.firstWhere(
+      (v) => RegExp(r'^(?:[0-9]{13}|[0-9]{9}[0-9Xx])
+    String query, {
+    int page = 1,
+    String? subject,
+  }) async {
+    final clean = query.trim();
+    final search = (subject == null || subject.isEmpty)
+        ? clean
+        : '$clean subject:$subject';
+    final data = await _get(Uri.https('openlibrary.org', '/search.json', {
+      'q': search,
+      'limit': '60',
+      'page': '${page.clamp(1, 150)}',
+      'fields': 'key,title,author_name,cover_i,first_publish_year,'
+          'isbn,edition_count,language',
+    }));
+    if (data is! Map || data['docs'] is! List) return [];
+    final result = <CatalogEntry>[];
+    for (final item in data['docs'] as List) {
+      if (item is! Map) continue;
+      final key = (item['key'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (key.isEmpty || title.isEmpty || !key.startsWith('/works/')) continue;
+      final authors = item['author_name'];
+      final author = authors is List && authors.isNotEmpty
+          ? authors.first.toString() : '';
+      final rawIsbns = item['isbn'];
+      final isbn = rawIsbns is List
+          ? rawIsbns.map((id) => id.toString()).firstWhere(
+              (id) => RegExp(r'^[0-9Xx-]{10,17}$').hasMatch(id),
+              orElse: () => '',
+            )
+          : '';
+      final editions = item['edition_count'] is num
+          ? (item['edition_count'] as num).toInt() : 0;
+      final cover = item['cover_i'];
+      result.add(CatalogEntry(
+        id: 'openlibrary:$key',
+        title: title,
+        kind: 'Livro',
+        description: [
+          if (author.isNotEmpty) 'Autor(a): $author',
+          if (isbn.isNotEmpty) 'ISBN: $isbn',
+          if (editions > 0) 'Edições catalogadas: $editions',
+        ].join(' · '),
+        year: item['first_publish_year'] is num
+            ? (item['first_publish_year'] as num).toInt()
+            : 0,
+        posterUrl: cover is num
+            ? 'https://covers.openlibrary.org/b/id/${cover.toInt()}-M.jpg'
+            : '',
+        creator: author,
+        provider: 'Open Library',
+        detailUrl: 'https://openlibrary.org$key',
+      ));
+    }
+    return result;
+  }
+
+  Future<List<CatalogEntry>> _discoverBooks(int page, {String? subject}) async {
+    final subjects = bookSubjects.values.toList(growable: false);
+    final number = page.clamp(1, 300).toInt();
+    final chosen = subject == null || subject.isEmpty
+        ? subjects[(number - 1) % subjects.length]
+        : subject;
+    final subjectPage = subject == null || subject.isEmpty
+        ? (number - 1) ~/ subjects.length
+        : number - 1;
+    final data = await _get(Uri.https(
+      'openlibrary.org',
+      '/subjects/$chosen.json',
+      {'limit': '60', 'offset': '${subjectPage * 60}'},
+    ));
+    if (data is! Map || data['works'] is! List) return [];
+    final result = <CatalogEntry>[];
+    for (final item in data['works'] as List) {
+      if (item is! Map) continue;
+      final key = (item['key'] ?? '').toString();
+      final title = (item['title'] ?? '').toString();
+      if (!key.startsWith('/works/') || title.isEmpty) continue;
+      final cover = item['cover_id'];
+      final authors = item['authors'];
+      final author = authors is List && authors.isNotEmpty && authors.first is Map
+          ? ((authors.first as Map)['name'] ?? '').toString()
+          : '';
+      final category = bookSubjects.entries
+          .where((entry) => entry.value == chosen)
+          .map((entry) => entry.key)
+          .firstOrNull ?? chosen;
+      result.add(CatalogEntry(
+        id: 'openlibrary:$key',
+        title: title,
+        kind: 'Livro',
+        description: [
+          if (author.isNotEmpty) 'Autor(a): $author',
+          'Categoria: $category',
+        ].join(' · '),
+        year: item['first_publish_year'] is num
+            ? (item['first_publish_year'] as num).toInt()
+            : 0,
+        posterUrl: cover is num
+            ? 'https://covers.openlibrary.org/b/id/${cover.toInt()}-M.jpg'
+            : '',
+        creator: author,
+        provider: 'Open Library',
+        detailUrl: 'https://openlibrary.org$key',
+      ));
+    }
+    return result;
+  }
+
+  static const _animeFields = r'''
+      id
+      title { romaji english native }
+      description(asHtml: false)
+      startDate { year }
+      coverImage { large extraLarge }
+      siteUrl
+      externalLinks { site url }
+    ''';
+
+  Future<List<CatalogEntry>> _anime({String? query, int page = 1}) async {
+    final gql = r'''
+      query ($page: Int!, $search: String) {
+        Page(page: $page, perPage: 24) {
+          media(type: ANIME, isAdult: false, search: $search,
+                sort: [POPULARITY_DESC]) {
+            MEDIA_FIELDS
+          }
+        }
+      }
+    '''.replaceFirst('MEDIA_FIELDS', _animeFields);
+    final response = await _post(
+      Uri.https('graphql.anilist.co', '/'),
+      {'query': gql, 'variables': {'page': page, 'search': query}},
+    );
+    if (response is! Map || response['data'] is! Map) return [];
+    final data = response['data'] as Map;
+    if (data['Page'] is! Map || (data['Page'] as Map)['media'] is! List) {
+      return [];
+    }
+    final items = (data['Page'] as Map)['media'] as List;
+    final result = <CatalogEntry>[];
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final id = raw['id'];
+      if (id == null) continue;
+      final titleMap = raw['title'];
+      final title = titleMap is Map
+          ? (titleMap['english'] ?? titleMap['romaji'] ?? titleMap['native'] ?? '').toString()
+          : '';
+      if (title.isEmpty) continue;
+      final cover = raw['coverImage'];
+      final published = raw['startDate'];
+      result.add(CatalogEntry(
+        id: 'anilist:$id',
+        title: title,
+        kind: 'Anime',
+        description: _strip((raw['description'] ?? '').toString()),
+        year: published is Map && published['year'] is num
+            ? (published['year'] as num).toInt() : 0,
+        posterUrl: cover is Map
+            ? (cover['extraLarge'] ?? cover['large'] ?? '').toString() : '',
+        creator: '',
+        provider: 'AniList',
+        detailUrl: (raw['siteUrl'] ?? '').toString(),
+        streamingLinks: extractOfficialTitleLinks(raw['externalLinks']),
+      ));
+    }
+    return result;
+  }
+
+  static int _year(String value) {
+    final match = RegExp(r'^\d{4}').firstMatch(value);
+    return match == null ? 0 : int.tryParse(match.group(0)!) ?? 0;
+  }
+
+  static String _strip(String value) => value
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+).hasMatch(v),
+      orElse: () => '');
+    final date = (raw['publish_date'] ?? '').toString();
+    final years = RegExp(r'(18|19|20)[0-9]{2}').allMatches(date);
+    final year = years.isEmpty ? 0 : int.parse(years.last.group(0)!);
+    final covers = raw['covers'];
+    final cover = covers is List && covers.isNotEmpty ? covers.first : null;
+    final publishers = raw['publishers'];
+    final publisher = publishers is List && publishers.isNotEmpty
+        ? publishers.first.toString() : '';
+    return CatalogEntry(
+      id: 'openlibrary:' + key,
+      title: title,
+      kind: 'Livro',
+      description: [
+        'Edição individual da Open Library',
+        if (extras.isNotEmpty) 'Identificação: ' + extras.join(' · '),
+        if (publisher.isNotEmpty) 'Editora: ' + publisher,
+        if (date.isNotEmpty) 'Publicação: ' + date,
+        if (isbn.isNotEmpty) 'ISBN: ' + isbn,
+      ].join(' · '),
+      year: year,
+      posterUrl: cover is num && cover > 0
+        ? 'https://covers.openlibrary.org/b/id/' + cover.toInt().toString() + '-M.jpg'
+        : isbn.isNotEmpty
+          ? 'https://covers.openlibrary.org/b/isbn/' + isbn + '-M.jpg'
+          : '',
+      creator: publisher,
+      provider: 'Open Library · edição',
+      detailUrl: 'https://openlibrary.org' + key,
+    );
+  }
+
   Future<List<CatalogEntry>> _books(
     String query, {
     int page = 1,

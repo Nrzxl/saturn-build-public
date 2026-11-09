@@ -65,6 +65,47 @@ void main() {
     expect(result.single.description, contains('210'));
   });
 
+  test('Manga volume 1 and special edition keep distinct IDs', () async {
+    final catalog = CatalogClient(client: MockClient((request) async {
+      expect(request.url.path, '/works/OL999W/editions.json');
+      expect(request.url.queryParameters['offset'], '0');
+      return http.Response(jsonEncode({
+        'entries': [
+          {'key': '/books/OL111M', 'title': 'Soul Eater',
+            'subtitle': 'Vol. 1', 'publish_date': '2020',
+            'isbn_13': ['9780000000001'], 'covers': [555]},
+          {'key': '/books/OL222M', 'title': 'Soul Eater',
+            'edition_name': 'Perfect Edition',
+            'publish_date': '2021', 'covers': [666]},
+        ],
+      }), 200);
+    }));
+    addTearDown(catalog.close);
+    final editions = await catalog.bookEditions('openlibrary:/works/OL999W');
+    expect(editions, hasLength(2));
+    expect(editions[0].id, 'openlibrary:/books/OL111M');
+    expect(editions[1].id, 'openlibrary:/books/OL222M');
+    expect(editions[0].title, contains('Vol. 1'));
+    expect(editions[0].year, 2020);
+    expect(editions[1].title, contains('Perfect Edition'));
+    expect(await catalog.bookEditions('not-a-work'), isEmpty);
+  });
+
+  test('ISBN looks up one edition instead of parent work', () async {
+    final catalog = CatalogClient(client: MockClient((request) async {
+      expect(request.url.path, '/isbn/9780000000001.json');
+      return http.Response(jsonEncode({
+        'key': '/books/OL111M', 'title': 'Soul Eater 1',
+        'publish_date': '2020', 'isbn_13': ['9780000000001'],
+      }), 200);
+    }));
+    addTearDown(catalog.close);
+    final edition = await catalog.editionByIsbn('978-0-000000-00-1');
+    expect(edition?.id, 'openlibrary:/books/OL111M');
+    expect(edition?.year, 2020);
+    expect(await catalog.editionByIsbn('invalid'), isNull);
+  });
+
   test('Unrecognized genres cannot create arbitrary API paths', () {
     expect(CatalogClient.bookSubjects.values,
       containsAll(['manga', 'romance', 'science_fiction', 'fiction']));
