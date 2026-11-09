@@ -2785,6 +2785,27 @@ class _SaturnHomeState extends State<SaturnHome>
                 ],
                 _cinematicDetailBanner(w),
                 const SizedBox(height: 12),
+                if (w.kind == 'Livro' &&
+                    w.id.startsWith('openlibrary:/works/')) ...[
+                  const Text(
+                    'Este registro reúne várias edições. Para mangás, '
+                    'escolha o volume específico antes de registrar '
+                    'o progresso e a nota.',
+                    style: TextStyle(color: Color(0xFFDDC4D1), fontSize: 12)),
+                  const SizedBox(height: 9),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      final edition = await _chooseBookEdition(w);
+                      if (edition == null || edition.id == w.id ||
+                          !ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      if (mounted) await _details(edition);
+                    },
+                    icon: const Icon(Icons.collections_bookmark_outlined),
+                    label: const Text('Escolher volume ou edição'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (w.kind == 'Livro')
                   SaturnBookDetailsPanel(
                     bookId: w.id,
