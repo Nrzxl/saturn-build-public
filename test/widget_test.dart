@@ -175,7 +175,7 @@ void main() {
     final sharedScroll = find.descendant(
       of: find.byKey(const PageStorageKey('saturn_shared_orbit')),
       matching: find.byType(Scrollable),
-    );
+    ).first;
     await tester.scrollUntilVisible(
       find.text('Memórias da nossa órbita'), 220,
       scrollable: sharedScroll, maxScrolls: 20);
@@ -241,7 +241,7 @@ void main() {
     final sharedScroll = find.descendant(
       of: find.byKey(const PageStorageKey('saturn_shared_orbit')),
       matching: find.byType(Scrollable),
-    );
+    ).first;
     await tester.scrollUntilVisible(
       find.text('MOMENTOS DA NOSSA HISTÓRIA'), 210,
       scrollable: sharedScroll, maxScrolls: 20);
@@ -318,7 +318,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Anime da Nossa Órbita'), findsOneWidget);
 
-    await tester.tap(find.text('Anime da Nossa Órbita'));
+    final animeCard = find.byKey(Key('saturn-ranked-card-' + saved.id));
+    await tester.ensureVisible(animeCard);
+    await tester.pumpAndSettle();
+    await tester.tap(animeCard);
     await tester.pumpAndSettle();
     expect(find.text('ONDE ASSISTIR · BRASIL'), findsOneWidget);
     expect(find.text('Crunchyroll'), findsWidgets);
@@ -358,7 +361,10 @@ void main() {
     expect(find.text('Livros • Minha estante'), findsOneWidget);
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Livro para Teste').first);
+    final bookCard = find.byKey(Key('saturn-ranked-card-' + book.id));
+    await tester.ensureVisible(bookCard);
+    await tester.pumpAndSettle();
+    await tester.tap(bookCard);
     await tester.pumpAndSettle();
     expect(find.text('MINHAS ESTRELAS'), findsOneWidget);
     expect(find.text('Quero ler ✓'), findsOneWidget);
@@ -446,7 +452,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Nossa Série'));
+    final seriesCard = find.byKey(Key('saturn-ranked-card-' + film.id));
+    await tester.ensureVisible(seriesCard);
+    await tester.pumpAndSettle();
+    await tester.tap(seriesCard);
     await tester.pumpAndSettle();
     expect(find.text('O QUE NÓS ACHAMOS'), findsOneWidget);
     expect(find.textContaining('Eu amei a história!'), findsWidgets);
