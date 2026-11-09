@@ -770,6 +770,15 @@ class _SaturnHomeState extends State<SaturnHome>
     if (work != null && (book ? work.kind != 'Livro' : work.kind != 'Filme')) {
       return;
     }
+    if (book && work != null &&
+        !SaturnOrbitRituals.canChooseBook(
+          _ritualOps, period, person, work.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+          'Cada perfil escolhe um livro diferente neste mês.')),
+      );
+      return;
+    }
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
       if (work != null && !works.any((old) => old.id == work.id)) {
@@ -778,29 +787,37 @@ class _SaturnHomeState extends State<SaturnHome>
       _ritualOps[SaturnOrbitRituals.nomination(period, person)] = {
         'workId': work?.id ?? '', 'updatedAt': stamp,
       };
-      final chosenKey = SaturnOrbitRituals.selection(period);
-      final selected = _ritualId(chosenKey);
-      if (selected.isNotEmpty &&
-          selected != _ritualId(SaturnOrbitRituals.nomination(period, 0)) &&
-          selected != _ritualId(SaturnOrbitRituals.nomination(period, 1))) {
-        // A replaced candidate can no longer be the final choice.
-        _ritualOps[chosenKey] = {
-          'workId': '', 'updatedAt': stamp + 1,
+      if (book && work != null && !shared.contains(work.id)) {
+        // Both personal reading journeys live in Nossa Órbita.
+        shared.add(work.id);
+        _sharedOps[work.id] = {
+          'present': true, 'updatedAt': stamp,
         };
+      }
+      if (!book) {
+        final chosenKey = SaturnOrbitRituals.selection(period);
+        final selected = _ritualId(chosenKey);
+        if (selected.isNotEmpty &&
+            selected != _ritualId(SaturnOrbitRituals.nomination(period, 0)) &&
+            selected != _ritualId(SaturnOrbitRituals.nomination(period, 1))) {
+          // A replaced film candidate cannot remain the final movie pick.
+          _ritualOps[chosenKey] = {
+            'workId': '', 'updatedAt': stamp + 1,
+          };
+        }
       }
     });
     _save();
   }
 
   void _chooseRitualWork(String period, Work work) {
+    // Monthly books are personal choices, never a shared final vote.
+    if (!period.startsWith('weekend:')) return;
     if (work.id != _ritualId(SaturnOrbitRituals.nomination(period, 0)) &&
         work.id != _ritualId(SaturnOrbitRituals.nomination(period, 1))) {
       return; // Only one of the two proposals can be chosen.
     }
-    if ((period.startsWith('month:') && work.kind != 'Livro') ||
-        (period.startsWith('weekend:') && work.kind != 'Filme')) {
-      return;
-    }
+    if (work.kind != 'Filme') return;
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
       if (!works.any((old) => old.id == work.id)) {
@@ -881,7 +898,7 @@ class _SaturnHomeState extends State<SaturnHome>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(book ? 'Indicar o livro do mês'
+                    Text(book ? 'Escolher meu livro do mês'
                         : 'Indicar o filme do fim de semana',
                       style: const TextStyle(
                         color: ivory, fontFamily: 'serif',
@@ -953,10 +970,11 @@ class _SaturnHomeState extends State<SaturnHome>
     }
   }
 
-  /// Face remains sad for an unread/unrated book even after month rollover.
+  /// Each face reflects only that profile's reading assignments.
   String _bookFace(int person) {
     final now = DateTime.now();
-    if (!SaturnOrbitRituals.hasAssignedBooks(_ritualOps, now)) return '';
+    if (!SaturnOrbitRituals.hasAssignedBooks(
+        _ritualOps, now, person: person)) return '';
     return SaturnOrbitRituals.pendingBooks(
       _ritualOps, records, person, now).isEmpty ? '😊' : '😢';
   }
@@ -2056,7 +2074,7 @@ class _SaturnHomeState extends State<SaturnHome>
           Expanded(child: Text(profiles[person],
             style: const TextStyle(
               color: ivory, fontWeight: FontWeight.w700))),
-          if (work?.id == chosenId && work != null)
+          if (!book && work?.id == chosenId && work != null)
             const Icon(Icons.check_circle, size: 18, color: gold),
         ]),
         const SizedBox(height: 10),
@@ -2079,6 +2097,21 @@ class _SaturnHomeState extends State<SaturnHome>
               : 'Ainda não indicou ${book ? 'um livro' : 'um filme'}.',
             style: const TextStyle(
               color: Color(0xFFCCB7C2), fontSize: 12)),
+        if (book && work != null) ...[
+          const SizedBox(height: 10),
+          _ritualBookFace(person, work),
+          if (person == profile &&
+              !SaturnOrbitRituals.bookFinishedAndRated(
+                  records, person, work.id))
+            Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: FilledButton.icon(
+                onPressed: () => _details(work),
+                icon: const Icon(Icons.rate_review_outlined, size: 17),
+                label: const Text('Marcar leitura e dar nota'),
+              ),
+            ),
+        ],
         const SizedBox(height: 12),
         if (person == profile)
           OutlinedButton.icon(
@@ -2086,7 +2119,9 @@ class _SaturnHomeState extends State<SaturnHome>
             icon: Icon(work == null
                 ? Icons.add_circle_outline : Icons.edit_outlined,
               size: 16),
-            label: Text(work == null ? 'Fazer minha indicação' : 'Trocar indicação'),
+            label: Text(book
+                ? (work == null ? 'Escolher meu livro' : 'Trocar meu livro')
+                : (work == null ? 'Fazer minha indicação' : 'Trocar indicação')),
           )
         else
           Text('Troque para o perfil ${profiles[person]} para indicar.',
@@ -2095,13 +2130,12 @@ class _SaturnHomeState extends State<SaturnHome>
         if (person == profile && nominatedId.isNotEmpty)
           TextButton(
             onPressed: () => _setRitualNomination(period, person, null),
-            child: const Text('Retirar indicação')),
-        if (work != null && work.id != chosenId)
+            child: Text(book ? 'Retirar meu livro' : 'Retirar indicação')),
+        if (!book && work != null && work.id != chosenId)
           TextButton.icon(
             onPressed: () => _chooseRitualWork(period, work),
             icon: const Icon(Icons.favorite_border, size: 16),
-            label: Text(book ? 'Escolher nosso livro'
-                : 'Escolher nosso filme')),
+            label: const Text('Escolher nosso filme')),
       ]),
     );
   }
@@ -2158,7 +2192,8 @@ class _SaturnHomeState extends State<SaturnHome>
         ]),
         const SizedBox(height: 9),
         Text(book
-            ? 'Cada um indica um livro; escolham uma única leitura do mês.'
+            ? 'Uma leitura diferente para cada pessoa, com nota e resenha '
+              'individuais. Não há votação de livro.'
             : 'Um filme indicado por cada um. Escolham juntos o que assistir.',
           style: const TextStyle(
             color: Color(0xFFD6C2CE), fontSize: 12, height: 1.35)),
@@ -2174,70 +2209,59 @@ class _SaturnHomeState extends State<SaturnHome>
                 child: _ritualProposer(period, book, person)),
           ]);
         }),
-        const SizedBox(height: 14),
-        const Divider(color: Color(0x665F4355)),
-        const SizedBox(height: 6),
-        const Text('NOSSA ESCOLHA',
-          style: TextStyle(color: gold, fontSize: 10,
-            fontWeight: FontWeight.bold, letterSpacing: 1.6)),
-        const SizedBox(height: 10),
-        if (selected == null)
-          Text(chosenId.isEmpty
-              ? 'Aguardando vocês escolherem uma das indicações.'
-              : 'O título escolhido ainda não foi carregado neste aparelho.',
-            style: const TextStyle(color: ivory, fontSize: 12))
-        else ...[
-          InkWell(
-            onTap: () => _details(selected),
-            child: Row(children: [
-              PosterThumbnail(work: selected, width: 63, height: 92),
-              const SizedBox(width: 12),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(selected.title, maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: ivory, fontSize: 17,
-                      fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(book
-                      ? 'Nosso livro de ${SaturnOrbitRituals.monthLabel(DateTime.now())}'
-                      : 'Nosso filme para este fim de semana',
-                    style: const TextStyle(
-                      color: gold, fontSize: 11)),
-                  const SizedBox(height: 7),
-                  const Text('Toque para abrir a ficha',
-                    style: TextStyle(
-                      color: Color(0xFFC9B6C0), fontSize: 11)),
-                ],
-              )),
-            ]),
+        if (!book) ...[
+          const SizedBox(height: 14),
+          const Divider(color: Color(0x665F4355)),
+          const SizedBox(height: 6),
+          const Text('NOSSA ESCOLHA',
+            style: TextStyle(color: gold, fontSize: 10,
+              fontWeight: FontWeight.bold, letterSpacing: 1.6)),
+          const SizedBox(height: 10),
+          if (selected == null)
+            Text(chosenId.isEmpty
+                ? 'Aguardando vocês escolherem uma das indicações.'
+                : 'O título escolhido ainda não foi carregado neste aparelho.',
+              style: const TextStyle(color: ivory, fontSize: 12))
+          else
+            InkWell(
+              onTap: () => _details(selected),
+              child: Row(children: [
+                PosterThumbnail(work: selected, width: 63, height: 92),
+                const SizedBox(width: 12),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(selected.title, maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: ivory, fontSize: 17,
+                        fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    const Text('Nosso filme para este fim de semana',
+                      style: TextStyle(color: gold, fontSize: 11)),
+                    const SizedBox(height: 7),
+                    const Text('Toque para abrir a ficha',
+                      style: TextStyle(
+                        color: Color(0xFFC9B6C0), fontSize: 11)),
+                  ],
+                )),
+              ]),
+            ),
+        ] else ...[
+          const SizedBox(height: 12),
+          const Text(
+            'Cada perfil escolhe e avalia seu próprio livro. '
+            'A carinha muda quando a leitura e a nota estiverem concluídas.',
+            style: TextStyle(
+              color: Color(0xFFCDB9C4), fontSize: 11, height: 1.35),
           ),
-          if (book) ...[
-            const SizedBox(height: 10),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              _ritualBookFace(0, selected),
-              _ritualBookFace(1, selected),
-            ]),
-            if (!SaturnOrbitRituals.bookFinishedAndRated(
-                records, profile, selected.id))
-              Padding(
-                padding: const EdgeInsets.only(top: 9),
-                child: FilledButton.icon(
-                  onPressed: () => _details(selected),
-                  icon: const Icon(Icons.rate_review_outlined),
-                  label: const Text('Marcar leitura e dar nota'),
-                ),
-              ),
-          ],
         ],
       ]),
     );
   }
 
   Widget _pastBookReminders(DateTime now) {
-    final current = _ritualId(
-      SaturnOrbitRituals.selection(SaturnOrbitRituals.monthPeriod(now)));
+    final current = _ritualId(SaturnOrbitRituals.nomination(
+      SaturnOrbitRituals.monthPeriod(now), profile));
     final pending = SaturnOrbitRituals.pendingBooks(
       _ritualOps, records, profile, now)
         .where((id) => id != current).toSet().toList();
@@ -2301,7 +2325,7 @@ class _SaturnHomeState extends State<SaturnHome>
         ),
         _ritualCard(
           period: SaturnOrbitRituals.monthPeriod(DateTime.now()),
-          title: 'Livro do mês',
+          title: 'Nossos livros do mês',
           dateLabel: SaturnOrbitRituals.monthLabel(DateTime.now()),
           book: true,
         ),
@@ -2638,7 +2662,7 @@ class _SaturnHomeState extends State<SaturnHome>
                     },
                     icon: const Icon(Icons.favorite_border_rounded),
                     label: Text(w.kind == 'Livro'
-                        ? 'Indicar como meu livro do mês'
+                        ? 'Escolher como meu livro do mês'
                         : 'Indicar como meu filme do fim de semana'),
                   ),
                   const SizedBox(height: 16),

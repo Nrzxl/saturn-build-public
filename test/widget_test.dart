@@ -65,10 +65,13 @@ void main() {
     final month = SaturnOrbitRituals.monthPeriod(now);
     final weekend = SaturnOrbitRituals.weekendPeriod(now);
     const bookId = 'openlibrary:/works/OL555W';
+    const otherBookId = 'openlibrary:/works/OL777W';
     const filmId = 'tmdb:movie:24601';
     const filmTwoId = 'tmdb:movie:24602';
-    final book = Work(bookId, 'Leitura do Mês', 'Livro',
-        'Nossa escolha mensal.', 2024, provider: 'Open Library');
+    final book = Work(bookId, 'Leitura do Eu', 'Livro',
+        'Minha escolha mensal.', 2024, provider: 'Open Library');
+    final otherBook = Work(otherBookId, 'Leitura da Ela', 'Livro',
+        'A escolha dela.', 2023, provider: 'Open Library');
     final first = Work(filmId, 'Filme de Um', 'Filme',
         'Nossa sexta.', 2023, provider: 'TMDB');
     final second = Work(filmTwoId, 'Filme de Dois', 'Filme',
@@ -76,6 +79,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'catalog_saved': jsonEncode({
         bookId: book.toJson(),
+        otherBookId: otherBook.toJson(),
         filmId: first.toJson(),
         filmTwoId: second.toJson(),
       }),
@@ -88,20 +92,20 @@ void main() {
             {'workId': filmTwoId, 'updatedAt': 120},
         SaturnOrbitRituals.nomination(month, 0):
             {'workId': bookId, 'updatedAt': 130},
-        SaturnOrbitRituals.selection(month):
-            {'workId': bookId, 'updatedAt': 140},
+        SaturnOrbitRituals.nomination(month, 1):
+            {'workId': otherBookId, 'updatedAt': 140},
       }),
       'records': jsonEncode({
         '0:$bookId': {
           'status': 'Em andamento', 'rating': 8.0,
           'notes': 'Ainda na metade.',
         },
-        '1:$bookId': {
+        '1:$otherBookId': {
           'status': 'Lido', 'rating': 10.0,
           'notes': 'Adorei.',
         },
       }),
-      'shared': jsonEncode([bookId, filmTwoId]),
+      'shared': jsonEncode([bookId, otherBookId, filmTwoId]),
     });
     await tester.pumpWidget(const SaturnApp());
     await tester.pumpAndSettle();
@@ -123,7 +127,9 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(bookCard, findsOneWidget);
-    expect(find.text('Leitura do Mês'), findsWidgets);
+    expect(find.text('Leitura do Eu'), findsWidgets);
+    expect(find.text('Leitura da Ela'), findsWidgets);
+    expect(find.text('Escolher nosso livro'), findsNothing);
     expect(find.text('Eu: Pendente'), findsOneWidget);
     expect(find.text('Ela: Lido e avaliado'), findsOneWidget);
     expect(find.text('Marcar leitura e dar nota'), findsOneWidget);
@@ -131,10 +137,12 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final stored = jsonDecode(prefs.getString('records')!) as Map;
     expect((stored['0:$bookId'] as Map)['notes'], 'Ainda na metade.');
-    expect((stored['1:$bookId'] as Map)['notes'], 'Adorei.');
+    expect((stored['1:$otherBookId'] as Map)['notes'], 'Adorei.');
     final ops = jsonDecode(prefs.getString('saturn_ritual_ops_v1')!) as Map;
-    expect((ops[SaturnOrbitRituals.selection(month)] as Map)['workId'],
+    expect((ops[SaturnOrbitRituals.nomination(month, 0)] as Map)['workId'],
       bookId);
+    expect((ops[SaturnOrbitRituals.nomination(month, 1)] as Map)['workId'],
+      otherBookId);
   });
 
 
