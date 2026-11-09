@@ -735,6 +735,7 @@ class _SaturnHomeState extends State<SaturnHome>
 
   @override
   Widget build(BuildContext context) {
+    final desktop = MediaQuery.sizeOf(context).width >= 1000;
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -779,12 +780,50 @@ class _SaturnHomeState extends State<SaturnHome>
         ],
       ),
       body: SafeArea(
-        child: IndexedStack(
-          index: tab,
-          children: [_start(), _explore(), _collection(), _shared(), _stats()],
+        child: Row(
+          children: [
+            if (desktop) ...[
+              NavigationRail(
+                backgroundColor: const Color(0xFF17121B),
+                indicatorColor: wine,
+                selectedIconTheme: const IconThemeData(color: gold),
+                unselectedIconTheme: const IconThemeData(
+                  color: Color(0xFFBDA9B5)),
+                selectedLabelTextStyle: const TextStyle(
+                  color: ivory, fontSize: 12),
+                unselectedLabelTextStyle: const TextStyle(
+                  color: Color(0xFFBDA9B5), fontSize: 12),
+                labelType: NavigationRailLabelType.all,
+                selectedIndex: tab,
+                onDestinationSelected: (value) => setState(() => tab = value),
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.home_outlined), label: Text('Início')),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.search), label: Text('Explorar')),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.bookmarks_outlined), label: Text('Coleção')),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.favorite_border), label: Text('Nós dois')),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.bar_chart), label: Text('Dados')),
+                ],
+              ),
+              const VerticalDivider(
+                width: 1, thickness: 1, color: Color(0xFF3C2837)),
+            ],
+            Expanded(
+              child: IndexedStack(
+                index: tab,
+                children: [
+                  _start(), _explore(), _collection(), _shared(), _stats(),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: desktop ? null : NavigationBar(
         selectedIndex: tab,
         onDestinationSelected: (value) => setState(() => tab = value),
         destinations: const [
@@ -2219,8 +2258,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
     ];
     return LayoutBuilder(builder: (context, constraints) {
       final width = constraints.maxWidth;
-      final columns = width >= 960 ? 5 : width >= 690 ? 4 :
-          width >= 480 ? 3 : 2;
+      // Cards com largura adequada tanto no iPhone quanto no desktop.
+      final columns = (width / 205).floor().clamp(2, 8).toInt();
       return CustomScrollView(
         key: const PageStorageKey('saturn_catalog_grid'),
         slivers: [

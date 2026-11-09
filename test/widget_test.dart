@@ -5,6 +5,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:saturn_app/main.dart';
 
 void main() {
+  testWidgets('Web desktop usa navegação lateral sem barra inferior',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1440, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    await tester.tap(find.text('Explorar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Filtros: tipos, gêneros e streaming'), findsOneWidget);
+  });
+
   testWidgets('Obra salva abre ficha com capa e streamings', (tester) async {
     final saved = Work(
       'anilist:30',
