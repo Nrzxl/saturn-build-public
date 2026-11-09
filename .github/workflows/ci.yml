@@ -31,6 +31,18 @@ jobs:
           cache: true
       - name: Preparar projeto Flutter
         run: flutter create --platforms=android,web --org com.nrzxl --project-name saturn_app .
+      - name: Verificar sintaxe da assinatura local (sem executá-la)
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            'scripts/release_saturn_windows.ps1', [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "PowerShell sintaticamente válido, sem ler chaves."
       - name: Testes sem credenciais
         run: |
           python3 -m unittest discover -s scripts -p 'test_*.py'
