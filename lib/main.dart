@@ -11,6 +11,7 @@ import 'catalog_client.dart';
 import 'streaming_preferences.dart';
 import 'streaming_links.dart';
 import 'saturn_star_rating.dart';
+import 'saturn_review_tiers.dart';
 import 'saturn_share.dart';
 import 'saturn_trailer.dart';
 import 'saturn_native_trailer.dart';
@@ -1774,6 +1775,192 @@ class _SaturnHomeState extends State<SaturnHome>
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// Horizontal, lazy-loaded home shelves replace long vertical lists.
+  Widget _rankedShelf(List<Work> items, {required String shelfKey}) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 273,
+      child: ListView.separated(
+        key: Key(shelfKey),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 3),
+        itemBuilder: (context, index) => SizedBox(
+          width: 155,
+          child: _rankedPosterCard(items[index], compact: true),
+        ),
+      ),
+    );
+  }
+
+  /// Only a personal rating plus an actual written review earns a halo.
+  Widget _rankedPosterCard(Work work, {bool compact = false}) {
+    final personal = entry(work);
+    final tier = SaturnReviewClassification.of(personal);
+    final stars = SaturnReviewClassification.stars(personal);
+    final comment = (personal['notes'] ?? '').toString().trim();
+    final selected = _selectedWorkIds.contains(work.id);
+    void select() => setState(() {
+      if (!_selectedWorkIds.add(work.id)) {
+        _selectedWorkIds.remove(work.id);
+      }
+    });
+    return SaturnHoverLift(
+      child: AnimatedContainer(
+        key: Key('saturn-ranked-card-' + work.id),
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        margin: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: const Color(0xFF241B27),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: tier == null ? const Color(0x554C3547) : tier.color,
+            width: tier == null ? 1 : 1.8,
+          ),
+          boxShadow: tier == null ? const [] : [
+            BoxShadow(
+              color: tier.color.withValues(alpha: 0.36),
+              blurRadius: 17, spreadRadius: 1.5,
+            ),
+            BoxShadow(
+              color: tier.color.withValues(alpha: 0.15),
+              blurRadius: 27, spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Material(
+          borderRadius: BorderRadius.circular(15),
+          color: const Color(0xFF251C2A),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: _selectingWorks ? select : () => _details(work),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: Stack(fit: StackFit.expand, children: [
+                  PosterThumbnail(
+                    work: work,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                  if (tier != null && stars != null)
+                    Positioned(top: 6, right: 5, child: Container(
+                      key: Key('saturn-review-halo-' + work.id),
+                      decoration: BoxDecoration(
+                        color: const Color(0xF2221A26),
+                        border: Border.all(
+                          color: tier.color.withValues(alpha: 0.75)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 4),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.auto_awesome,
+                          color: tier.color, size: 12),
+                        const SizedBox(width: 3),
+                        Text(tier.label,
+                          style: TextStyle(color: tier.color,
+                            fontSize: 9, letterSpacing: 0.4,
+                            fontWeight: FontWeight.bold)),
+                      ]),
+                    )),
+                  if (_selectingWorks)
+                    Positioned(
+                      top: 3, left: 3,
+                      child: Checkbox(
+                        key: Key('saturn-poster-select-' + work.id),
+                        value: selected,
+                        onChanged: (_) => select(),
+                      ),
+                    ),
+                ])),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 7, 8, 2),
+                  child: Text(work.title,
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: ivory, fontSize: 12.5,
+                      fontWeight: FontWeight.w700, height: 1.12)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 1, 8, 4),
+                  child: Text(
+                    tier == null || stars == null
+                        ? (work.year > 0
+                            ? work.kind + ' · ' + work.year.toString()
+                            : work.kind)
+                        : stars.toStringAsFixed(1) + ' ★ / 5 · ' + tier.label,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: tier?.color ?? const Color(0xFFCEB9C6),
+                      fontSize: 10,
+                      fontWeight: tier == null
+                          ? FontWeight.w400 : FontWeight.w700),
+                  ),
+                ),
+                if (tier != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                    child: Text('“$comment”',
+                      maxLines: compact ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFDECBD4),
+                        fontSize: 10.5, height: 1.15)),
+                  ),
+                if (!compact && !_selectingWorks)
+                  SizedBox(height: 35, child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      IconButton(
+                        tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
+                        constraints: const BoxConstraints(
+                          minWidth: 35, minHeight: 33),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 18,
+                        onPressed: () => _toggleWatchlist(work),
+                        icon: Icon(_isWatchlisted(work)
+                            ? Icons.bookmark_added_rounded
+                            : Icons.bookmark_add_outlined,
+                            color: gold)),
+                      IconButton(
+                        tooltip: work.kind == 'Livro'
+                            ? 'Marcar como lido' : 'Marcar como assistido',
+                        constraints: const BoxConstraints(
+                          minWidth: 35, minHeight: 33),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 18,
+                        onPressed: () => _toggleCompleted(work),
+                        icon: Icon(_isDone(work)
+                            ? Icons.check_circle_rounded
+                            : Icons.check_circle_outline_rounded,
+                            color: gold)),
+                      IconButton(
+                        tooltip: 'Adicionar à Nossa Órbita',
+                        constraints: const BoxConstraints(
+                          minWidth: 35, minHeight: 33),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 18,
+                        onPressed: () => toggleShared(work),
+                        icon: Icon(shared.contains(work.id)
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                            color: gold)),
+                    ],
+                  )),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
