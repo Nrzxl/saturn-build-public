@@ -54,10 +54,21 @@ jobs:
       - name: Compilar SATURN Web / PWA
         env:
           PUBLIC_BUILD_SHA: ${{ github.sha }}
+          SATURN_SUPABASE_URL: ${{ vars.SATURN_SUPABASE_URL }}
+          SATURN_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SATURN_SUPABASE_PUBLISHABLE_KEY }}
         run: |
+          # Both variables are public client configuration, never service_role.
+          # An empty pair leaves SATURN Cloud safely disabled.
+          if [[ -n "$SATURN_SUPABASE_URL" && -n "$SATURN_SUPABASE_PUBLISHABLE_KEY" ]]; then
+            echo "SATURN Cloud: configuração pública informada"
+          else
+            echo "SATURN Cloud: aguardando URL e publishable key do projeto pessoal"
+          fi
           flutter build web --release \
             --base-href /saturn-build-public/ \
-            --dart-define="SATURN_WEB_BUILD_SHA=$PUBLIC_BUILD_SHA"
+            --dart-define="SATURN_WEB_BUILD_SHA=$PUBLIC_BUILD_SHA" \
+            --dart-define="SATURN_SUPABASE_URL=$SATURN_SUPABASE_URL" \
+            --dart-define="SATURN_SUPABASE_PUBLISHABLE_KEY=$SATURN_SUPABASE_PUBLISHABLE_KEY"
           echo "$PUBLIC_BUILD_SHA" > build/web/saturn-build.txt
           touch build/web/.nojekyll
           test -f build/web/manifest.json

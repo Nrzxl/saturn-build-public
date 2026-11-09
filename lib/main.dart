@@ -2632,11 +2632,13 @@ class _SaturnHomeState extends State<SaturnHome>
                     ),
                   ),
                 if (w.kind != 'Livro')
-                  SaturnExternalRatings(
-                    ratings: w.externalRatings,
+                  SaturnRatingsFromCatalog(
+                    workId: w.id,
+                    workTitle: w.title,
+                    kind: w.kind,
+                    cachedRatings: w.externalRatings,
                     tmdbScore: w.tmdbScore,
                     tmdbVoteCount: w.tmdbVoteCount,
-                    isBook: false,
                   ),
                 const SizedBox(height: 7),
                 if (w.creator.isNotEmpty)

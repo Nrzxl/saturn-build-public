@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'catalog_client.dart';
 
 const satinGold = Color(0xFFC6A477);
 const satinIvory = Color(0xFFF2E8DF);
@@ -42,23 +43,49 @@ class SaturnDetailSection extends StatelessWidget {
   );
 }
 
+/// Ratings are attributable metadata, not the couple's own scores.
+///
+/// A public TMDB vote average is NOT the Rotten Tomatoes audience
+/// Popcornmeter; Rotten Tomatoes and other sources need explicit feeds.
 class SaturnExternalRatings extends StatelessWidget {
   const SaturnExternalRatings({
     super.key, required this.ratings, required this.isBook,
     this.tmdbScore, this.tmdbVoteCount,
   });
+
   final Map<String, String> ratings;
   final bool isBook;
   final double? tmdbScore;
   final int? tmdbVoteCount;
 
+  static const _sources = [
+    ('imdb', 'IMDb', Icons.movie_filter_outlined),
+    ('rottenTomatoes', 'Rotten Tomatoes · crítica', Icons.local_movies_outlined),
+    ('metacritic', 'Metacritic · crítica', Icons.insights_outlined),
+  ];
+
+  static bool validRating(String key, String? value) {
+    if (value == null) return false;
+    final input = value.trim();
+    return switch (key) {
+      'imdb' => RegExp(r'^(10(?:\\.0)?|[0-9](?:\\.[0-9])?)/10\$')
+          .hasMatch(input),
+      'rottenTomatoes' => RegExp(r'^(100|[0-9]{1,2})%\$')
+          .hasMatch(input),
+      'metacritic' => RegExp(r'^(100|[0-9]{1,2})/100\$')
+          .hasMatch(input),
+      _ => false,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isBook) return const SizedBox.shrink();
-    const sources = [
-      ('imdb', 'IMDb', Icons.movie_filter_outlined),
-      ('rottenTomatoes', 'Rotten Tomatoes', Icons.local_movies_outlined),
-      ('metacritic', 'Metacritic', Icons.insights_outlined),
+    final hasAudience = tmdbScore != null && tmdbScore! > 0 &&
+        tmdbScore! <= 10 && (tmdbVoteCount ?? 0) > 0;
+    final external = [
+      for (final source in _sources)
+        if (validRating(source.$1, ratings[source.$1])) source,
     ];
     return SaturnDetailSection(
       title: 'Crítica e audiência',
@@ -66,34 +93,186 @@ class SaturnExternalRatings extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(spacing: 9, runSpacing: 9, children: [
-            if (tmdbScore != null && tmdbScore! > 0 && tmdbScore! <= 10 &&
-                (tmdbVoteCount ?? 0) > 0)
-              _RatingChip(
-                title: 'TMDB',
-                value: '${tmdbScore!.toStringAsFixed(1)}/10',
-                icon: Icons.people_alt_outlined,
-              ),
-            for (final source in sources)
-              _RatingChip(
-                title: source.$2,
-                value: ratings[source.$1] ?? '—',
-                icon: source.$3,
-              ),
-          ]),
-          const SizedBox(height: 9),
+          const Text('AUDIÊNCIA · COMUNIDADE TMDB',
+            style: TextStyle(color: satinGold,
+                fontSize: 10, fontWeight: FontWeight.w700,
+                letterSpacing: 1.2)),
+          const SizedBox(height: 7),
+          if (hasAudience)
+            _RatingChip(
+              title: 'Público TMDB',
+              value: '${tmdbScore!.toStringAsFixed(1)}/10',
+              icon: Icons.people_alt_outlined,
+            )
+          else
+            const Text(
+              'Ainda não há uma nota de público TMDB verificada para este título.',
+              style: TextStyle(color: satinSubdued, fontSize: 12, height: 1.4),
+            ),
+          if (hasAudience) ...[
+            const SizedBox(height: 5),
+            Text(
+              '${tmdbVoteCount!} votos da comunidade TMDB. '
+              'Não é a nota do público Rotten Tomatoes.',
+              style: const TextStyle(
+                color: satinSubdued, fontSize: 11, height: 1.4),
+            ),
+          ],
+          const SizedBox(height: 17),
+          const Text('OUTRAS FONTES · NOTAS PUBLICADAS',
+            style: TextStyle(color: satinGold,
+                fontSize: 10, fontWeight: FontWeight.w700,
+                letterSpacing: 1.2)),
+          const SizedBox(height: 8),
+          if (external.isEmpty)
+            const Text(
+              'As notas IMDb, Rotten Tomatoes e Metacritic não estão '
+              'disponíveis neste catálogo. Elas exigem uma fonte '
+              'autorizada e podem não existir para todas as obras.',
+              style: TextStyle(color: satinSubdued, fontSize: 12, height: 1.4),
+            )
+          else
+            Wrap(spacing: 9, runSpacing: 9, children: [
+              for (final source in external)
+                _RatingChip(
+                  title: source.$2,
+                  value: ratings[source.$1]!.trim(),
+                  icon: source.$3,
+                ),
+            ]),
+          const SizedBox(height: 11),
           Text(
-            ratings.isEmpty
-                ? 'IMDb, Rotten Tomatoes e Metacritic serão exibidos '
-                  'somente quando houver dados autorizados. '
-                  'A nota TMDB é uma avaliação separada da comunidade.'
-                : 'Notas externas via OMDb; podem não existir para '
-                  'todas as obras. Não são as estrelas de vocês.',
+            external.isEmpty
+                ? 'SATURN não inventa pontuações ausentes. '
+                  'As avaliações pessoais de vocês ficam separadas.'
+                : 'Notas externas fornecidas por fonte atribuída via OMDb. '
+                  'Elas não equivalem às estrelas de vocês nem a '
+                  'uma pontuação de audiência Rotten Tomatoes.',
             style: const TextStyle(
               color: satinSubdued, fontSize: 11, height: 1.35),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// When an older locally saved title does not yet contain public scores,
+/// consult the currently published SATURN catalog *without* changing notes,
+/// watchlists, local storage or the stored Work snapshot.
+class SaturnRatingsFromCatalog extends StatefulWidget {
+  const SaturnRatingsFromCatalog({
+    super.key,
+    required this.workId,
+    required this.workTitle,
+    required this.kind,
+    required this.cachedRatings,
+    this.tmdbScore,
+    this.tmdbVoteCount,
+  });
+  final String workId;
+  final String workTitle;
+  final String kind;
+  final Map<String, String> cachedRatings;
+  final double? tmdbScore;
+  final int? tmdbVoteCount;
+
+  @override
+  State<SaturnRatingsFromCatalog> createState() =>
+      _SaturnRatingsFromCatalogState();
+}
+
+class _SaturnRatingsFromCatalogState extends State<SaturnRatingsFromCatalog> {
+  CatalogClient? _client;
+  Future<CatalogEntry?>? _lookup;
+
+  @override
+  void initState() {
+    super.initState();
+    _startLookup();
+  }
+
+  void _startLookup() {
+    _client?.close();
+    _client = null;
+    _lookup = null;
+    if (!widget.workId.startsWith('tmdb:') ||
+        widget.workTitle.trim().length < 2) {
+      return;
+    }
+    final filter = switch (widget.kind) {
+      'Filme' => CatalogFilter.movies,
+      'Série' => CatalogFilter.series,
+      'Dorama' => CatalogFilter.dramas,
+      'Anime' => CatalogFilter.anime,
+      _ => CatalogFilter.all,
+    };
+    _client = CatalogClient();
+    _lookup = _client!.search(widget.workTitle, filter).then((items) {
+      for (final item in items) {
+        if (item.id == widget.workId) return item;
+      }
+      return null;
+    }).catchError((Object _) => null);
+  }
+
+  @override
+  void didUpdateWidget(covariant SaturnRatingsFromCatalog oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.workId != widget.workId ||
+        oldWidget.workTitle != widget.workTitle ||
+        oldWidget.kind != widget.kind) {
+      _startLookup();
+    }
+  }
+
+  @override
+  void dispose() {
+    _client?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<CatalogEntry?>(
+      future: _lookup,
+      builder: (context, snapshot) {
+        final refreshed = snapshot.data;
+        final scores = <String, String>{
+          ...widget.cachedRatings,
+          if (refreshed != null) ...refreshed.externalRatings,
+        };
+        final hasFreshScores = refreshed?.externalRatings.isNotEmpty == true ||
+            ((refreshed?.tmdbScore ?? 0) > 0 &&
+                (refreshed?.tmdbVoteCount ?? 0) > 0);
+        final initialHasScores = widget.cachedRatings.isNotEmpty ||
+            (widget.tmdbScore != null && (widget.tmdbVoteCount ?? 0) > 0);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SaturnExternalRatings(
+              ratings: scores, isBook: false,
+              tmdbScore: refreshed?.tmdbScore ?? widget.tmdbScore,
+              tmdbVoteCount: refreshed?.tmdbVoteCount ?? widget.tmdbVoteCount,
+            ),
+            if (_lookup != null && !hasFreshScores && !initialHasScores &&
+                snapshot.connectionState == ConnectionState.waiting)
+              const Padding(
+                padding: EdgeInsets.only(left: 12, bottom: 6),
+                child: Text('Consultando notas públicas disponíveis…',
+                    style: TextStyle(color: satinSubdued, fontSize: 11)),
+              ),
+            if (_lookup != null && snapshot.connectionState == ConnectionState.done &&
+                !hasFreshScores && !initialHasScores)
+              const Padding(
+                padding: EdgeInsets.only(left: 12, bottom: 6),
+                child: Text('O catálogo atual também não informa notas '
+                  'verificadas para esta obra.',
+                  style: TextStyle(color: satinSubdued, fontSize: 11)),
+              ),
+          ],
+        );
+      },
     );
   }
 }
