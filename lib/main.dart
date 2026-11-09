@@ -993,7 +993,7 @@ class _SaturnHomeState extends State<SaturnHome>
         padding: const EdgeInsets.fromLTRB(16, 9, 16, 9),
         scrollDirection: Axis.horizontal,
         itemCount: titles.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 11),
+        separatorBuilder: (context, index) => const SizedBox(width: 11),
         itemBuilder: (context, index) {
           final work = titles[index];
           return SaturnHoverLift(
