@@ -1483,8 +1483,15 @@ class _SaturnHomeState extends State<SaturnHome>
                       if (_bookFace(profile).isNotEmpty)
                         Positioned(
                           right: 0, bottom: 0,
-                          child: Text(_bookFace(profile),
-                            style: const TextStyle(fontSize: 15)),
+                          child: Tooltip(
+                            message: _bookFace(profile) == '😢'
+                              ? 'Leitura de mês anterior em atraso'
+                              : _bookFace(profile) == '📖'
+                                ? 'Livro do mês em andamento · prazo até o fim do mês'
+                                : 'Leitura concluída e avaliada',
+                            child: Text(_bookFace(profile),
+                              style: const TextStyle(fontSize: 15)),
+                          ),
                         ),
                     ]),
                   ),
