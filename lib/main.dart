@@ -679,7 +679,7 @@ class _SaturnHomeState extends State<SaturnHome>
   void _toggleWatchlist(Work w) {
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
-      if (!works.any((old) => old.id == w.id)) savedWorks[w.id] = w;
+      if (!savedWorks.containsKey(w.id)) savedWorks[w.id] = w;
       if (!currentWatchlist.add(w.id)) currentWatchlist.remove(w.id);
       _watchlistOps['$profile:${w.id}'] = {
         'present': currentWatchlist.contains(w.id),
@@ -694,7 +694,7 @@ class _SaturnHomeState extends State<SaturnHome>
     final done = _isDone(w);
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
-      if (!works.any((other) => other.id == w.id)) savedWorks[w.id] = w;
+      if (!savedWorks.containsKey(w.id)) savedWorks[w.id] = w;
       _archivedFromCollection.remove('${profile}:${w.id}');
       _archivedOps['${profile}:${w.id}'] = {
         'present': false, 'updatedAt': stamp,
@@ -725,7 +725,7 @@ class _SaturnHomeState extends State<SaturnHome>
   void update(Work w, Map<String, dynamic> value) {
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
-      if (!works.any((old) => old.id == w.id)) savedWorks[w.id] = w;
+      if (!savedWorks.containsKey(w.id)) savedWorks[w.id] = w;
       _archivedFromCollection.remove('${profile}:${w.id}');
       _archivedOps['${profile}:${w.id}'] = {
         'present': false, 'updatedAt': stamp,
@@ -746,7 +746,7 @@ class _SaturnHomeState extends State<SaturnHome>
   void toggleShared(Work w) {
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
-      if (!works.any((old) => old.id == w.id)) savedWorks[w.id] = w;
+      if (!savedWorks.containsKey(w.id)) savedWorks[w.id] = w;
       if (shared.contains(w.id)) {
         shared.remove(w.id);
       } else {
