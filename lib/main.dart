@@ -843,6 +843,120 @@ class _SaturnHomeState extends State<SaturnHome>
     _save();
   }
 
+
+  /// Work-level manga entries group volumes. Use real edition IDs for reads.
+  Future<Work?> _chooseBookEdition(Work parent) async {
+    if (!parent.id.startsWith('openlibrary:/works/')) return parent;
+    final client = CatalogClient();
+    final isbn = TextEditingController();
+    final initial = client.bookEditions(parent.id);
+    try {
+      return await showModalBottomSheet<Work>(
+        context: context, isScrollControlled: true, useSafeArea: true,
+        backgroundColor: const Color(0xFF241B29),
+        builder: (sheet) => StatefulBuilder(builder: (ctx, repaint) {
+          var searchingIsbn = false;
+          String? error;
+          Future<void> lookup() async {
+            if (searchingIsbn) return;
+            repaint(() => searchingIsbn = true);
+            try {
+              final result = await client.editionByIsbn(isbn.text);
+              if (!sheet.mounted) return;
+              if (result != null) {
+                Navigator.pop(sheet, Work.fromCatalog(result));
+              } else {
+                repaint(() => error = 'ISBN não encontrado na Open Library.');
+              }
+            } catch (_) {
+              if (sheet.mounted) repaint(() =>
+                error = 'Não foi possível buscar o ISBN. Tente novamente.');
+            } finally {
+              if (sheet.mounted) repaint(() => searchingIsbn = false);
+            }
+          }
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+            child: SizedBox(
+              height: (MediaQuery.sizeOf(ctx).height -
+                  MediaQuery.of(ctx).viewInsets.bottom - 75)
+                  .clamp(170.0, 630.0).toDouble(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Selecionar volume ou edição',
+                    style: TextStyle(color: ivory, fontFamily: 'serif',
+                      fontSize: 23, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 7),
+                  Text(parent.title, maxLines: 2,
+                    style: const TextStyle(color: gold, fontSize: 12)),
+                  const SizedBox(height: 5),
+                  const Text('Volumes e edições especiais são livros '
+                    'diferentes. Confira o ano, a capa e o ISBN.',
+                    style: TextStyle(color: ivory, fontSize: 11)),
+                  const SizedBox(height: 9),
+                  Row(children: [
+                    Expanded(child: TextField(
+                      controller: isbn, onSubmitted: (_) => lookup(),
+                      decoration: const InputDecoration(
+                        isDense: true, hintText: 'ISBN da edição',
+                        border: OutlineInputBorder()))),
+                    IconButton.filled(
+                      onPressed: searchingIsbn ? null : lookup,
+                      icon: const Icon(Icons.search)),
+                  ]),
+                  if (error != null)
+                    Text(error!, style: const TextStyle(
+                        color: Color(0xFFFFAABC), fontSize: 11)),
+                  Expanded(child: FutureBuilder<List<CatalogEntry>>(
+                    future: initial,
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        if (snapshot.hasError) {
+                          return const Center(child: Text(
+                            'Não foi possível carregar as edições. '
+                            'Tente o ISBN da capa.'));
+                        }
+                        return const Center(
+                          child: CircularProgressIndicator(color: gold));
+                      }
+                      final books = snapshot.data!;
+                      if (books.isEmpty) return const Center(
+                        child: Text('Nenhuma edição catalogada. '
+                          'Tente pesquisar pelo ISBN.'));
+                      return ListView.builder(
+                        itemCount: books.length,
+                        itemBuilder: (context, index) {
+                          final work = Work.fromCatalog(books[index]);
+                          return ListTile(
+                            leading: PosterThumbnail(
+                              work: work, width: 42, height: 59),
+                            title: Text(work.title, maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                            subtitle: Text(work.description, maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11)),
+                            onTap: () => Navigator.pop(sheet, work),
+                          );
+                        });
+                    },
+                  )),
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheet, parent),
+                    child: const Text('Usar obra geral (sem volume)')),
+                ],
+              ),
+            ),
+          );
+        }),
+      );
+    } finally {
+      isbn.dispose();
+      client.close();
+    }
+  }
+
   /// A new monthly title is always picked explicitly from actual catalog data.
   Future<void> _nominateRitual(String period, bool book) async {
     final client = CatalogClient();
