@@ -7,9 +7,21 @@ import 'saturn_orbit_merge.dart';
 /// Values set at build time through --dart-define. The publishable key is
 /// public by design; NEVER use a Supabase service_role or secret API key.
 class SaturnCloudConfig {
-  static const url = String.fromEnvironment('SATURN_SUPABASE_URL');
-  static const publishableKey = String.fromEnvironment(
-      'SATURN_SUPABASE_PUBLISHABLE_KEY');
+  // Public client-only configuration for the dedicated personal SATURN
+  // project. This sb_publishable key is deliberately NOT a server secret;
+  // authorization is enforced by Supabase Auth and table-level RLS.
+  // --dart-define values can override both on later deployments.
+  static const configuredUrl =
+      String.fromEnvironment('SATURN_SUPABASE_URL');
+  static const configuredPublishableKey =
+      String.fromEnvironment('SATURN_SUPABASE_PUBLISHABLE_KEY');
+
+  static const url = configuredUrl.isNotEmpty
+      ? configuredUrl
+      : 'https://uiyjeiddnirdhquapkic.supabase.co';
+  static const publishableKey = configuredPublishableKey.isNotEmpty
+      ? configuredPublishableKey
+      : 'sb_publishable_wcYGG68bSWSYPrOwRAHb5g_bB7nFJDB';
 
   static bool get enabled =>
       url.startsWith('https://') &&
