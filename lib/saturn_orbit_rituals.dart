@@ -55,65 +55,34 @@ class SaturnOrbitRituals {
     return complete && rating is num && rating > 0;
   }
 
-  /// Only that person's book counts toward their reading progress.
-  /// Old unfinished assignments remain pending after the month rolls over.
+  /// Each partner has one independent book per month. Previous assignments
+  /// stay pending until that partner marks the book read and gives a rating.
   static List<String> pendingBooks(Map<String, dynamic> ops,
       Map<String, dynamic> records, int person, DateTime now) {
     if (person != 0 && person != 1) return [];
     final lastKey = nomination(monthPeriod(now), person);
-    final pattern = RegExp('^month:\\d{4}-\\d{2}:nomination:$person\
-
-  static String weekendLabel(DateTime now) {
-    final sat = weekendSaturday(now);
-    final sun = sat.add(const Duration(days: 1));
-    return '${two(sat.day)}/${two(sat.month)}'
-        '–${two(sun.day)}/${two(sun.month)}';
-  }
-
-  static const months = [
-    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
-  ];
-
-  static String monthLabel(DateTime now) =>
-      '${months[now.month - 1]} de ${now.year}';
-}
-);
+    final pattern = RegExp(
+        '^month:[0-9]{4}-[0-9]{2}:nomination:$person' + r'$');
     final keys = ops.keys.where((key) =>
         pattern.hasMatch(key) && key.compareTo(lastKey) <= 0)
         .toList()..sort();
-    return [
-      for (final id in {
-        for (final key in keys)
-          if (workId(ops, key).isNotEmpty &&
-              !bookFinishedAndRated(records, person, workId(ops, key)))
-            workId(ops, key),
-      }) id,
-    ];
+    final pending = <String>{};
+    for (final key in keys) {
+      final id = workId(ops, key);
+      if (id.isNotEmpty && !bookFinishedAndRated(records, person, id)) {
+        pending.add(id);
+      }
+    }
+    return pending.toList(growable: false);
   }
 
+  /// Former shared month:selected entries do not assign a book to anyone.
   static bool hasAssignedBooks(Map<String, dynamic> ops, DateTime now,
       {required int person}) {
     if (person != 0 && person != 1) return false;
     final lastKey = nomination(monthPeriod(now), person);
-    final pattern = RegExp('^month:\\d{4}-\\d{2}:nomination:$person\
-
-  static String weekendLabel(DateTime now) {
-    final sat = weekendSaturday(now);
-    final sun = sat.add(const Duration(days: 1));
-    return '${two(sat.day)}/${two(sat.month)}'
-        '–${two(sun.day)}/${two(sun.month)}';
-  }
-
-  static const months = [
-    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
-  ];
-
-  static String monthLabel(DateTime now) =>
-      '${months[now.month - 1]} de ${now.year}';
-}
-);
+    final pattern = RegExp(
+        '^month:[0-9]{4}-[0-9]{2}:nomination:$person' + r'$');
     return ops.keys.any((key) =>
         pattern.hasMatch(key) && key.compareTo(lastKey) <= 0 &&
         workId(ops, key).isNotEmpty);
