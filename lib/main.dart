@@ -874,7 +874,10 @@ class _SaturnHomeState extends State<SaturnHome>
               padding: EdgeInsets.fromLTRB(
                 18, 18, 18, MediaQuery.of(sheet).viewInsets.bottom + 16),
               child: SizedBox(
-                height: MediaQuery.sizeOf(sheet).height * 0.66,
+                // Keep the picker above the iPhone on-screen keyboard.
+                height: (MediaQuery.sizeOf(sheet).height -
+                    MediaQuery.of(sheet).viewInsets.bottom - 85)
+                    .clamp(120.0, 620.0).toDouble(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
