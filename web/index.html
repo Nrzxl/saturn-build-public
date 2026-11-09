@@ -7,6 +7,8 @@
   <meta name="theme-color" content="#211827">
   <meta name="description" content="SATURN — filmes, séries, doramas, animes, livros e a Nossa Órbita.">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="SATURN">
+  <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SATURN">
@@ -17,7 +19,8 @@
   <link rel="manifest" href="manifest.json">
   <title>SATURN · Nosso universo</title>
   <style>
-    html, body { height: 100%; margin: 0; background: #211827; }
+    html, body { height: 100%; min-height: 100%; margin: 0; background: #211827; }
+    @supports (min-height: 100dvh) { html, body { min-height: 100dvh; } }
     body { overscroll-behavior-y: none; }
     #saturn-boot {
       position: fixed; inset: 0; z-index: 10000;
@@ -46,6 +49,24 @@
     .saturn-tagline { margin-top: 12px; font-size: 12px; letter-spacing: .08em; color: #DCC7D0; }
     .saturn-loading { margin-top: 34px; font-size: 12px; color: #C6A477; line-height: 1.6; }
     .saturn-loading a { color: #E5CBAC; }
+    #saturn-retry {
+      display: none; margin-top: 16px; border: 1px solid #C6A477;
+      background: #392438; border-radius: 13px; padding: 11px 18px;
+      font: inherit; color: #F2E8DF; cursor: pointer;
+    }
+    #saturn-retry.visible { display: inline-flex; }
+    #saturn-network {
+      position: fixed; z-index: 11000; left: 16px; right: 16px;
+      bottom: max(16px, env(safe-area-inset-bottom));
+      width: max-content; max-width: calc(100% - 32px);
+      margin: 0 auto; padding: 11px 16px;
+      border: 1px solid #79566B; border-radius: 15px;
+      background: #231A2BEF; color: #F2E8DF;
+      font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      text-align: center; box-sizing: border-box; pointer-events: none;
+      opacity: 0; visibility: hidden; transition: opacity .2s ease;
+    }
+    #saturn-network.visible { opacity: 1; visibility: visible; }
     @keyframes saturn-breathe { 50% { opacity: .65; transform: rotate(-25deg) scale(.96); } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
   </style>
@@ -58,10 +79,38 @@
     <div class="saturn-name">SATURN</div>
     <div class="saturn-tagline">Every story has its orbit.</div>
     <div class="saturn-loading" id="saturn-boot-message">Preparando seu universo de histórias…</div>
+    <button id="saturn-retry" type="button">Tentar novamente</button>
   </main>
+  <div id="saturn-network" role="status" aria-live="polite"></div>
   <script>
     (function () {
       const splash = document.getElementById('saturn-boot');
+      const retry = document.getElementById('saturn-retry');
+      const network = document.getElementById('saturn-network');
+      let networkHold;
+      retry.addEventListener('click', function () { window.location.reload(); });
+
+      function networkMessage(message, persistent) {
+        window.clearTimeout(networkHold);
+        network.textContent = message;
+        network.classList.add('visible');
+        if (!persistent) {
+          networkHold = window.setTimeout(function () {
+            network.classList.remove('visible');
+          }, 4800);
+        }
+      }
+
+      window.addEventListener('offline', function () {
+        networkMessage('Sem conexão. As listas locais continuam disponíveis; os catálogos podem falhar.', true);
+      });
+      window.addEventListener('online', function () {
+        networkMessage('Conexão restabelecida. Você pode atualizar o catálogo.', false);
+      });
+      if (!navigator.onLine) {
+        networkMessage('Sem conexão. O SATURN precisa de rede para carregar o catálogo.', true);
+      }
+
       window.addEventListener('flutter-first-frame', function () {
         splash.classList.add('ready');
         window.setTimeout(function () { splash.remove(); }, 400);
@@ -69,7 +118,10 @@
       window.setTimeout(function () {
         if (!splash.isConnected || splash.classList.contains('ready')) return;
         const status = document.getElementById('saturn-boot-message');
-        status.textContent = 'O carregamento está demorando. Verifique sua conexão e recarregue a página.';
+        status.textContent = navigator.onLine
+          ? 'O carregamento está demorando. Verifique sua conexão.'
+          : 'Sem conexão. O primeiro carregamento exige acesso à rede.';
+        retry.classList.add('visible');
       }, 25000);
     })();
   </script>

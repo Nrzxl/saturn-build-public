@@ -43,6 +43,16 @@ O arquivo `web/manifest.json` e os ícones PWA são gerados automaticamente pela
 
 A Web ainda não sincroniza a coleção com Android porque um projeto Supabase SATURN dedicado não foi ativado. Não desinstale a Web com notas locais importantes. Offline completo não está garantido: o Flutter moderno não inclui cache offline automático por padrão.
 
+### Experiência PWA e atualização
+
+- Dentro de **Atualizar SATURN**, a instalação mostra instruções para iPhone (Safari → Compartilhar → Adicionar à Tela de Início) ou PC/Android, além de reconhecer o modo standalone quando o navegador informa esse estado.
+- O indicador de versão compara o SHA da build em execução com o arquivo `saturn-build.txt` publicado no mesmo domínio. Versões antigas sem identificador recebem um aviso específico, sem indicar incorretamente que estão atualizadas.
+- **Atualizar SATURN Web** navega para a mesma página com parâmetro de recarga único para evitar um documento HTML obsoleto. Não limpa localStorage, IndexedDB nem SharedPreferences e não requer reinstalação do PWA.
+- Uma mensagem discreta informa queda e retorno de conexão. O carregamento oferece **Tentar novamente** se ficar preso; isso não significa que as APIs de filmes e livros funcionem offline.
+- Os testes de manifesto, metadados iPhone, preservação de dados e versão Web são verificados pelo workflow do Pages. Nenhuma service worker de cache offline é registrada por este recurso.
+
+**Importante:** a detecção de rede do navegador é apenas um sinal local; a disponibilidade real das APIs pode variar. Não exclua o PWA para atualizar: isso pode apagar o armazenamento do aplicativo.
+
 ## Por que o Android não ofereceu a 0.7?
 
 O APK gerado em Actions deste repositório é **debug**, não é uma versão com a assinatura Android permanente. O canal de produção `Nrzxl/saturn-downloads/update.json` permanece na 0.6.0 assinada até uma nova release de produção ser verificada e publicada. Nunca tente instalar o APK debug por cima da versão assinada e **não desinstale a versão atual**, pois isso pode apagar suas listas e avaliações locais.

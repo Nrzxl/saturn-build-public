@@ -46,6 +46,7 @@ jobs:
 
       - name: Validar dependências e testes
         run: |
+          python3 -m unittest discover -s scripts -p 'test_*.py'
           flutter pub get
           flutter analyze lib
           flutter test --reporter expanded
@@ -62,6 +63,9 @@ jobs:
           test -f build/web/manifest.json
           test -f build/web/apple-touch-icon.png
           test -f build/web/main.dart.js
+          test -f build/web/flutter_bootstrap.js
+          test -f build/web/saturn-build.txt
+          test "$(cat build/web/saturn-build.txt)" = "$PUBLIC_BUILD_SHA"
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5

@@ -38,5 +38,11 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "categories": [
+    "entertainment",
+    "books",
+    "lifestyle"
+  ],
+  "prefer_related_applications": false
 }

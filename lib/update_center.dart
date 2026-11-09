@@ -8,6 +8,7 @@ import 'saturn_web_refresh_stub.dart'
 import 'package:url_launcher/url_launcher.dart';
 
 import 'update_service.dart';
+import 'saturn_web_version.dart';
 
 const _gold = Color(0xFFC6A477);
 const _ivory = Color(0xFFF2E8DF);
@@ -56,21 +57,29 @@ class _SaturnUpdateCenterState extends State<SaturnUpdateCenter> {
         'Cache-Control': 'no-cache, no-store',
         'Accept': 'text/plain',
       }).timeout(const Duration(seconds: 10));
-      final latest = response.body.trim();
-      if (response.statusCode != 200 ||
-          !RegExp(r'^[a-f0-9]{40}$').hasMatch(latest)) {
+      if (response.statusCode != 200) {
         throw const FormatException('Publicação Web indisponível');
       }
-      final changed = _webBuildSha.isNotEmpty && latest != _webBuildSha;
+      final state = compareSaturnWebBuild(
+        installedSha: _webBuildSha,
+        publishedResponse: response.body,
+      );
       if (!mounted) return;
       setState(() {
         _version = '0.7.0 Web';
         _build = 0;
-        _webHasUpdate = changed;
-        _webMessage = changed
-            ? 'Nova versão do SATURN Web publicada. Toque em Atualizar.'
-            : 'SATURN Web atualizado. Novas versões chegam pelo site, '
-              'sem instalar APK ou usar TestFlight.';
+        _webHasUpdate = state != SaturnWebBuildState.current;
+        _webMessage = switch (state) {
+          SaturnWebBuildState.available =>
+            'Há uma nova versão do SATURN Web. Atualize sem desinstalar '
+                'o aplicativo ou apagar as suas listas.',
+          SaturnWebBuildState.unknownLocal =>
+            'Esta instalação não informa um código de versão. '
+                'Atualize a página para receber a publicação mais recente.',
+          SaturnWebBuildState.current =>
+            'SATURN Web atualizado. Novidades chegam pelo site '
+                'sem APK ou TestFlight.',
+        };
       });
     } catch (_) {
       if (mounted) setState(() {
@@ -152,10 +161,13 @@ class _SaturnUpdateCenterState extends State<SaturnUpdateCenter> {
     final isWeb = kIsWeb;
     final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final isIos = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+    final isIosWeb = isWeb && defaultTargetPlatform == TargetPlatform.iOS;
+    final isInstalledPwa = isWeb && web_refresh.isSaturnWebStandalone();
+    final webOnline = !isWeb || web_refresh.isSaturnWebOnline();
     final channelMessage = isWeb
-        ? 'No iPhone, instale pelo Safari → Compartilhar → Adicionar à Tela de Início. '
-          'A versão Web não usa APK. Notas e listas não sincronizam '
-          'com o Android até ativarmos o SATURN Cloud.'
+        ? 'A versão Web não usa APK nem TestFlight. Notas e listas '
+          'ficam neste navegador e não sincronizam com o Android '
+          'enquanto o SATURN Cloud não estiver ativo.'
         : isIos
         ? 'No iPhone, o TestFlight entrega atualizações após o build '
           'ser publicado e seu convite estar ativo. Não é possível '
@@ -250,6 +262,63 @@ class _SaturnUpdateCenterState extends State<SaturnUpdateCenter> {
                         : isIos ? 'Abrir TestFlight' : 'Verificar novamente'),
                 ),
               ),
+              if (isWeb) ...[
+                const SizedBox(height: 17),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF30242F),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: const Color(0x665C4558)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Icon(
+                          isInstalledPwa
+                              ? Icons.verified_rounded
+                              : Icons.add_to_home_screen_rounded,
+                          color: _gold, size: 20),
+                        const SizedBox(width: 9),
+                        Expanded(child: Text(
+                          isInstalledPwa
+                              ? 'SATURN instalado como aplicativo'
+                              : 'Instalar SATURN na tela inicial',
+                          style: const TextStyle(
+                            color: _ivory, fontWeight: FontWeight.bold))),
+                      ]),
+                      const SizedBox(height: 9),
+                      Text(
+                        isInstalledPwa
+                            ? 'Você já está usando o modo aplicativo. '
+                              'As atualizações chegam por esta tela.'
+                            : isIosWeb
+                                ? 'No iPhone: abra no Safari, toque em '
+                                  'Compartilhar e escolha "Adicionar à Tela '
+                                  'de Início". Ative "Abrir como App", '
+                                  'se a opção aparecer.'
+                                : 'No Chrome ou Edge, abra o menu do '
+                                  'navegador e procure "Instalar aplicativo". '
+                                  'No Android, use "Adicionar à tela inicial".',
+                        style: const TextStyle(
+                          color: _ivory, fontSize: 12, height: 1.5),
+                      ),
+                      if (!webOnline) ...[
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Sem conexão: os catálogos e as verificações de '
+                          'versão podem falhar. Suas listas locais não '
+                          'são apagadas por isso.',
+                          style: TextStyle(
+                            color: Color(0xFFF3C6AC), fontSize: 12),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 7),
               SizedBox(
                 width: double.infinity,
