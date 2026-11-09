@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 const saturnUpdateFeed =
     'https://raw.githubusercontent.com/Nrzxl/saturn-downloads/main/update.json';
 const saturnBuildsPage =
-    'https://github.com/Nrzxl/saturn-mobile/actions/workflows/build.yml';
+    'https://github.com/Nrzxl/saturn-build-public/actions/workflows/ci.yml';
 
 enum UpdateState { available, current, notConfigured, failed }
 

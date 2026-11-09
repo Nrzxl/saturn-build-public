@@ -31,3 +31,18 @@ Dados e capas podem vir de [TMDB](https://www.themoviedb.org/), [Open Library](h
 
 ---
 Este é um snapshot sem histórico privado. O projeto original não foi tornado público.
+
+
+## SATURN Web — instalação no iPhone
+
+O arquivo `web/manifest.json` e os ícones PWA são gerados automaticamente pela rotina `scripts/create_pwa_icons.py`. A publicação está em `.github/workflows/pages.yml`, usando GitHub Pages.
+
+**Primeiro uso:** em **Settings → Pages → Build and deployment → Source**, selecione **GitHub Actions**. O workflow `SATURN Web · iPhone PWA` publicará em `https://nrzxl.github.io/saturn-build-public/` após a primeira execução verde. Antes disso, o endereço pode retornar 404.
+
+**No iPhone:** abra o site no Safari → Compartilhar → Adicionar à Tela de Início → Abrir como App (se aparecer). O ícone SATURN será instalado na Tela de Início. Em atualizações futuras, abra `Atualizar SATURN` dentro da Web para conferir a publicação mais recente e atualizar a página quando houver versão nova.
+
+A Web ainda não sincroniza a coleção com Android porque um projeto Supabase SATURN dedicado não foi ativado. Não desinstale a Web com notas locais importantes. Offline completo não está garantido: o Flutter moderno não inclui cache offline automático por padrão.
+
+## Por que o Android não ofereceu a 0.7?
+
+O APK gerado em Actions deste repositório é **debug**, não é uma versão com a assinatura Android permanente. O canal de produção `Nrzxl/saturn-downloads/update.json` permanece na 0.6.0 assinada até uma nova release de produção ser verificada e publicada. Nunca tente instalar o APK debug por cima da versão assinada e **não desinstale a versão atual**, pois isso pode apagar suas listas e avaliações locais.
