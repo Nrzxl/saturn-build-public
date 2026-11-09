@@ -6,6 +6,59 @@ import 'package:saturn_app/main.dart';
 import 'package:saturn_app/saturn_orbit_rituals.dart';
 
 void main() {
+  testWidgets('Indicar e escolher filme salva ritual e Nossa Órbita',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1440, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final film = Work(
+      'tmdb:movie:40001', 'Teste de Cinema', 'Filme',
+      'Um título real salvo para escolher.', 2025, provider: 'TMDB');
+    SharedPreferences.setMockInitialValues({
+      'catalog_saved': jsonEncode({film.id: film.toJson()}),
+      'shared': '[]',
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nós dois'));
+    await tester.pumpAndSettle();
+
+    final person = find.byKey(
+      const Key('saturn-ritual-film-person-0'));
+    final nominate = find.descendant(
+      of: person, matching: find.text('Fazer minha indicação'));
+    await tester.ensureVisible(nominate);
+    await tester.tap(nominate);
+    await tester.pumpAndSettle();
+    expect(find.text('Indicar o filme do fim de semana'), findsOneWidget);
+    await tester.tap(find.text('Teste de Cinema'));
+    await tester.pumpAndSettle();
+
+    final weekend = SaturnOrbitRituals.weekendPeriod(DateTime.now());
+    final prefs = await SharedPreferences.getInstance();
+    final nominations = jsonDecode(
+        prefs.getString('saturn_ritual_ops_v1')!) as Map;
+    expect(
+      (nominations[SaturnOrbitRituals.nomination(weekend, 0)] as Map)
+          ['workId'],
+      film.id,
+    );
+
+    final choose = find.text('Escolher nosso filme');
+    await tester.ensureVisible(choose);
+    await tester.tap(choose);
+    await tester.pumpAndSettle();
+
+    final updated = jsonDecode(
+        prefs.getString('saturn_ritual_ops_v1')!) as Map;
+    expect(
+      (updated[SaturnOrbitRituals.selection(weekend)] as Map)['workId'],
+      film.id,
+    );
+    expect(jsonDecode(prefs.getString('shared')!), contains(film.id));
+  });
+
   testWidgets('Livro do mês mostra carinha triste até leitura e nota',
       (tester) async {
     final now = DateTime.now();
