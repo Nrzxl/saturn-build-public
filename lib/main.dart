@@ -1939,15 +1939,30 @@ class _SaturnHomeState extends State<SaturnHome>
     });
   }
 
+  void _catalogEditionAction(Work work, void Function(Work) action) {
+    if (work.kind != 'Livro' ||
+        !work.id.startsWith('openlibrary:/works/')) {
+      action(work);
+      return;
+    }
+    // A parent work is not necessarily a volume. Ask for the printing
+    // before performing a list action so the note never joins an omnibus.
+    _chooseBookEdition(work).then((edition) {
+      if (edition != null && mounted) action(edition);
+    });
+  }
+
   Widget _explore() => CatalogExplore(
         active: tab == 1,
         requestedFilter: _catalogFilter,
         onOpen: _details,
-        onToggleShared: toggleShared,
+        onToggleShared: (work) => _catalogEditionAction(work, toggleShared),
         isShared: (work) => shared.contains(work.id),
-        onToggleWatchlist: _toggleWatchlist,
+        onToggleWatchlist: (work) =>
+            _catalogEditionAction(work, _toggleWatchlist),
         isWatchlisted: _isWatchlisted,
-        onToggleCompleted: _toggleCompleted,
+        onToggleCompleted: (work) =>
+            _catalogEditionAction(work, _toggleCompleted),
         isCompleted: _isDone,
       );
 
