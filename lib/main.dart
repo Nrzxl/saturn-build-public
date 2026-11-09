@@ -3226,6 +3226,7 @@ class _SaturnHomeState extends State<SaturnHome>
     final current = entry(w);
     String status = current['status'] ?? 'Quero conhecer';
     double rating = (current['rating'] as num?)?.toDouble() ?? 0;
+    bool ratingSet = current['rating'] is num;
     final notes = TextEditingController(text: current['notes'] ?? '');
     await showModalBottomSheet<void>(
       context: context,
@@ -3585,13 +3586,34 @@ class _SaturnHomeState extends State<SaturnHome>
                 const SizedBox(height: 7),
                 SaturnStarRating(
                   stars: starsFromLegacy(rating),
-                  onChanged: (stars) =>
-                      refresh(() => rating = legacyFromStars(stars)),
+                  onChanged: (stars) => refresh(() {
+                    rating = legacyFromStars(stars);
+                    ratingSet = true;
+                  }),
                 ),
+                Wrap(spacing: 8, runSpacing: 2, children: [
+                  TextButton.icon(
+                    onPressed: () => refresh(() {
+                      rating = 0;
+                      ratingSet = true;
+                    }),
+                    icon: const Icon(Icons.star_outline_rounded, size: 17),
+                    label: const Text('Dar 0 estrelas'),
+                  ),
+                  TextButton(
+                    onPressed: () => refresh(() {
+                      rating = 0;
+                      ratingSet = false;
+                    }),
+                    child: const Text('Remover minha nota'),
+                  ),
+                ]),
                 const Padding(
                   padding: EdgeInsets.only(bottom: 12, top: 2),
                   child: Text(
-                    'Toque na metade de uma estrela para dar meia estrela.',
+                    'Meia estrela é permitida. O halo Bronze, Prata ou Ouro '
+                    'só aparece na capa depois que você salvar uma nota '
+                    'e uma resenha escrita.',
                     style: TextStyle(
                       fontSize: 11, color: Color(0xFFBFAAB4)),
                   ),
@@ -3693,7 +3715,7 @@ class _SaturnHomeState extends State<SaturnHome>
                     onPressed: () {
                       update(w, {
                         'status': status,
-                        'rating': rating == 0 ? null : rating,
+                        'rating': ratingSet ? rating : null,
                         'notes': notes.text,
                       });
                       Navigator.pop(ctx);
