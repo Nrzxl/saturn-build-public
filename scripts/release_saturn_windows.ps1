@@ -81,8 +81,13 @@ try {
   $env:SATURN_KEYSTORE_PASSWORD = $pass
   & gh auth status | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Use gh auth login para conectar sua conta GitHub.' }
-  $existing = & gh release view $tag --repo $repo --json name 2>$null
-  if ($LASTEXITCODE -eq 0) { throw "Release $tag ja existe. Abortado sem sobrescrever." }
+  # Query successful release listing; a missing tag must not emit native
+  # stderr that PowerShell 5.1 may promote to an exception.
+  $listed = & gh release list --repo $repo --json tagName --limit 100
+  if ($LASTEXITCODE -ne 0) { throw 'Falha ao consultar releases existentes.' }
+  if (@($listed | ConvertFrom-Json | Where-Object { $_.tagName -eq $tag }).Count -gt 0) {
+    throw "Release $tag ja existe. Abortado sem sobrescrever."
+  }
 
   # Compara SHA256 do APK anterior + certificado do APK anterior e novo.
   $old = Join-Path $temp 'SATURN-anterior.apk'
