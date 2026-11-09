@@ -88,9 +88,13 @@ void main() {
       ops, period, 0, 'livro-eu'), isTrue);
     final today = DateTime(2026, 11, 9);
     expect(SaturnOrbitRituals.pendingBooks(
-      ops, {}, 0, today), ['livro-eu']);
+      ops, {}, 0, today), isEmpty);
     expect(SaturnOrbitRituals.pendingBooks(
-      ops, {}, 1, today), ['livro-ela']);
+      ops, {}, 1, today), isEmpty);
+    expect(SaturnOrbitRituals.readingFace(
+      ops, {}, 0, today), '📖');
+    expect(SaturnOrbitRituals.readingFace(
+      ops, {}, 1, today), '📖');
   });
 
   test('Livro do mês tem prazo até o último dia, sem emoji triste', () {

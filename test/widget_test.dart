@@ -109,7 +109,7 @@ void main() {
     });
     await tester.pumpWidget(const SaturnApp());
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Livro do mês pendente: leia e dê sua nota'),
+    expect(find.byTooltip('Livro do mês em andamento · prazo até o fim do mês'),
       findsOneWidget);
     await tester.tap(find.text('Nós dois'));
     await tester.pumpAndSettle();
@@ -130,7 +130,7 @@ void main() {
     expect(find.text('Leitura do Eu'), findsWidgets);
     expect(find.text('Leitura da Ela'), findsWidgets);
     expect(find.text('Escolher nosso livro'), findsNothing);
-    expect(find.text('Eu: Pendente'), findsOneWidget);
+    expect(find.text('Eu: Em leitura'), findsOneWidget);
     expect(find.text('Ela: Lido e avaliado'), findsOneWidget);
     expect(find.text('Marcar leitura e dar nota'), findsOneWidget);
 
