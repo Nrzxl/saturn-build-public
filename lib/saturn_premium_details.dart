@@ -68,11 +68,11 @@ class SaturnExternalRatings extends StatelessWidget {
     if (value == null) return false;
     final input = value.trim();
     return switch (key) {
-      'imdb' => RegExp(r'^(10(?:\\.0)?|[0-9](?:\\.[0-9])?)/10\$')
+      'imdb' => RegExp(r'^(10([.]0)?|[0-9]([.][0-9])?)/10$')
           .hasMatch(input),
-      'rottenTomatoes' => RegExp(r'^(100|[0-9]{1,2})%\$')
+      'rottenTomatoes' => RegExp(r'^(100|[0-9]{1,2})%$')
           .hasMatch(input),
-      'metacritic' => RegExp(r'^(100|[0-9]{1,2})/100\$')
+      'metacritic' => RegExp(r'^(100|[0-9]{1,2})/100$')
           .hasMatch(input),
       _ => false,
     };
