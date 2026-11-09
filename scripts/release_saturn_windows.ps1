@@ -94,7 +94,9 @@ try {
   $previousCert = Certificate $old $signer
   Push-Location $root
   try {
-    & flutter create --platforms=android --org com.nrzxl --project-name saturn_app .
+    # Use the same default com.example.saturn_app template as the private
+    # release workflow, then replace it with com.nrzxl.saturn exactly once.
+    & flutter create --platforms=android --project-name saturn_app .
     if ($LASTEXITCODE -ne 0) { throw 'Falhou flutter create.' }
     & flutter pub get
     if ($LASTEXITCODE -ne 0) { throw 'Falhou flutter pub get.' }
