@@ -2381,84 +2381,84 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
-  Widget _collectionGalleryCard(Work work) => SaturnHoverLift(
-    child: Card(
-      margin: EdgeInsets.zero,
-      color: const Color(0xFF261C28),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _details(work),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: SizedBox(
-              width: double.infinity,
-              child: PosterThumbnail(
-                work: work, width: double.infinity,
-                height: double.infinity))),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 1),
-              child: Text(work.title,
-                maxLines: 2, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: ivory, fontSize: 13,
-                  fontWeight: FontWeight.w600, height: 1.2))),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 1, 10, 0),
-              child: Text('${work.kind} · ${_statusLabel(work)}',
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFFC9B2C0), fontSize: 10))),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              IconButton(
-                tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
-                onPressed: () => _toggleWatchlist(work),
-                icon: Icon(_isWatchlisted(work)
-                    ? Icons.bookmark_added_rounded
-                    : Icons.bookmark_add_outlined, size: 19, color: gold)),
-              IconButton(
-                tooltip: work.kind == 'Livro'
-                    ? 'Marcar como lido' : 'Marcar como assistido',
-                onPressed: () => _toggleCompleted(work),
-                icon: Icon(_isDone(work)
-                    ? Icons.check_circle_rounded
-                    : Icons.check_circle_outline_rounded,
-                  size: 19, color: gold)),
-              IconButton(
-                tooltip: 'Adicionar à Nossa Órbita',
-                onPressed: () => toggleShared(work),
-                icon: Icon(shared.contains(work.id)
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
-                  size: 19, color: gold)),
-            ]),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  Widget _collectionContents(List<Work> items) =>
+  /// Responsive at phone, tablet and desktop widths. Keep cover cards and
+  /// multi-select in the same layout, rather than returning to giant rows.
+  Widget _rankedGalleryGrid(List<Work> items) =>
       LayoutBuilder(builder: (context, constraints) {
-    if (constraints.maxWidth < 980 || _selectingWorks) {
-      return Column(children: items.map(_tile).toList(growable: false));
-    }
-    final columns = (constraints.maxWidth / 250).floor().clamp(3, 5).toInt();
+    final columns = (constraints.maxWidth / 182).floor().clamp(2, 6).toInt();
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+      key: Key('saturn-ranked-gallery-' + items.first.id),
+      padding: const EdgeInsets.fromLTRB(9, 3, 9, 13),
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: columns,
-        childAspectRatio: 0.71,
-        mainAxisSpacing: 13, crossAxisSpacing: 13),
-      itemBuilder: (context, index) => _collectionGalleryCard(items[index]),
+        mainAxisExtent: 316,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+      ),
+      itemBuilder: (context, index) =>
+          _rankedPosterCard(items[index]),
     );
   });
 
+  /// Bronze -> Prata -> Ouro, and unreviewed items kept separately.
+  /// Only the current person's written reviews determine this ordering.
+  Widget _collectionContents(List<Work> items) {
+    final byTier = <SaturnReviewTier, List<Work>>{
+      for (final tier in SaturnReviewTier.values)
+        tier: items.where((work) =>
+            SaturnReviewClassification.of(entry(work)) == tier)
+            .toList(growable: false),
+    };
+    final pending = items.where((work) =>
+        SaturnReviewClassification.of(entry(work)) == null)
+        .toList(growable: false);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      for (final tier in SaturnReviewTier.values)
+        if (byTier[tier]!.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(17, 16, 17, 7),
+            child: Row(children: [
+              Icon(Icons.auto_awesome, size: 18, color: tier.color),
+              const SizedBox(width: 9),
+              Text(tier.label,
+                style: TextStyle(color: tier.color,
+                  fontSize: 13, fontWeight: FontWeight.bold,
+                  letterSpacing: 1.4)),
+              const SizedBox(width: 9),
+              Text(byTier[tier]!.length.toString(),
+                style: const TextStyle(
+                  color: Color(0xFFBFAAB7), fontSize: 12)),
+            ]),
+          ),
+          _rankedGalleryGrid(byTier[tier]!),
+        ],
+      if (pending.isNotEmpty) ...[
+        const Padding(
+          padding: EdgeInsets.fromLTRB(17, 16, 17, 7),
+          child: Row(children: [
+            Icon(Icons.grid_view_rounded, size: 18,
+              color: Color(0xFFBEAABA)),
+            SizedBox(width: 9),
+            Expanded(child: Text('SEM CLASSIFICAÇÃO · SEM HALO',
+              style: TextStyle(
+                color: Color(0xFFCFBDC9),
+                fontSize: 12, fontWeight: FontWeight.w600,
+                letterSpacing: 0.9))),
+          ]),
+        ),
+        _rankedGalleryGrid(pending),
+      ],
+    ]);
+  }
+
   Widget _collection() {
     final all = allWorks.where((w) =>
-        entry(w)['status'] != null && !_isArchived(w)).toList();
+        !_isArchived(w) &&
+        (entry(w)['status'] != null || currentWatchlist.contains(w.id)))
+        .toList();
     final items = _filteredCollection(all, false);
     return ListView(children: [
       _collectionHeader(false, all.length),
