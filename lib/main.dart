@@ -965,6 +965,7 @@ class _SaturnHomeState extends State<SaturnHome>
         .where((w) => w.kind == (book ? 'Livro' : 'Filme'))
         .take(40).toList(growable: false);
     bool loading = false;
+    bool initialized = false;
     String? error;
     try {
       final chosen = await showModalBottomSheet<Work>(
@@ -974,6 +975,39 @@ class _SaturnHomeState extends State<SaturnHome>
         backgroundColor: const Color(0xFF241B29),
         builder: (sheet) => StatefulBuilder(
           builder: (sheet, repaint) {
+            Future<void> discoverReal() async {
+              if (loading) return;
+              repaint(() { loading = true; error = null; });
+              try {
+                final found = await client.discover(
+                    book ? CatalogFilter.books : CatalogFilter.movies,
+                    page: 1);
+                if (!sheet.mounted) return;
+                repaint(() {
+                  final merged = <String, Work>{
+                    for (final saved in options) saved.id: saved,
+                    for (final entry in found)
+                      entry.id: Work.fromCatalog(entry),
+                  };
+                  options = merged.values.toList(growable: false);
+                  if (options.isEmpty) {
+                    error = 'Nenhuma sugestão carregada. '
+                        'Pesquise um título para indicar.';
+                  }
+                  loading = false;
+                });
+              } catch (_) {
+                if (!sheet.mounted) return;
+                repaint(() {
+                  if (options.isEmpty) {
+                    error = 'Falha ao carregar sugestões. '
+                        'Use a busca para tentar outro título.';
+                  }
+                  loading = false;
+                });
+              }
+            }
+
             Future<void> search() async {
               if (loading) return;
               final text = searchController.text.trim();
@@ -986,10 +1020,12 @@ class _SaturnHomeState extends State<SaturnHome>
                 error = null;
               });
               try {
-                final found = await client.search(
-                  text,
-                  book ? CatalogFilter.books : CatalogFilter.movies,
-                );
+                final isbnResult =
+                    book ? await client.editionByIsbn(text) : null;
+                final found = isbnResult == null
+                    ? await client.search(text,
+                        book ? CatalogFilter.books : CatalogFilter.movies)
+                    : [isbnResult];
                 if (!sheet.mounted) return;
                 repaint(() {
                   options = found.map(Work.fromCatalog)
@@ -1007,6 +1043,12 @@ class _SaturnHomeState extends State<SaturnHome>
                   loading = false;
                 });
               }
+            }
+            if (!initialized) {
+              initialized = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (sheet.mounted) discoverReal();
+              });
             }
             return Padding(
               padding: EdgeInsets.fromLTRB(
@@ -1037,7 +1079,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         textInputAction: TextInputAction.search,
                         onSubmitted: (_) => search(),
                         decoration: InputDecoration(
-                          hintText: book ? 'Buscar livro...' : 'Buscar filme...',
+                          hintText: book ? 'Buscar livro ou ISBN...' : 'Buscar filme no catálogo...',
                           prefixIcon: const Icon(Icons.search),
                           border: const OutlineInputBorder()),
                       )),
@@ -1056,7 +1098,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         child: Text(error!, style: const TextStyle(
                           color: Color(0xFFF1B4C2), fontSize: 12))),
                     const SizedBox(height: 9),
-                    const Text('SEUS TÍTULOS E RESULTADOS',
+                    const Text('CATÁLOGO REAL · SALVOS E DESCOBERTAS',
                       style: TextStyle(color: gold,
                         letterSpacing: 1.2, fontSize: 10)),
                     const SizedBox(height: 7),
@@ -1070,8 +1112,18 @@ class _SaturnHomeState extends State<SaturnHome>
                           title: Text(work.title, maxLines: 2,
                             overflow: TextOverflow.ellipsis),
                           subtitle: Text(
-                            '${work.kind} • ${work.year > 0 ? work.year : 'Sem ano'}'),
-                          onTap: () => Navigator.pop(sheet, work),
+                            (book && work.id.startsWith('openlibrary:/works/')
+                                ? 'Escolher volume/edição · ' : '') +
+                            work.kind + ' · ' +
+                            (work.year > 0
+                                ? work.year.toString() : 'Sem ano')),
+                          onTap: () async {
+                            final selected = book
+                                ? await _chooseBookEdition(work) : work;
+                            if (selected != null && sheet.mounted) {
+                              Navigator.pop(sheet, selected);
+                            }
+                          },
                         );
                       },
                     )),
