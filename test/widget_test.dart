@@ -5,6 +5,58 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:saturn_app/main.dart';
 
 void main() {
+
+  testWidgets('Filtros das coleções não alteram notas ou lista do casal',
+      (tester) async {
+    final film = Work('tmdb:movie:891', 'Filme em Conjunto',
+        'Filme', 'Uma história do casal.', 2024, provider: 'TMDB');
+    final book = Work('openlibrary:/works/OL345W', 'Livro em Conjunto',
+        'Livro', 'Uma leitura do casal.', 2018, provider: 'Open Library');
+    SharedPreferences.setMockInitialValues({
+      'records': jsonEncode({
+        '0:${film.id}': {
+          'status': 'Concluído', 'rating': 9.0,
+          'notes': 'Nossa memória favorita',
+        },
+        '0:${book.id}': {
+          'status': 'Em andamento', 'rating': 8.0,
+          'notes': 'Não perder esta resenha',
+        },
+      }),
+      'catalog_saved': jsonEncode({
+        film.id: film.toJson(), book.id: book.toJson(),
+      }),
+      'shared': jsonEncode([film.id, book.id]),
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Coleção'));
+    await tester.pumpAndSettle();
+    expect(find.text('Filme em Conjunto'), findsOneWidget);
+    expect(find.text('Livro em Conjunto'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('saturn-collection-filter-Livros')));
+    await tester.pumpAndSettle();
+    expect(find.text('Livro em Conjunto'), findsOneWidget);
+    expect(find.text('Filme em Conjunto'), findsNothing);
+
+    await tester.tap(find.text('Nós dois'));
+    await tester.pumpAndSettle();
+    expect(find.text('Filme em Conjunto'), findsOneWidget);
+    expect(find.text('Livro em Conjunto'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('saturn-shared-filter-Filmes')));
+    await tester.pumpAndSettle();
+    expect(find.text('Filme em Conjunto'), findsOneWidget);
+    expect(find.text('Livro em Conjunto'), findsNothing);
+
+    final prefs = await SharedPreferences.getInstance();
+    final records = jsonDecode(prefs.getString('records')!) as Map;
+    expect((records['0:${book.id}'] as Map)['notes'],
+      'Não perder esta resenha');
+    expect(jsonDecode(prefs.getString('shared')!),
+      containsAll([film.id, book.id]));
+  });
+
   testWidgets('Home preserva entrada de descoberta em vitrine cinematográfica',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

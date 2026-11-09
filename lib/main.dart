@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -244,6 +245,12 @@ class _SaturnHomeState extends State<SaturnHome>
   bool loadingRecommendations = false;
   int _filmRecommendationPage = 0;
   final profiles = ['Eu', 'Ela'];
+  String _collectionKind = 'Tudo';
+  String _sharedKind = 'Tudo';
+  static const _collectionTypes = <String, String>{
+    'Tudo': '', 'Filmes': 'Filme', 'Séries': 'Série',
+    'Doramas': 'Dorama', 'Animes': 'Anime', 'Livros': 'Livro',
+  };
   Set<StreamingService> _streaming = {...defaultStreamingServices};
 
   @override
@@ -867,7 +874,7 @@ class _SaturnHomeState extends State<SaturnHome>
           return ClipRRect(
             borderRadius: BorderRadius.circular(26),
             child: SizedBox(
-              height: spacious ? 310 : 345,
+              height: spacious ? 346 : 355,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -885,16 +892,19 @@ class _SaturnHomeState extends State<SaturnHome>
                     ),
                   ),
                   if (featured != null)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      bottom: 0,
-                      width: spacious ? 345 : 230,
-                      child: Image.network(
-                        featured.posterUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stack) =>
-                            const SizedBox.shrink(),
+                    Positioned.fill(
+                      child: Opacity(
+                        opacity: 0.36,
+                        child: ImageFiltered(
+                          imageFilter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                          child: Image.network(
+                            featured.posterUrl,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.centerRight,
+                            errorBuilder: (context, error, stack) =>
+                                const SizedBox.shrink(),
+                          ),
+                        ),
                       ),
                     ),
                   const DecoratedBox(
@@ -911,6 +921,21 @@ class _SaturnHomeState extends State<SaturnHome>
                       ),
                     ),
                   ),
+                  if (featured != null)
+                    Positioned(
+                      top: spacious ? 21 : 24,
+                      right: spacious ? 31 : 13,
+                      bottom: spacious ? 21 : 78,
+                      width: spacious ? 183 : 124,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: PosterThumbnail(
+                          work: featured,
+                          width: spacious ? 183 : 124,
+                          height: spacious ? 265 : 220,
+                        ),
+                      ),
+                    ),
                   Padding(
                     padding: EdgeInsets.symmetric(
                       horizontal: spacious ? 35 : 22,
@@ -939,14 +964,18 @@ class _SaturnHomeState extends State<SaturnHome>
                             fontWeight: FontWeight.bold, letterSpacing: 2),
                         ),
                         const SizedBox(height: 8),
-                        Text(
-                          featured?.title ?? 'Seu universo de histórias',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'serif', color: ivory,
-                            fontWeight: FontWeight.bold,
-                            fontSize: spacious ? 35 : 28, height: 1.12),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth:
+                            featured == null ? constraints.maxWidth
+                                : constraints.maxWidth * (spacious ? 0.60 : 0.58)),
+                          child: Text(
+                            featured?.title ?? 'Seu universo de histórias',
+                            maxLines: 3, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'serif', color: ivory,
+                              fontWeight: FontWeight.bold,
+                              fontSize: spacious ? 35 : 25, height: 1.12),
+                          ),
                         ),
                         const SizedBox(height: 9),
                         Text(
@@ -1365,42 +1394,193 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
-  Widget _collection() {
-    final items = allWorks.where((w) =>
-        entry(w)['status'] != null && !_isArchived(w)).toList();
-    return ListView(children: [
-      _heading('Minha coleção'),
-      _collectionSelectionToolbar(items),
-      ...items.map(_tile),
-      if (items.isEmpty)
-        const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('Sua coleção está vazia. Explore e escolha um título.'),
+
+  List<Work> _filteredCollection(Iterable<Work> source, bool sharedList) {
+    final selected = sharedList ? _sharedKind : _collectionKind;
+    final kind = _collectionTypes[selected] ?? '';
+    return source.where((w) => kind.isEmpty || w.kind == kind)
+        .toList(growable: false);
+  }
+
+  Widget _collectionHeader(bool sharedList, int count) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 20, 16, 13),
+    child: Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(23),
+        border: Border.all(color: const Color(0x665E4553)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF49233A), Color(0xFF241A2A), night]),
+      ),
+      child: Row(children: [
+        Icon(sharedList ? Icons.favorite_rounded
+            : Icons.collections_bookmark_rounded, color: gold, size: 32),
+        const SizedBox(width: 13),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(sharedList ? 'Nossa órbita ♡' : 'Minha coleção',
+              style: const TextStyle(color: ivory, fontFamily: 'serif',
+                fontSize: 25, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 5),
+            Text(sharedList
+                ? 'Histórias que fazem parte da nossa trajetória'
+                : 'Seu cinema, sua estante, suas memórias',
+              style: const TextStyle(color: Color(0xFFDAC8D0), fontSize: 12)),
+          ],
+        )),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xAA241723),
+            borderRadius: BorderRadius.circular(14)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Text('$count', style: const TextStyle(
+              color: gold, fontSize: 23, fontWeight: FontWeight.w700)))),
+      ]),
+    ),
+  );
+
+  Widget _collectionFilters(bool sharedList) {
+    final selected = sharedList ? _sharedKind : _collectionKind;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Wrap(spacing: 7, runSpacing: 2, children: [
+        for (final kind in _collectionTypes.keys)
+          ChoiceChip(
+            key: Key('saturn-${sharedList ? 'shared' : 'collection'}-filter-$kind'),
+            label: Text(kind),
+            selected: selected == kind,
+            selectedColor: wine,
+            onSelected: (_) => setState(() {
+              if (sharedList) {
+                _sharedKind = kind;
+              } else {
+                _collectionKind = kind;
+              }
+              // Prevent bulk actions on items hidden by the changed filter.
+              _selectingWorks = false;
+              _selectedWorkIds.clear();
+            }),
+          ),
+      ]),
+    );
+  }
+
+  Widget _collectionGalleryCard(Work work) => SaturnHoverLift(
+    child: Card(
+      margin: EdgeInsets.zero,
+      color: const Color(0xFF261C28),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _details(work),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: SizedBox(
+              width: double.infinity,
+              child: PosterThumbnail(
+                work: work, width: double.infinity,
+                height: double.infinity))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 1),
+              child: Text(work.title,
+                maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: ivory, fontSize: 13,
+                  fontWeight: FontWeight.w600, height: 1.2))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 1, 10, 0),
+              child: Text('${work.kind} · ${_statusLabel(work)}',
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFFC9B2C0), fontSize: 10))),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              IconButton(
+                tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
+                onPressed: () => _toggleWatchlist(work),
+                icon: Icon(_isWatchlisted(work)
+                    ? Icons.bookmark_added_rounded
+                    : Icons.bookmark_add_outlined, size: 19, color: gold)),
+              IconButton(
+                tooltip: work.kind == 'Livro'
+                    ? 'Marcar como lido' : 'Marcar como assistido',
+                onPressed: () => _toggleCompleted(work),
+                icon: Icon(_isDone(work)
+                    ? Icons.check_circle_rounded
+                    : Icons.check_circle_outline_rounded,
+                  size: 19, color: gold)),
+              IconButton(
+                tooltip: 'Adicionar à Nossa Órbita',
+                onPressed: () => toggleShared(work),
+                icon: Icon(shared.contains(work.id)
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                  size: 19, color: gold)),
+            ]),
+          ],
         ),
+      ),
+    ),
+  );
+
+  Widget _collectionContents(List<Work> items) =>
+      LayoutBuilder(builder: (context, constraints) {
+    if (constraints.maxWidth < 980 || _selectingWorks) {
+      return Column(children: items.map(_tile).toList(growable: false));
+    }
+    final columns = (constraints.maxWidth / 250).floor().clamp(3, 5).toInt();
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        childAspectRatio: 0.71,
+        mainAxisSpacing: 13, crossAxisSpacing: 13),
+      itemBuilder: (context, index) => _collectionGalleryCard(items[index]),
+    );
+  });
+
+  Widget _collection() {
+    final all = allWorks.where((w) =>
+        entry(w)['status'] != null && !_isArchived(w)).toList();
+    final items = _filteredCollection(all, false);
+    return ListView(children: [
+      _collectionHeader(false, all.length),
+      _collectionFilters(false),
+      _collectionSelectionToolbar(items),
+      _collectionContents(items),
+      if (items.isEmpty)
+        Padding(padding: const EdgeInsets.all(16),
+          child: Text(all.isEmpty
+              ? 'Sua coleção está vazia. Explore e escolha um título.'
+              : 'Nenhum título desta categoria na sua coleção.')),
     ]);
   }
 
   Widget _shared() {
-    final items = allWorks.where((w) => shared.contains(w.id)).toList();
+    final all = allWorks.where((w) => shared.contains(w.id)).toList();
+    final items = _filteredCollection(all, true);
     return ListView(children: [
-      _heading('Nossa órbita ♡'),
+      _collectionHeader(true, all.length),
       Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Text(
           _cloud?.connected == true
               ? 'Nossa coleção compartilhada entre os aparelhos conectados.'
               : 'Coleção de vocês neste aparelho. Ative a nuvem para '
                 'sincronizar Android e iPhone.',
-          style: const TextStyle(color: Color(0xFFD6C4CE)),
-        ),
-      ),
+          style: const TextStyle(color: Color(0xFFD6C4CE)))),
+      _collectionFilters(true),
       _collectionSelectionToolbar(items, sharedList: true),
-      ...items.map(_tile),
+      _collectionContents(items),
       if (items.isEmpty)
-        const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('Ainda não há histórias na lista de vocês.'),
-        ),
+        Padding(padding: const EdgeInsets.all(16),
+          child: Text(all.isEmpty
+              ? 'Ainda não há histórias na lista de vocês.'
+              : 'Nenhuma história desta categoria em Nossa Órbita.')),
     ]);
   }
 
@@ -1531,6 +1711,83 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
+
+  /// Hero cinematográfico feito com a capa autêntica da obra.
+  Widget _cinematicDetailBanner(Work work) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final wide = constraints.maxWidth >= 630;
+      final titleWidth = (constraints.maxWidth - (wide ? 250.0 : 128.0))
+          .clamp(142.0, 640.0).toDouble();
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(23),
+        child: SizedBox(
+          height: wide ? 282 : 237,
+          child: Stack(fit: StackFit.expand, children: [
+            const DecoratedBox(decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                colors: [Color(0xFF54283D), Color(0xFF251928), night]))),
+            if (work.posterUrl.startsWith('https://'))
+              Positioned.fill(child: Opacity(
+                opacity: 0.32,
+                child: ImageFiltered(
+                  imageFilter: ui.ImageFilter.blur(sigmaX: 13, sigmaY: 13),
+                  child: Image.network(work.posterUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stack) =>
+                        const SizedBox.shrink())))),
+            const DecoratedBox(decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft, end: Alignment.centerRight,
+                colors: [
+                  Color(0xF21A1522), Color(0xD52B1C2F), Color(0x66321C2B)]))),
+            Positioned(
+              top: wide ? 16 : 31, bottom: wide ? 16 : 31,
+              right: wide ? 25 : 11, width: wide ? 162 : 104,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: PosterThumbnail(
+                  work: work, width: wide ? 162 : 104,
+                  height: wide ? 250 : 175))),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                wide ? 27 : 15, 22, 16, wide ? 23 : 19),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('SATURN · FICHA CINEMATOGRÁFICA',
+                    style: TextStyle(color: gold, fontSize: 10,
+                      fontWeight: FontWeight.w600, letterSpacing: 1.4)),
+                  const Spacer(),
+                  SizedBox(width: titleWidth,
+                    child: Text(work.title,
+                      maxLines: 3, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontFamily: 'serif', color: ivory,
+                        fontWeight: FontWeight.bold,
+                        fontSize: wide ? 32 : 23, height: 1.12))),
+                  const SizedBox(height: 10),
+                  SizedBox(width: titleWidth,
+                    child: Text(
+                      '${work.kind} · ${work.year > 0 ? work.year : 'Ano não informado'}'
+                      '${work.creator.isNotEmpty ? ' · ${work.creator}' : ''}',
+                      maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12, color: Color(0xFFE4D1D5)))),
+                  const SizedBox(height: 7),
+                  if (work.provider.isNotEmpty)
+                    SizedBox(width: titleWidth,
+                      child: Text('Fonte: ${work.provider}',
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: gold, fontSize: 11))),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      );
+    });
+  }
+
   Future<void> _details(Work w) async {
     final current = entry(w);
     String status = current['status'] ?? 'Quero conhecer';
@@ -1580,54 +1837,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   SaturnTrailerPreview(youtubeId: w.trailerYoutubeId),
                   const SizedBox(height: 14),
                 ],
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: const Color(0x776A4A58)),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF512A42), Color(0xFF241B2A)],
-                    ),
-                  ),
-                  child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(13),
-                      child: PosterThumbnail(work: w,
-                        width: 124, height: 183),
-                    ),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(w.title, style: const TextStyle(
-                            fontFamily: 'serif', fontWeight: FontWeight.bold,
-                            fontSize: 26, color: ivory, height: 1.2,
-                          )),
-                          const SizedBox(height: 9),
-                          Text('${w.kind} · ${w.year > 0 ? w.year : 'Ano não informado'}',
-                            style: const TextStyle(color: gold)),
-                          if (w.creator.isNotEmpty) ...[
-                            const SizedBox(height: 7),
-                            Text(w.creator,
-                              style: const TextStyle(fontSize: 12, color: ivory)),
-                          ],
-                          if (w.provider.isNotEmpty) ...[
-                            const SizedBox(height: 9),
-                            Text('Catálogo: ${w.provider}',
-                              style: const TextStyle(fontSize: 11,
-                                color: Color(0xFFBDA9B3))),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                  ),
-                ),
+                _cinematicDetailBanner(w),
                 const SizedBox(height: 12),
                 if (w.kind == 'Livro')
                   SaturnBookDetailsPanel(
