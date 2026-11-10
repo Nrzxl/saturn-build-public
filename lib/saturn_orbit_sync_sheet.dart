@@ -75,15 +75,23 @@ class _SaturnOrbitSyncSheetState extends State<SaturnOrbitSyncSheet> {
     final cloud = widget.cloud;
     const accent = Color(0xFFC6A477);
     const cream = Color(0xFFF2E8DF);
+    // Keep the form inside iOS Safari's visual viewport when its keyboard
+    // appears; the long account/partner form stays independently scrollable.
+    final screen = MediaQuery.sizeOf(context);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final safe = MediaQuery.viewPaddingOf(context);
+    final available = (screen.height - keyboard -
+        safe.top - safe.bottom - 24).clamp(150.0, screen.height).toDouble();
 
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          18, 18, 18,
-          MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
+        padding: EdgeInsets.fromLTRB(14, 8, 14, keyboard),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: available),
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(4, 12, 4, 24),
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -294,6 +302,7 @@ class _SaturnOrbitSyncSheetState extends State<SaturnOrbitSyncSheet> {
                 Text(cloud!.lastError!, style: const TextStyle(
                   color: Color(0xFFFFC0C0), fontSize: 12)),
             ],
+            ),
           ),
         ),
       ),
