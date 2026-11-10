@@ -298,6 +298,8 @@ class _SaturnHomeState extends State<SaturnHome>
   Set<String> _archivedFromCollection = <String>{};
   bool _selectingWorks = false;
   final Set<String> _selectedWorkIds = <String>{};
+  // Render covers in batches to avoid decoding hundreds on first scroll.
+  int _visibleGalleryCards = 42;
   Map<String, Map<String, String>> customTitleLinks = {};
   List<Work> get allWorks => savedWorks.values.toList(growable: false);
   Map<int, Set<String>> watchlists = {0: <String>{}, 1: <String>{}};
@@ -2270,6 +2272,13 @@ class _SaturnHomeState extends State<SaturnHome>
     final metalColor = inOrbit ? firstTier?.color : tier?.color;
     final partnerMetalColor = secondTier?.color;
     final selected = _selectedWorkIds.contains(work.id);
+    final zeroStarMovie = SaturnReviewClassification.shouldShowFlies(
+        work.kind, personal) ||
+        (inOrbit && (
+          SaturnReviewClassification.shouldShowFlies(
+              work.kind, records['0:${work.id}']) ||
+          SaturnReviewClassification.shouldShowFlies(
+              work.kind, records['1:${work.id}'])));
     void select() => setState(() {
       if (!_selectedWorkIds.add(work.id)) {
         _selectedWorkIds.remove(work.id);
@@ -2311,6 +2320,8 @@ class _SaturnHomeState extends State<SaturnHome>
                     width: double.infinity,
                     height: double.infinity,
                   ),
+                  if (zeroStarMovie)
+                    const Positioned.fill(child: SaturnZeroStarFlies()),
                   if (_selectingWorks)
                     Positioned(
                       top: 3, left: 3,
@@ -2671,6 +2682,14 @@ class _SaturnHomeState extends State<SaturnHome>
         onToggleCompleted: (work) =>
             _catalogEditionAction(work, _toggleCompleted),
         isCompleted: _isDone,
+        showZeroStarFlies: (work) =>
+            SaturnReviewClassification.shouldShowFlies(
+                work.kind, records['${profile}:${work.id}']) ||
+            (shared.contains(work.id) && (
+              SaturnReviewClassification.shouldShowFlies(
+                  work.kind, records['0:${work.id}']) ||
+              SaturnReviewClassification.shouldShowFlies(
+                  work.kind, records['1:${work.id}']))),
       );
 
   bool _isArchived(Work work) =>
@@ -2874,6 +2893,7 @@ class _SaturnHomeState extends State<SaturnHome>
               // Prevent bulk actions on items hidden by the changed filter.
               _selectingWorks = false;
               _selectedWorkIds.clear();
+              _visibleGalleryCards = 42;
             }),
           ),
       ]),
@@ -2908,7 +2928,20 @@ class _SaturnHomeState extends State<SaturnHome>
     if (items.isEmpty) return const SizedBox.shrink();
     final ranked = SaturnReviewClassification.sorted<Work>(
       items, (work) => entry(work));
-    return _rankedGalleryGrid(ranked);
+    final visible = ranked.take(_visibleGalleryCards)
+        .toList(growable: false);
+    return Column(children: [
+      _rankedGalleryGrid(visible),
+      if (ranked.length > visible.length)
+        Padding(padding: const EdgeInsets.fromLTRB(16, 2, 16, 18),
+          child: OutlinedButton.icon(
+            key: const Key('saturn-gallery-load-more'),
+            onPressed: () => setState(() => _visibleGalleryCards += 42),
+            icon: const Icon(Icons.expand_more_rounded),
+            label: Text('Mostrar mais capas '
+                '(${visible.length} de ${ranked.length})'),
+          )),
+    ]);
   }
 
   Widget _collection() {
@@ -5289,6 +5322,7 @@ class CatalogExplore extends StatefulWidget {
   final bool Function(Work) isWatchlisted;
   final void Function(Work) onToggleCompleted;
   final bool Function(Work) isCompleted;
+  final bool Function(Work)? showZeroStarFlies;
 
   const CatalogExplore({
     super.key,
@@ -5301,6 +5335,7 @@ class CatalogExplore extends StatefulWidget {
     required this.isWatchlisted,
     required this.onToggleCompleted,
     required this.isCompleted,
+    this.showZeroStarFlies,
   });
 
   @override
@@ -5905,6 +5940,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
                       ),
                     ),
                   )),
+                  if (widget.showZeroStarFlies?.call(work) ?? false)
+                    const Positioned.fill(child: SaturnZeroStarFlies()),
                   Positioned(top: 5, left: 5,
                     child: IconButton.filledTonal(
                       tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
