@@ -25,6 +25,7 @@ import 'saturn_premium_details.dart';
 import 'saturn_story_synopsis.dart';
 import 'saturn_book_details.dart';
 import 'saturn_book_cover.dart';
+import 'saturn_artwork.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
 import 'saturn_couple_suggestions.dart';
@@ -4827,50 +4828,54 @@ class PosterThumbnail extends StatelessWidget {
               ? Icons.tv_rounded : Icons.movie_creation_outlined,
           color: gold, size: 26),
     );
-    final coverUrl = SaturnBookCover.resolve(work.id, work.posterUrl);
-    if (!coverUrl.startsWith('https://')) return fallback;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Image.network(
-        coverUrl,
-        key: ValueKey('cover-' + work.id + '-' + coverUrl),
-        width: width, height: height,
-        fit: BoxFit.cover,
-        // Decode smaller thumbnails where supported and keep low-cost
-        // filtering while Safari scrolls hundreds of book/film covers.
-        cacheWidth: width.isFinite && width > 0
-            ? (width * MediaQuery.devicePixelRatioOf(context))
-                .round().clamp(60, 780).toInt() : null,
-        filterQuality: FilterQuality.low,
-        gaplessPlayback: true,
-        // Show the first decoded frame instead of hiding it until the
-        // network loading callback finishes. Crossfade avoids white flashes.
-        frameBuilder: (context, image, frame, synchronous) {
-          if (synchronous) return image;
-          return AnimatedOpacity(
-            opacity: frame == null ? 0 : 1,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            child: Stack(fit: StackFit.passthrough, children: [
-              fallback,
-              image,
-            ]),
-          );
-        },
-        loadingBuilder: (context, image, progress) =>
-            progress == null ? image : Stack(
-              fit: StackFit.passthrough,
-              children: [fallback, image],
-            ),
-        errorBuilder: (context, error, stackTrace) {
-          final second = SaturnBookCover.fallback(work.id);
-          return second == null ? fallback : Image.network(
-            second, width: width, height: height, fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => fallback,
-          );
-        },
-      ),
-    );
+    final original = SaturnBookCover.resolve(work.id, work.posterUrl);
+    if (!original.startsWith('https://')) return fallback;
+    return LayoutBuilder(builder: (context, constraints) {
+      final logicalWidth = width.isFinite && width > 0
+          ? width
+          : constraints.maxWidth.isFinite && constraints.maxWidth > 0
+              ? constraints.maxWidth : 168.0;
+      final pixels = (logicalWidth *
+          MediaQuery.devicePixelRatioOf(context) * 1.16)
+          .round().clamp(100, 1280).toInt();
+      final coverUrl = SaturnArtwork.bestUrl(original,
+          devicePixels: pixels.toDouble());
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.network(
+          coverUrl,
+          key: ValueKey('cover-' + work.id + '-' + coverUrl),
+          width: width, height: height,
+          fit: BoxFit.cover,
+          cacheWidth: pixels,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+          frameBuilder: (context, image, frame, synchronous) {
+            if (synchronous) return image;
+            return AnimatedOpacity(
+              opacity: frame == null ? 0 : 1,
+              duration: const Duration(milliseconds: 200),
+              child: Stack(fit: StackFit.passthrough,
+                children: [fallback, image]),
+            );
+          },
+          loadingBuilder: (context, image, progress) =>
+              progress == null ? image : Stack(
+                fit: StackFit.passthrough,
+                children: [fallback, image]),
+          errorBuilder: (context, error, trace) {
+            final alternate = SaturnBookCover.fallback(work.id) ??
+                (coverUrl != original ? original : '');
+            if (!alternate.startsWith('https://')) return fallback;
+            return Image.network(alternate,
+              width: width, height: height, fit: BoxFit.cover,
+              cacheWidth: pixels,
+              errorBuilder: (context, error, trace) => fallback,
+            );
+          },
+        ),
+      );
+    });
   }
 }
 
