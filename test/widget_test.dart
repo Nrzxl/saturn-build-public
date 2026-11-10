@@ -33,6 +33,11 @@ void main() {
     expect(find.text('Ela escolheu desta vez.'), findsOneWidget);
     expect(find.text('Próxima escolha: Eu'), findsOneWidget);
     final done = find.byKey(const Key('saturn-series-finish'));
+    await tester.scrollUntilVisible(done, 100,
+        scrollable: find.byType(Scrollable).first, maxScrolls: 18);
+    await tester.drag(find.byType(Scrollable).first,
+        const Offset(0, -180));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(done);
     await tester.tap(done);
     await tester.pumpAndSettle();
@@ -480,7 +485,9 @@ void main() {
         findsOneWidget);
     expect(find.text('Netflix'), findsNothing);
     expect(find.text('Pesquisar em meus serviços'), findsOneWidget);
-    expect(find.byKey(Key('saturn-trailer-' + office.id)), findsOneWidget);
+    // Flutter VM tests use a cover fallback: the iframe is instantiated
+    // only by the browser/mobile player runtime, never by the test runner.
+    expect(find.byKey(Key('saturn-trailer-' + office.id)), findsNothing);
     expect(find.text('A MELHOR SÉRIE DE TODAS!'), findsWidgets);
     final prefs = await SharedPreferences.getInstance();
     final existing = jsonDecode(prefs.getString('records')!) as Map;
