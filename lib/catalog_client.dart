@@ -71,6 +71,34 @@ class CatalogClient {
 
   void close() => _client.close();
 
+  /// Look up a saved film/series by its stable TMDB identifier in the latest
+  /// published online SATURN snapshot; no title/first-page approximation.
+  Future<CatalogEntry?> onlineRatingsById(String workId) async {
+    if (!_enableTmdb || !workId.startsWith('tmdb:')) return null;
+    final row = await _tmdb.findById(workId);
+    if (row == null) return null;
+    final external = row['externalRatings'];
+    return CatalogEntry(
+      id: (row['id'] ?? '').toString(),
+      title: (row['title'] ?? '').toString(),
+      kind: (row['kind'] ?? '').toString(),
+      description: (row['description'] ?? '').toString(),
+      year: row['year'] is num ? (row['year'] as num).toInt() : 0,
+      posterUrl: (row['posterUrl'] ?? '').toString(),
+      provider: 'TMDB',
+      externalRatings: external is Map
+          ? external.map((key, value) =>
+              MapEntry(key.toString(), value.toString()))
+          : const {},
+      tmdbScore: row['tmdbVoteAverage'] is num
+          ? (row['tmdbVoteAverage'] as num).toDouble()
+          : null,
+      tmdbVoteCount: row['tmdbVoteCount'] is num
+          ? (row['tmdbVoteCount'] as num).toInt()
+          : null,
+    );
+  }
+
   Future<List<CatalogEntry>> _snapshot({
     required CatalogFilter filter,
     required String query,

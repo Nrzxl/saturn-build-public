@@ -196,24 +196,11 @@ class _SaturnRatingsFromCatalogState extends State<SaturnRatingsFromCatalog> {
     _client?.close();
     _client = null;
     _lookup = null;
-    if (!widget.workId.startsWith('tmdb:') ||
-        widget.workTitle.trim().length < 2) {
-      return;
-    }
-    final filter = switch (widget.kind) {
-      'Filme' => CatalogFilter.movies,
-      'Série' => CatalogFilter.series,
-      'Dorama' => CatalogFilter.dramas,
-      'Anime' => CatalogFilter.anime,
-      _ => CatalogFilter.all,
-    };
+    if (!widget.workId.startsWith('tmdb:')) return;
+    // Online catalog lookups use the exact TMDB ID, not an ambiguous title.
     _client = CatalogClient();
-    _lookup = _client!.search(widget.workTitle, filter).then((items) {
-      for (final item in items) {
-        if (item.id == widget.workId) return item;
-      }
-      return null;
-    }).catchError((Object _) => null);
+    _lookup = _client!.onlineRatingsById(widget.workId)
+        .catchError((Object _) => null);
   }
 
   @override
@@ -259,7 +246,7 @@ class _SaturnRatingsFromCatalogState extends State<SaturnRatingsFromCatalog> {
                 snapshot.connectionState == ConnectionState.waiting)
               const Padding(
                 padding: EdgeInsets.only(left: 12, bottom: 6),
-                child: Text('Consultando notas públicas disponíveis…',
+                child: Text('Consultando notas públicas do catálogo online…',
                     style: TextStyle(color: satinSubdued, fontSize: 11)),
               ),
             if (_lookup != null && snapshot.connectionState == ConnectionState.done &&

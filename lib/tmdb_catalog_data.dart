@@ -53,6 +53,24 @@ class TmdbCatalogData {
     }
   }
 
+  /// Direct exact-ID lookup: a saved title may be on page 100 of discovery.
+  /// Search by title and take(36) could otherwise hide its online ratings.
+  Future<Map<String, dynamic>?> findById(String id) async {
+    final categories = id.startsWith('tmdb:movie:')
+        ? ['movies']
+        : id.startsWith('tmdb:tv:')
+            ? ['series', 'dramas', 'anime']
+            : const <String>[];
+    if (categories.isEmpty) return null;
+    final groups = await Future.wait(categories.map(load));
+    for (final group in groups) {
+      for (final entry in group) {
+        if (entry['id'] == id) return entry;
+      }
+    }
+    return null;
+  }
+
   /// A snapshot can be several thousand titles. It stays in memory for
   /// the session, and never modifies ratings or the saved watchlist.
   Future<List<Map<String, dynamic>>> query({
