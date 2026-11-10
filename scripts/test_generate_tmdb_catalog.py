@@ -74,6 +74,30 @@ class CatalogGenerationTests(unittest.TestCase):
                  "key": "not-valid"},
             ]}), "")
 
+    def test_original_audio_first_and_verified_alternatives(self):
+        sample = {"results": [
+            {"site": "YouTube", "type": "Trailer",
+             "official": True, "iso_639_1": "pt", "key": "123456789ab"},
+            {"site": "YouTube", "type": "Trailer",
+             "official": True, "iso_639_1": "ja", "key": "abcdefghijk"},
+            {"site": "YouTube", "type": "Trailer",
+             "official": True, "iso_639_1": "en", "key": "123456789ac"},
+            {"site": "YouTube", "type": "Teaser",
+             "iso_639_1": "ja", "key": "123456789ad"},
+            {"site": "YouTube", "type": "Trailer",
+             "iso_639_1": "ja", "key": "abcdefghijk"},
+            {"site": "Vimeo", "type": "Trailer",
+             "iso_639_1": "ja", "key": "123456789ae"},
+        ]}
+        ids = MODULE.trailer_youtube_ids(sample, "ja")
+        self.assertEqual(ids, [
+            "abcdefghijk", "123456789ab", "123456789ac",
+            "123456789ad"])
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(MODULE.trailer_youtube_ids(
+            {"results": [{"site": "YouTube", "type": "Trailer",
+                "key": "bad id"}]}, "ja"), [])
+
     def test_no_adult_titles_and_no_duplicate_ids(self):
         record = {
             "id": 100, "title": "Filme Real", "poster_path": "/poster.jpg",

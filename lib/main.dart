@@ -70,6 +70,7 @@ class Work {
   final String watchUrl;
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
+  final String nativeTrailerSubtitleUrl;
   final String availabilityUpdatedAt;
   final bool availabilityChecked;
 
@@ -80,6 +81,7 @@ class Work {
        this.streamingProviders = const {}, this.watchProviders = const [],
        this.watchUrl = '', this.trailerYoutubeId = '',
        this.nativeTrailerUrl = '',
+       this.nativeTrailerSubtitleUrl = '',
        this.genreIds = const [], this.externalRatings = const {},
        this.tmdbScore, this.tmdbVoteCount,
        this.availabilityUpdatedAt = '',
@@ -100,6 +102,7 @@ class Work {
         watchUrl: entry.watchUrl,
         trailerYoutubeId: entry.trailerYoutubeId,
         nativeTrailerUrl: entry.nativeTrailerUrl,
+        nativeTrailerSubtitleUrl: entry.nativeTrailerSubtitleUrl,
         availabilityChecked: entry.availabilityChecked,
         availabilityUpdatedAt: entry.availabilityUpdatedAt,
       );
@@ -142,6 +145,8 @@ class Work {
         watchUrl: (data['watchUrl'] ?? '').toString(),
         trailerYoutubeId: (data['trailerYoutubeId'] ?? '').toString(),
         nativeTrailerUrl: (data['nativeTrailerUrl'] ?? '').toString(),
+        nativeTrailerSubtitleUrl:
+            (data['nativeTrailerSubtitleUrl'] ?? '').toString(),
         availabilityChecked: data['availabilityChecked'] == true,
         availabilityUpdatedAt:
             (data['availabilityUpdatedAt'] ?? '').toString(),
@@ -163,6 +168,7 @@ class Work {
         'watchUrl': watchUrl,
         'trailerYoutubeId': trailerYoutubeId,
         'nativeTrailerUrl': nativeTrailerUrl,
+        'nativeTrailerSubtitleUrl': nativeTrailerSubtitleUrl,
         'availabilityChecked': availabilityChecked,
         'availabilityUpdatedAt': availabilityUpdatedAt,
       };
@@ -4419,12 +4425,10 @@ class _SaturnHomeState extends State<SaturnHome>
     // Only the browser has the official iframe platform initialized here.
     final canEmbedTrailer = kIsWeb;
     final trailerFuture = canEmbedTrailer && w.kind != 'Livro'
-        ? RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(w.trailerYoutubeId)
-          ? Future<String?>.value(w.trailerYoutubeId)
-          : _homeCatalog.verifiedTrailerFor(
-              workId: w.id, title: w.title,
-              kind: w.kind, year: w.year)
-        : Future<String?>.value(null);
+        ? _homeCatalog.verifiedTrailerCandidatesFor(
+            workId: w.id, title: w.title, kind: w.kind, year: w.year,
+            savedYoutubeId: w.trailerYoutubeId)
+        : Future<List<String>>.value(const <String>[]);
     final current = entry(w);
     String status = current['status'] ?? 'Quero conhecer';
     double rating = (current['rating'] as num?)?.toDouble() ?? 0;
@@ -4460,16 +4464,16 @@ class _SaturnHomeState extends State<SaturnHome>
                 ]),
                 const SizedBox(height: 10),
                 if (w.kind != 'Livro' && canEmbedTrailer)
-                  FutureBuilder<String?>(
+                  FutureBuilder<List<String>>(
                     future: trailerFuture,
                     builder: (context, snapshot) {
-                      final videoId = snapshot.data ?? '';
-                      final verified = RegExp(r'^[A-Za-z0-9_-]{11}$')
-                          .hasMatch(videoId);
-                      if (verified) {
+                      final candidates = snapshot.data ?? const <String>[];
+                      if (candidates.isNotEmpty) {
                         return SaturnTrailerPreview(
                           key: Key('saturn-trailer-' + w.id),
-                          youtubeId: videoId,
+                          youtubeId: candidates.first,
+                          alternativeIds: candidates.skip(1).toList(),
+                          storyPreview: _cinematicDetailBanner(w),
                           heroMode: true,
                           workTitle: w.title,
                           workMetadata: w.kind + ' · ' +
@@ -4519,6 +4523,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   const SizedBox(height: 10),
                   SaturnNativeTrailer(
                     mediaUrl: w.nativeTrailerUrl,
+                    subtitleUrl: w.nativeTrailerSubtitleUrl,
                     rightsConfirmed: true),
                 ],
                 const SizedBox(height: 12),
@@ -5041,19 +5046,10 @@ class PosterThumbnail extends StatelessWidget {
           cacheWidth: pixels,
           filterQuality: FilterQuality.medium,
           gaplessPlayback: true,
-          frameBuilder: (context, image, frame, synchronous) {
-            if (synchronous) return image;
-            return AnimatedOpacity(
-              opacity: frame == null ? 0 : 1,
-              duration: const Duration(milliseconds: 200),
-              child: Stack(fit: StackFit.passthrough,
-                children: [fallback, image]),
-            );
-          },
-          loadingBuilder: (context, image, progress) =>
-              progress == null ? image : Stack(
-                fit: StackFit.passthrough,
-                children: [fallback, image]),
+          // One image at a time: avoid stacked loading frames that can
+          // paint two covers across the same card during rapid scrolling.
+          frameBuilder: (context, image, frame, synchronous) =>
+              frame == null ? fallback : image,
           errorBuilder: (context, error, trace) {
             final alternate = SaturnBookCover.fallback(work.id) ??
                 (coverUrl != original ? original : '');
@@ -5636,7 +5632,10 @@ class _CatalogExploreState extends State<CatalogExplore> {
               ),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: columns,
-                childAspectRatio: 0.59,
+                // Deterministic poster/footer geometry avoids long titles
+                // crossing into artwork while cards load or resize.
+                mainAxisExtent: (((width - 28 - (columns - 1) * 12) /
+                    columns) * 1.40 + 80).clamp(290.0, 390.0),
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
               ),
@@ -5773,38 +5772,53 @@ class _CatalogExploreState extends State<CatalogExplore> {
                           color: ivory, letterSpacing: 1.5,
                           fontSize: 9, fontWeight: FontWeight.w800))),
                   ])),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [tone, Color.lerp(tone, night, .62)!],
+                  SizedBox(
+                    height: 80,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [tone, Color.lerp(tone, night, .62)!],
+                        ),
                       ),
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 5),
-                          child: Text(work.title, maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: ivory, fontFamily: 'serif',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14, height: 1.2)),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              height: 40,
+                              child: Align(
+                                alignment: Alignment.topLeft,
+                                child: Text(
+                                  work.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: true,
+                                  style: const TextStyle(
+                                    color: ivory, fontFamily: 'serif',
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14, height: 1.17,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            Text([
+                              if (work.year > 0) work.year.toString(),
+                              if (work.kind == 'Livro' &&
+                                  work.creator.isNotEmpty) work.creator
+                              else if (work.kind != 'Livro') work.provider,
+                            ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFFE4CAD6), fontSize: 10),
+                            ),
+                          ],
                         ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 1, 10, 10),
-                          child: Text([
-                            if (work.year > 0) work.year.toString(),
-                            if (work.kind == 'Livro' &&
-                                work.creator.isNotEmpty) work.creator
-                            else if (work.kind != 'Livro') work.provider,
-                          ].join(' · '), maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFFE4CAD6), fontSize: 10)),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ],

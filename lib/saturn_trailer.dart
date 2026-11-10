@@ -1,20 +1,23 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
-/// A verified TMDB trailer. Attempts silent inline autoplay when the sheet
-/// opens; OS/YouTube policies may prevent it, so playback remains user-driven.
-/// Never auto-play with audio enabled; leaving the details disposes the player.
+/// Show SATURN artwork first; instantiate the official iframe only after the
+/// viewer chooses play. Its required branding/links remain unobscured.
 class SaturnTrailerPreview extends StatefulWidget {
+  const SaturnTrailerPreview({
+    super.key, required this.youtubeId, this.alternativeIds = const [],
+    this.storyPreview, this.heroMode = false,
+    this.workTitle = '', this.workMetadata = '',
+  });
+
   final String youtubeId;
+  final List<String> alternativeIds;
+  final Widget? storyPreview;
   final bool heroMode;
   final String workTitle;
   final String workMetadata;
-
-  const SaturnTrailerPreview({
-    super.key, required this.youtubeId,
-    this.heroMode = false, this.workTitle = '', this.workMetadata = '',
-  });
 
   @override
   State<SaturnTrailerPreview> createState() => _SaturnTrailerPreviewState();
@@ -23,44 +26,29 @@ class SaturnTrailerPreview extends StatefulWidget {
 class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   YoutubePlayerController? _controller;
   bool _muted = true;
+  bool _exhausted = false;
+  bool _pendingError = false;
+  int _candidateIndex = 0;
 
-  static bool validVideoId(String value) =>
-      RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(value);
+  static bool validVideoId(String id) =>
+      RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id);
 
-  @override
-  void initState() {
-    super.initState();
-    _setup();
-  }
-
-  void _setup() {
-    if (!validVideoId(widget.youtubeId)) return;
-    _controller = YoutubePlayerController.fromVideoId(
-      videoId: widget.youtubeId,
-      autoPlay: true,
-      params: const YoutubePlayerParams(
-        mute: true,
-        playsInline: true,
-        // SATURN's existing play/pause and sound actions drive the iframe.
-        // The embedded video surface does not capture taps or mouse clicks.
-        pointerEvents: PointerEvents.none,
-        enableKeyboard: false,
-        showControls: false,
-        showFullscreenButton: false,
-        enableCaption: false,
-        privacyEnhancedMode: true,
-      ),
-    );
-  }
+  List<String> get _candidates => <String>{
+    widget.youtubeId, ...widget.alternativeIds,
+  }.where(validVideoId).take(4).toList(growable: false);
 
   @override
   void didUpdateWidget(covariant SaturnTrailerPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.youtubeId == oldWidget.youtubeId) return;
-    _controller?.close();
+    if (widget.youtubeId == oldWidget.youtubeId &&
+        listEquals(widget.alternativeIds, oldWidget.alternativeIds)) return;
+    final old = _controller;
     _controller = null;
+    _candidateIndex = 0;
+    _pendingError = false;
+    _exhausted = false;
     _muted = true;
-    _setup();
+    old?.close();
   }
 
   @override
@@ -69,189 +57,205 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
     super.dispose();
   }
 
+  void _activateCandidate(int index) {
+    final ids = _candidates;
+    if (!mounted || index < 0 || index >= ids.length) {
+      if (mounted) setState(() => _exhausted = true);
+      return;
+    }
+    final replacement = YoutubePlayerController.fromVideoId(
+      videoId: ids[index],
+      // Only called after the user pressed SATURN's play control.
+      autoPlay: true,
+      params: const YoutubePlayerParams(
+        mute: true, playsInline: true,
+        showControls: false, showFullscreenButton: false,
+        showVideoAnnotations: false,
+        enableCaption: true, captionLanguage: 'pt',
+        interfaceLanguage: 'pt', privacyEnhancedMode: true,
+        pointerEvents: PointerEvents.initial,
+      ),
+    );
+    final previous = _controller;
+    setState(() {
+      _candidateIndex = index;
+      _controller = replacement;
+      _muted = true;
+      _exhausted = false;
+    });
+    previous?.close();
+  }
+
+  void _handlePlayerError(YoutubeError error) {
+    if (error == YoutubeError.none || _pendingError || !mounted) return;
+    _pendingError = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _pendingError = false;
+      final next = _candidateIndex + 1;
+      if (next < _candidates.length) {
+        _activateCandidate(next);
+      } else {
+        final previous = _controller;
+        setState(() {
+          _controller = null;
+          _exhausted = true;
+        });
+        previous?.close();
+      }
+    });
+  }
+
   Future<void> _togglePlayback() async {
     final player = _controller;
-    if (player == null) return;
+    if (player == null) {
+      if (!_exhausted && _candidates.isNotEmpty) _activateCandidate(0);
+      return;
+    }
     try {
-      final state = await player.playerState;
-      if (state == PlayerState.playing) {
+      if (await player.playerState == PlayerState.playing) {
         await player.pauseVideo();
       } else {
         await player.playVideo();
       }
     } catch (_) {
-      // iOS may block autoplay, but a direct tap can still start playback.
+      // Some browsers need another explicit gesture to resume playback.
     }
   }
 
   Future<void> _toggleSound() async {
     final player = _controller;
     if (player == null) return;
-    final next = !_muted;
     try {
-      if (next) {
-        await player.mute();
-      } else {
+      if (_muted) {
         await player.unMute();
         await player.setVolume(75);
+      } else {
+        await player.mute();
       }
-      if (mounted) setState(() => _muted = next);
+      if (mounted) setState(() => _muted = !_muted);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(
-            'O som não pôde ser alterado neste player.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Não foi possível alterar o som.'),
+        ));
       }
     }
   }
 
-  Future<void> _openYouTube() async {
-    if (!validVideoId(widget.youtubeId)) return;
-    final url = Uri.https('www.youtube.com', '/watch', {
-      'v': widget.youtubeId,
-    });
-    await launchUrl(url, mode: LaunchMode.externalApplication);
+  Future<void> _searchOfficialTrailer() async {
+    await launchUrl(Uri.https('www.youtube.com', '/results', {
+      'search_query': widget.workTitle + ' trailer original oficial',
+    }), mode: LaunchMode.externalApplication);
+  }
+
+  Widget _preview() => widget.storyPreview ?? Container(
+    height: 240, alignment: Alignment.center,
+    decoration: const BoxDecoration(gradient: LinearGradient(
+      colors: [Color(0xFF422438), Color(0xFF201924)])),
+    child: const Icon(Icons.movie_filter_outlined,
+      size: 62, color: Color(0xFFC6A477)),
+  );
+
+  Widget _videoSurface() {
+    final player = _controller;
+    if (player == null) {
+      return Column(children: [
+        _preview(),
+        if (_exhausted)
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('Trailers indisponíveis para reprodução aqui. '
+              'Tentamos as alternativas cadastradas.',
+              style: TextStyle(color: Color(0xFFF2E8DF), fontSize: 12)),
+          ),
+      ]);
+    }
+    return YoutubeValueBuilder(controller: player,
+      builder: (context, value) {
+        if (value.hasError) _handlePlayerError(value.error);
+        return YoutubePlayer(
+          key: ValueKey('saturn-youtube-' + _candidates[_candidateIndex]),
+          controller: player, aspectRatio: 16 / 9);
+      });
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = _controller;
-    if (controller == null) return const SizedBox.shrink();
-    if (widget.heroMode) {
-      // The title and controls remain in the SAME hero surface as the
-      // official player. They sit outside the iframe hit-test region, which
-      // keeps them clickable in Safari Web and the installed iOS PWA.
-      return Container(
-        key: const Key('saturn-trailer-hero'),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(23),
-          gradient: const LinearGradient(colors: [
-            Color(0xFF402639), Color(0xFF191923),
-          ]),
-          border: Border.all(color: const Color(0x665F465A)),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 780),
-              child: YoutubePlayer(
-                controller: controller, aspectRatio: 16 / 9))),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 12, 13),
-              child: Row(children: [
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.workTitle, maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'serif', color: Color(0xFFF2E8DF),
-                        fontSize: 21, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 3),
-                    Text(widget.workMetadata, maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFD0B8C7), fontSize: 11)),
-                  ],
-                )),
-                YoutubeValueBuilder(
-                  controller: controller,
-                  builder: (context, value) {
-                    final playing = value.playerState == PlayerState.playing;
-                    return IconButton.filledTonal(
-                      key: const Key('saturn-trailer-play-pause'),
-                      tooltip: playing ? 'Pausar trailer' : 'Reproduzir trailer',
-                      icon: Icon(playing
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded),
-                      onPressed: _togglePlayback,
-                    );
-                  },
-                ),
-                const SizedBox(width: 4),
-                IconButton.filledTonal(
-                  key: const Key('saturn-trailer-mute'),
-                  tooltip: _muted ? 'Ativar som' : 'Silenciar trailer',
-                  icon: Icon(_muted
-                      ? Icons.volume_off_rounded : Icons.volume_up_rounded),
-                  onPressed: _toggleSound),
-              ]),
-            ),
-          ],
-        ),
-      );
-    }
+    final player = _controller;
     return Container(
-      padding: const EdgeInsets.all(13),
+      key: widget.heroMode
+          ? const Key('saturn-trailer-hero')
+          : const Key('saturn-trailer-inline'),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        color: const Color(0xFF211923),
-        border: Border.all(color: const Color(0x776B4C57)),
+        borderRadius: BorderRadius.circular(widget.heroMode ? 23 : 18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF402639), Color(0xFF191923)]),
+        border: Border.all(color: const Color(0x665F465A)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.play_circle_outline,
-                color: Color(0xFFC6A477)),
-            const SizedBox(width: 9),
-            const Expanded(child: Text('TRAILER OFICIAL',
-              style: TextStyle(
-                color: Color(0xFFC6A477),
-                letterSpacing: 1.5, fontSize: 11,
-                fontWeight: FontWeight.bold),
-            )),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Center(child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780),
+          child: _videoSurface(),
+        )),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 13),
+          child: Row(children: [
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.workTitle, maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontFamily: 'serif',
+                    color: Color(0xFFF2E8DF), fontSize: 21,
+                    fontWeight: FontWeight.bold)),
+                const SizedBox(height: 3),
+                Text(_exhausted
+                    ? 'Trailer indisponível · buscar outra versão'
+                    : player == null
+                        ? 'Reproduzir trailer · áudio original preferencial'
+                        : 'Legendas PT-BR quando disponíveis no YouTube',
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFFD0B8C7),
+                    fontSize: 11)),
+                Text(widget.workMetadata, maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFFBCA7B6),
+                    fontSize: 10)),
+              ])),
+            if (_exhausted)
+              IconButton.filledTonal(
+                key: const Key('saturn-trailer-find-alternative'),
+                tooltip: 'Buscar trailer oficial',
+                icon: const Icon(Icons.search_rounded),
+                onPressed: _searchOfficialTrailer)
+            else if (player == null)
+              IconButton.filledTonal(
+                key: const Key('saturn-trailer-play-pause'),
+                tooltip: 'Reproduzir trailer',
+                icon: const Icon(Icons.play_arrow_rounded),
+                onPressed: _togglePlayback)
+            else
+              YoutubeValueBuilder(
+                controller: player,
+                builder: (context, value) => IconButton.filledTonal(
+                  key: const Key('saturn-trailer-play-pause'),
+                  tooltip: value.playerState == PlayerState.playing
+                      ? 'Pausar trailer' : 'Reproduzir trailer',
+                  icon: Icon(value.playerState == PlayerState.playing
+                      ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                  onPressed: _togglePlayback)),
+            const SizedBox(width: 4),
             IconButton.filledTonal(
+              key: const Key('saturn-trailer-mute'),
               tooltip: _muted ? 'Ativar som' : 'Silenciar trailer',
               icon: Icon(_muted
-                  ? Icons.volume_off_rounded
-                  : Icons.volume_up_rounded),
-              onPressed: _toggleSound,
-            ),
+                  ? Icons.volume_off_rounded : Icons.volume_up_rounded),
+              onPressed: player == null ? null : _toggleSound),
           ]),
-          const SizedBox(height: 9),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x60000000),
-                  blurRadius: 18, offset: Offset(0, 8)),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(children: [
-                Positioned.fill(child: Image.network(
-                  'https://i.ytimg.com/vi/${widget.youtubeId}/hqdefault.jpg',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: const Color(0xFF211923)),
-                )),
-                YoutubePlayer(
-                  controller: controller,
-                  aspectRatio: 16 / 9,
-                ),
-              ]),
-            ),
-          ),
-          const SizedBox(height: 5),
-          Row(children: [
-            const Expanded(child: Text(
-              'Player oficial • prévia automática sem som, '
-              'quando permitida pelo aparelho.',
-              style: TextStyle(
-                fontSize: 10, color: Color(0xFFC9B2BC)),
-            )),
-            TextButton.icon(
-              onPressed: _openYouTube,
-              icon: const Icon(Icons.open_in_new, size: 15),
-              label: const Text('YouTube'),
-            ),
-          ]),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 }

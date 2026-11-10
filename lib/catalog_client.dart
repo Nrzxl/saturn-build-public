@@ -30,6 +30,7 @@ class CatalogEntry {
   final String watchUrl;
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
+  final String nativeTrailerSubtitleUrl;
   final String originalTitle;
   final String availabilityUpdatedAt;
   final bool availabilityChecked;
@@ -55,6 +56,7 @@ class CatalogEntry {
     this.watchUrl = '',
     this.trailerYoutubeId = '',
     this.nativeTrailerUrl = '',
+    this.nativeTrailerSubtitleUrl = '',
     this.originalTitle = '',
     this.availabilityUpdatedAt = '',
     this.availabilityChecked = false,
@@ -195,6 +197,86 @@ class CatalogClient {
     });
   }
 
+  final Map<String, Future<List<String>>> _trailerCandidatesCache = {};
+
+  /// Confirmed YouTube trailer alternatives by exact TMDB ID or strict
+  /// title/year matching for legacy TVMaze works.
+  Future<List<String>> verifiedTrailerCandidatesFor({
+    required String workId,
+    required String title,
+    required String kind,
+    required int year,
+    String savedYoutubeId = '',
+  }) {
+    final cacheKey = '$workId:$title:$year:$savedYoutubeId';
+    return _trailerCandidatesCache.putIfAbsent(cacheKey, () async {
+      final found = <String>[];
+      bool isValid(String id) => RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id);
+      void addRow(Map row) {
+        final ids = row['trailerYoutubeIds'];
+        if (ids is List) {
+          for (final value in ids) {
+            final id = value.toString();
+            if (isValid(id) && !found.contains(id) && found.length < 4) {
+              found.add(id);
+            }
+          }
+        }
+        final old = (row['trailerYoutubeId'] ?? '').toString();
+        if (isValid(old) && !found.contains(old) && found.length < 4) {
+          found.add(old);
+        }
+      }
+      if (_enableTmdb && {'Filme', 'Série', 'Dorama', 'Anime'}.contains(kind)) {
+        try {
+          final row = await _tmdb.findById(workId);
+          if (row != null) {
+            addRow(row);
+          } else {
+            final groups = kind == 'Filme'
+                ? const ['movies'] : const ['series', 'dramas', 'anime'];
+            final wanted = _normalizeTrailerTitle(title);
+            for (final group in groups) {
+              if (found.isNotEmpty) break;
+              final rows = await _tmdb.query(filter: group, search: title,
+                  page: 1, perPage: 40);
+              for (final candidate in rows) {
+                final name = _normalizeTrailerTitle(
+                    (candidate['title'] ?? '').toString());
+                final original = _normalizeTrailerTitle(
+                    (candidate['originalTitle'] ?? '').toString());
+                final catalogYear = candidate['year'] is num
+                    ? (candidate['year'] as num).toInt() : 0;
+                if (name != wanted && original != wanted) continue;
+                if (year > 0 && catalogYear > 0 &&
+                    (year - catalogYear).abs() > 2) continue;
+                addRow(candidate);
+                if (found.isNotEmpty) break;
+              }
+            }
+          }
+        } catch (_) {
+          // Saved title data still works when the feed is offline.
+        }
+      }
+      if (isValid(savedYoutubeId) && !found.contains(savedYoutubeId) &&
+          found.length < 4) {
+        found.add(savedYoutubeId);
+      }
+      return found;
+    });
+  }
+
+  static String _normalizeTrailerTitle(String title) {
+    const from = 'áàâãäéèêëíìîïóòôõöúùûüçñ';
+    const into = 'aaaaaeeeeiiiiooooouuuucn';
+    var normalized = title.toLowerCase();
+    for (var i = 0; i < from.length; i++) {
+      normalized = normalized.replaceAll(from[i], into[i]);
+    }
+    return normalized.replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
   Future<List<CatalogEntry>> _snapshot({
     required CatalogFilter filter,
     required String query,
@@ -249,6 +331,8 @@ class CatalogClient {
           watchUrl: (row['watchUrl'] ?? '').toString(),
           trailerYoutubeId: (row['trailerYoutubeId'] ?? '').toString(),
           nativeTrailerUrl: (row['nativeTrailerUrl'] ?? '').toString(),
+          nativeTrailerSubtitleUrl:
+              (row['nativeTrailerSubtitleUrl'] ?? '').toString(),
           availabilityChecked: row['availabilityChecked'] == true,
           availabilityUpdatedAt: (row['availabilityUpdatedAt'] ??
                   row['generatedAt'] ?? '').toString(),
