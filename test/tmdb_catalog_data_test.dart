@@ -77,6 +77,54 @@ void main() {
     expect(empty, isEmpty);
   });
 
+  test('Críticas online usam ID exato, inclusive além da primeira página',
+      () async {
+    final requested = <String>[];
+    final client = MockClient((request) async {
+      requested.add(request.url.path);
+      final movies = [
+        for (var i = 1; i <= 46; i++)
+          title(id: 'tmdb:movie:' + i.toString(),
+            name: 'Título ' + i.toString()),
+      ];
+      movies[45] = {
+        ...movies[45],
+        'tmdbVoteAverage': 8.7,
+        'tmdbVoteCount': 5100,
+        'externalRatings': {'imdb': '8.4/10'},
+      };
+      return http.Response(jsonEncode({
+        'schema': 1, 'country': 'BR', 'results': movies,
+      }), 200);
+    });
+    final data = TmdbCatalogData(client);
+    expect((await data.query(filter: 'movies', search: '',
+        page: 1, perPage: 36)).length, 36);
+    final fromId = await data.findById('tmdb:movie:46');
+    expect(fromId?['tmdbVoteAverage'], 8.7);
+    expect(fromId?['tmdbVoteCount'], 5100);
+    expect(await data.findById('tmdb:movie:9999'), isNull);
+
+    final catalog = CatalogClient(
+      client: MockClient((request) async => http.Response(jsonEncode({
+        'schema': 1, 'country': 'BR',
+        'results': [{
+          ...title(id: 'tmdb:movie:46', name: 'Um título traduzido'),
+          'tmdbVoteAverage': 8.7,
+          'tmdbVoteCount': 5100,
+          'externalRatings': {'imdb': '8.4/10'},
+        }],
+      }), 200)),
+      enableTmdb: true);
+    addTearDown(catalog.close);
+    final verified = await catalog.onlineRatingsById('tmdb:movie:46');
+    expect(verified?.tmdbScore, 8.7);
+    expect(verified?.tmdbVoteCount, 5100);
+    expect(verified?.externalRatings['imdb'], '8.4/10');
+    expect(await catalog.onlineRatingsById('not-tmdb'), isNull);
+    expect(requested, hasLength(1));
+  });
+
   test('CatalogClient maps TMDB availability; saves work without data loss',
       () async {
     final catalog = CatalogClient(

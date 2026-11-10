@@ -40,6 +40,22 @@ void main() {
     }), isNull);
   });
 
+  test('Ordenação de alto para baixo é estável e mantém não avaliados', () {
+    final rows = <Map<String, dynamic>>[
+      {'id': 'bronze', 'rating': 2, 'notes': 'Ruim'},
+      {'id': 'sem', 'rating': 10, 'notes': ''},
+      {'id': 'ouro', 'rating': 10, 'notes': 'Excelente'},
+      {'id': 'prata', 'rating': 6, 'notes': 'Ok'},
+      {'id': 'ouro2', 'rating': 8, 'notes': 'Bom'},
+      {'id': 'prata2', 'rating': 6, 'notes': 'Também bom'},
+    ];
+    final sorted = SaturnReviewClassification.sorted(rows, (r) => r);
+    expect(sorted.map((e) => e['id']).toList(),
+        ['ouro', 'ouro2', 'prata', 'prata2', 'bronze', 'sem']);
+    expect(SaturnReviewClassification.priority(SaturnReviewTier.ouro), 0);
+    expect(SaturnReviewClassification.priority(null), 3);
+  });
+
   test('Escala legada 0–10 é convertida corretamente para cinco estrelas', () {
     expect(SaturnReviewClassification.stars(
       {'rating': 8.5}), 4.25);

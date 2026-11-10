@@ -98,10 +98,14 @@ void main() {
     expect(find.byKey(Key('saturn-review-halo-' + bronze.id)), findsOneWidget);
     expect(find.byKey(Key('saturn-review-halo-' + withoutReview.id)),
       findsNothing);
-    expect(find.text('SEM CLASSIFICAÇÃO · SEM HALO'), findsOneWidget);
-    expect(find.text('BRONZE'), findsWidgets);
-    expect(find.text('PRATA'), findsWidgets);
-    expect(find.text('OURO'), findsWidgets);
+    // One seamless grid, sorted gold -> silver -> bronze -> unreviewed,
+    // without status headings, badges, or tier names rendered as text.
+    expect(find.byKey(Key('saturn-ranked-gallery-' + gold.id)),
+        findsOneWidget);
+    expect(find.text('SEM CLASSIFICAÇÃO · SEM HALO'), findsNothing);
+    expect(find.text('BRONZE'), findsNothing);
+    expect(find.text('PRATA'), findsNothing);
+    expect(find.text('OURO'), findsNothing);
     // Review text accompanies glowing cards; imported synopsis alone does not.
     expect(find.textContaining('Maravilhoso, vou rever!'), findsWidgets);
     expect(find.byType(GridView), findsWidgets);
