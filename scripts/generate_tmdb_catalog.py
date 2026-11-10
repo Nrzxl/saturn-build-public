@@ -146,6 +146,8 @@ def save_result(media: str, record: dict) -> str | None:
         "watchProviders": [],
         "watchUrl": "",
         "trailerYoutubeId": "",
+        "trailerYoutubeIds": [],
+        "originalLanguage": (record.get("original_language") or "").lower(),
         "externalRatings": {},
         "ratingsUpdatedAt": "",
         "availabilityChecked": False,
@@ -263,29 +265,46 @@ def best_panorama(payload: dict) -> str:
     return "https://image.tmdb.org/t/p/w1280" + choices[0][1]
 
 
-def trailer_youtube_id(payload: dict) -> str:
-    """Only TMDB-provided YouTube trailer keys, never user-generated guesses."""
-    videos = payload.get("results") or []
+def trailer_youtube_ids(payload: dict, original_language: str = "") -> list[str]:
+    """Rank real TMDB-linked YouTube videos; prefer original speech.
+
+    Keep up to four different IDs so an unavailable/restricted embed can
+    switch to another official candidate without guessing or scraping.
+    """
     candidates = []
-    for row in videos:
+    for row in payload.get("results") or []:
         if not isinstance(row, dict):
             continue
         key = row.get("key")
-        if (row.get("site") != "YouTube"
-            or row.get("type") != "Trailer"
-            or not isinstance(key, str)
-            or not re.fullmatch(r"[A-Za-z0-9_-]{11}", key)):
+        if (row.get("site") != "YouTube" or
+            row.get("type") not in ("Trailer", "Teaser") or
+            not isinstance(key, str) or
+            not re.fullmatch(r"[A-Za-z0-9_-]{11}", key)):
             continue
-        language = row.get("iso_639_1")
-        country = row.get("iso_3166_1")
+        language = str(row.get("iso_639_1") or "").lower()
+        country = str(row.get("iso_3166_1") or "").upper()
+        original = original_language.lower()
         score = (
-            int(row.get("official") is True) * 100
-            + (40 if language == "pt" else 20 if language == "en" else 0)
-            + (10 if country == "BR" else 0)
+            int(row.get("type") == "Trailer") * 1000
+            + int(bool(original) and language == original) * 330
+            + int(row.get("official") is True) * 110
+            + (50 if language == "pt" else 30 if language == "en" else 0)
+            + (9 if country == "BR" else 0)
         )
         candidates.append((score, key))
     candidates.sort(reverse=True)
-    return candidates[0][1] if candidates else ""
+    result = []
+    for _, key in candidates:
+        if key not in result:
+            result.append(key)
+        if len(result) >= 4:
+            break
+    return result
+
+
+def trailer_youtube_id(payload: dict) -> str:
+    """Compatibility helper used by old fixtures and snapshot consumers."""
+    return next(iter(trailer_youtube_ids(payload)), "")
 
 
 def parse_omdb_ratings(payload: dict) -> dict[str, str]:
@@ -414,10 +433,23 @@ def build() -> None:
     for ident in prioritized[:MAX_TRAILERS]:
         try:
             _, media, sid = ident.split(":")
+            original = str(TITLES[ident].get("originalLanguage") or "")
+            local = {
+                "ja": "ja-JP", "ko": "ko-KR", "zh": "zh-CN",
+                "es": "es-ES", "fr": "fr-FR", "de": "de-DE",
+                "hi": "hi-IN", "en": "en-US", "pt": "pt-BR",
+            }.get(original, "")
+            languages = ",".join(dict.fromkeys([
+                x for x in [local, "en-US", "pt-BR", "null"] if x
+            ]))
             payload = get(f"/{media}/{sid}/videos", {
-                "language": "pt-BR", "include_video_language": "pt-BR,en-US,null",
+                "language": "en-US",
+                "include_video_language": languages,
             })
-            TITLES[ident]["trailerYoutubeId"] = trailer_youtube_id(payload)
+            alternatives = trailer_youtube_ids(payload, original)
+            TITLES[ident]["trailerYoutubeIds"] = alternatives
+            TITLES[ident]["trailerYoutubeId"] = (
+                alternatives[0] if alternatives else "")
         except Exception as exc:
             print(f"Trailer not available for {ident}: {type(exc).__name__}",
                   file=sys.stderr)
