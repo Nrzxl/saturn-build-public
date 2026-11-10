@@ -5110,6 +5110,27 @@ class _CatalogExploreState extends State<CatalogExplore> {
                       ),
                     ),
                   ),
+                  if (_filter == CatalogFilter.books) ...[
+                    const SizedBox(height: 10),
+                    Wrap(spacing: 8, runSpacing: 7, children: [
+                      ActionChip(
+                        key: const Key('saturn-books-agatha-pt'),
+                        avatar: const Icon(Icons.auto_stories_outlined,
+                          size: 16, color: gold),
+                        label: const Text('Agatha Christie · português'),
+                        onPressed: () {
+                          _query.text = 'Agatha Christie';
+                          _search();
+                        },
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 9),
+                        child: Text('Edições e capas conforme o catálogo',
+                          style: TextStyle(
+                            color: Color(0xFFCFBAC5), fontSize: 10)),
+                      ),
+                    ]),
+                  ],
                   const SizedBox(height: 12),
                   Row(children: [
                     Expanded(child: OutlinedButton.icon(
