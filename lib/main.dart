@@ -2496,8 +2496,9 @@ class _SaturnHomeState extends State<SaturnHome>
           child: Row(children: [
             const Text('🪐', style: TextStyle(fontSize: 23)),
             const SizedBox(width: 7),
-            Text(profiles[0], style: const TextStyle(
-              color: ivory, fontWeight: FontWeight.w700)),
+            Flexible(child: Text(profiles[0], maxLines: 1,
+              overflow: TextOverflow.ellipsis, style: const TextStyle(
+              color: ivory, fontWeight: FontWeight.w700))),
             const SizedBox(width: 10),
             const Expanded(child: Divider(color: Color(0x997A5868))),
             const Padding(
@@ -2506,8 +2507,9 @@ class _SaturnHomeState extends State<SaturnHome>
                 color: Color(0xFFF0B6C2), size: 20)),
             const Expanded(child: Divider(color: Color(0x997A5868))),
             const SizedBox(width: 10),
-            Text(profiles[1], style: const TextStyle(
-              color: ivory, fontWeight: FontWeight.w700)),
+            Flexible(child: Text(profiles[1], maxLines: 1,
+              overflow: TextOverflow.ellipsis, style: const TextStyle(
+              color: ivory, fontWeight: FontWeight.w700))),
             const SizedBox(width: 7),
             const Text('🌙', style: TextStyle(fontSize: 23)),
           ]),
@@ -3409,7 +3411,7 @@ class _SaturnHomeState extends State<SaturnHome>
               label: const Text('Escolher minha próxima série')),
           if (turns.isNotEmpty && !canPick)
             Text('A próxima escolha pertence a ' + profiles[next] +
-                '. Quando entrar no perfil, ela poderá escolher.',
+                '. Entre nesse perfil para continuar.',
               style: const TextStyle(
                 color: Color(0xFFDCC7D2), fontSize: 12)),
           if (completed.isNotEmpty) ...[
