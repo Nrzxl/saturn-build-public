@@ -226,6 +226,12 @@ class CatalogClient {
     if (filter == CatalogFilter.all || filter == CatalogFilter.books) {
       requests.add(safe('livros',
           () => _books(query, page: p, subject: bookSubject)));
+      // Broaden PT-BR edition coverage without harvesting a full catalog.
+      if (filter == CatalogFilter.books) {
+        requests.add(safe('livros nacionais e em português',
+          () => _googleBooks(query: query, page: p,
+            national: bookSubject == 'brazilian_literature')));
+      }
     }
 
     if (requests.isEmpty) return [];
@@ -297,6 +303,11 @@ class CatalogClient {
     if (filter == CatalogFilter.all || filter == CatalogFilter.books) {
       requests.add(safe('livros',
           () => _discoverBooks(p, subject: bookSubject)));
+      if (filter == CatalogFilter.books) {
+        requests.add(safe('Google Livros',
+          () => _googleBooks(page: p,
+            national: bookSubject == 'brazilian_literature')));
+      }
     }
 
     final groups = await Future.wait(requests);
@@ -502,6 +513,97 @@ class CatalogClient {
     'Literatura brasileira': 'brazilian_literature',
   };
 
+
+
+  /// Google Books increases coverage of Brazilian publishers and actual
+  /// Portuguese editions that do not exist in Open Library. User-requested
+  /// pages only (max 40), unique stable volume IDs, no fabricated books.
+  Future<List<CatalogEntry>> _googleBooks({
+    String query = '', int page = 1, bool national = false,
+  }) async {
+    final input = query.trim();
+    const nationalAuthors = <String>[
+      'Machado de Assis', 'Clarice Lispector', 'Jorge Amado',
+      'Conceição Evaristo', 'Lygia Fagundes Telles',
+      'Carlos Drummond de Andrade', 'Milton Hatoum',
+      'Graciliano Ramos', 'Carolina Maria de Jesus', 'Paulo Coelho',
+      'Cecília Meireles', 'Guimarães Rosa',
+    ];
+    final search = input.isNotEmpty
+        ? (national ? input + ' subject:literatura brasileira' : input)
+        : national
+          ? 'inauthor:' + nationalAuthors[
+              (page - 1) % nationalAuthors.length]
+          : 'subject:ficção';
+    // Rotate Brazilian writers on national discovery pages and paginate
+    // without flooding Google or Open Library with background requests.
+    final nationalPage = national && input.isEmpty
+        ? (page - 1) ~/ nationalAuthors.length : page - 1;
+    final data = await _get(Uri.https(
+      'www.googleapis.com', '/books/v1/volumes', {
+        'q': search,
+        'langRestrict': 'pt',
+        'printType': 'books',
+        'maxResults': '40',
+        'startIndex': (nationalPage * 40).toString(),
+        'projection': 'lite',
+      }));
+    if (data is! Map || data['items'] is! List) return [];
+    final result = <CatalogEntry>[];
+    for (final item in data['items'] as List) {
+      if (item is! Map) continue;
+      final id = (item['id'] ?? '').toString();
+      final volume = item['volumeInfo'];
+      if (id.isEmpty || volume is! Map) continue;
+      final title = (volume['title'] ?? '').toString().trim();
+      final language = (volume['language'] ?? '').toString().toLowerCase();
+      if (title.isEmpty || language != 'pt') continue;
+      final authors = volume['authors'];
+      final creator = authors is List
+          ? authors.map((a) => a.toString()).join(', ') : '';
+      final identifiers = volume['industryIdentifiers'];
+      var isbn = '';
+      if (identifiers is List) {
+        for (final value in identifiers) {
+          if (value is Map && value['type'] == 'ISBN_13' &&
+              value['identifier'] != null) {
+            isbn = value['identifier'].toString();
+            break;
+          }
+        }
+      }
+      final images = volume['imageLinks'];
+      var cover = images is Map
+          ? (images['thumbnail'] ?? images['smallThumbnail'] ?? '').toString()
+          : '';
+      if (cover.startsWith('http://books.google.com/') ||
+          cover.startsWith('http://books.googleusercontent.com/')) {
+        cover = cover.replaceFirst('http://', 'https://');
+      }
+      if (!cover.startsWith('https://')) cover = '';
+      final link = (volume['infoLink'] ?? '').toString();
+      result.add(CatalogEntry(
+        id: 'googlebooks:' + id,
+        title: title,
+        kind: 'Livro',
+        description: [
+          if (creator.isNotEmpty) 'Autoria: ' + creator,
+          if (volume['publisher'] != null)
+            'Editora: ' + volume['publisher'].toString(),
+          if (isbn.isNotEmpty) 'ISBN: ' + isbn,
+          if (volume['description'] != null)
+            _strip(volume['description'].toString()),
+        ].join(' · '),
+        year: _year((volume['publishedDate'] ?? '').toString()),
+        posterUrl: cover,
+        creator: creator,
+        provider: 'Google Livros · português',
+        detailUrl: link.startsWith('https://')
+            ? link : 'https://books.google.com/books?id=' + id,
+      ));
+    }
+    return _unique(result);
+  }
 
   /// A work groups all editions. Individual manga volumes use /books OL...M.
   Future<List<CatalogEntry>> bookEditions(String workId, {int page = 1}) async {
