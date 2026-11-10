@@ -17,7 +17,7 @@ void main() {
     expect(find.text('7.8/10'), findsNothing);
     expect(find.text('IMDb'), findsNothing);
     expect(find.textContaining('Rotten Tomatoes'), findsNothing);
-    expect(find.textContaining('não disponível'), findsOneWidget);
+    expect(find.text('Metacritic · crítica'), findsNothing);
   });
 
   testWidgets('Somente Metacritic aparece com fontes múltiplas',
@@ -58,7 +58,7 @@ void main() {
     ));
     expect(find.text('Metascore · crítica'), findsNothing);
     expect(find.text('9.9/10'), findsNothing);
-    expect(find.textContaining('não disponível'), findsOneWidget);
+    expect(find.text('Metacritic · crítica'), findsNothing);
   });
 
   testWidgets('Livros não recebem nota de cinema', (tester) async {
@@ -71,7 +71,7 @@ void main() {
     expect(find.text('Metascore · crítica'), findsNothing);
   });
 
-  testWidgets('Apenas link oficial do Metacritic fica disponível',
+  testWidgets('Sem nota verificável não exibe link ou bloco vazio',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(body: SingleChildScrollView(
@@ -81,7 +81,8 @@ void main() {
         ),
       )),
     ));
-    expect(find.text('Ver no Metacritic'), findsOneWidget);
+    expect(find.text('Ver no Metacritic'), findsNothing);
+    expect(find.text('Metacritic · crítica'), findsNothing);
     expect(find.text('Ver no IMDb'), findsNothing);
     expect(find.text('Ver no Rotten Tomatoes'), findsNothing);
   });
