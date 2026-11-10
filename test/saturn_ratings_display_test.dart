@@ -74,6 +74,36 @@ void main() {
     expect(find.text('Crítica e audiência'), findsNothing);
   });
 
+  test('Fontes de crítica abrem buscas oficiais sem fingir pontuações', () {
+    final imdb = SaturnExternalRatings.sourceSearch('imdb', 'Dark');
+    expect(imdb.host, 'www.imdb.com');
+    expect(imdb.queryParameters['q'], 'Dark');
+    final rt = SaturnExternalRatings.sourceSearch(
+        'rottenTomatoes', 'The Batman');
+    expect(rt.host, 'www.rottentomatoes.com');
+    expect(rt.queryParameters['search'], 'The Batman');
+    final mc = SaturnExternalRatings.sourceSearch(
+        'metacritic', 'The Batman');
+    expect(mc.host, 'www.metacritic.com');
+    expect(mc.path, contains('The Batman'));
+  });
+
+  testWidgets('Sem licença para nota, mantém pesquisa nas fontes oficiais',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: SingleChildScrollView(
+        child: SaturnExternalRatings(
+          workTitle: 'Dark',
+          isBook: false, ratings: {},
+        ),
+      )),
+    ));
+    expect(find.text('Ver no IMDb'), findsOneWidget);
+    expect(find.text('Ver no Rotten Tomatoes'), findsOneWidget);
+    expect(find.text('Ver no Metacritic'), findsOneWidget);
+    expect(find.text('8.8/10'), findsNothing);
+  });
+
   test('Valida faixas e escalas sem transformar ausências em números', () {
     expect(SaturnExternalRatings.validRating('imdb', '8.2/10'), isTrue);
     expect(SaturnExternalRatings.validRating('rottenTomatoes', '82%'), isTrue);
