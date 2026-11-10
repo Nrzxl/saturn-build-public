@@ -21,6 +21,7 @@ import 'saturn_orbit_merge.dart';
 import 'saturn_orbit_sync_sheet.dart';
 import 'saturn_premium_details.dart';
 import 'saturn_book_details.dart';
+import 'saturn_book_cover.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
 import 'update_center.dart';
@@ -3122,7 +3123,8 @@ class _SaturnHomeState extends State<SaturnHome>
                 opacity: 0.32,
                 child: ImageFiltered(
                   imageFilter: ui.ImageFilter.blur(sigmaX: 13, sigmaY: 13),
-                  child: Image.network(work.posterUrl,
+                  child: Image.network(
+                    SaturnBookCover.resolve(work.id, work.posterUrl),
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stack) =>
                         const SizedBox.shrink())))),
@@ -3255,7 +3257,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   SaturnBookDetailsPanel(
                     bookId: w.id,
                     fallbackDescription: w.description,
-                    fallbackCover: w.posterUrl,
+                    fallbackCover: SaturnBookCover.resolve(w.id, w.posterUrl),
                   )
                 else
                   SaturnDetailSection(
@@ -3742,12 +3744,13 @@ class PosterThumbnail extends StatelessWidget {
               ? Icons.tv_rounded : Icons.movie_creation_outlined,
           color: gold, size: 26),
     );
-    if (!work.posterUrl.startsWith('https://')) return fallback;
+    final coverUrl = SaturnBookCover.resolve(work.id, work.posterUrl);
+    if (!coverUrl.startsWith('https://')) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Image.network(
-        work.posterUrl,
-        key: ValueKey('cover-' + work.id + '-' + work.posterUrl),
+        coverUrl,
+        key: ValueKey('cover-' + work.id + '-' + coverUrl),
         width: width, height: height,
         fit: BoxFit.cover,
         filterQuality: FilterQuality.medium,
@@ -3771,7 +3774,13 @@ class PosterThumbnail extends StatelessWidget {
               fit: StackFit.passthrough,
               children: [fallback, image],
             ),
-        errorBuilder: (context, error, stackTrace) => fallback,
+        errorBuilder: (context, error, stackTrace) {
+          final second = SaturnBookCover.fallback(work.id);
+          return second == null ? fallback : Image.network(
+            second, width: width, height: height, fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => fallback,
+          );
+        },
       ),
     );
   }

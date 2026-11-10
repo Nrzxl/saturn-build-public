@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'saturn_premium_details.dart';
+import 'saturn_book_cover.dart';
 
 class OpenLibraryWorkDetails {
   const OpenLibraryWorkDetails({
@@ -152,9 +153,10 @@ class _SaturnBookDetailsPanelState extends State<SaturnBookDetailsPanel> {
         final description = details?.description.isNotEmpty == true
             ? details!.description
             : widget.fallbackDescription;
-        final cover = details?.coverUrl.isNotEmpty == true
-            ? details!.coverUrl
-            : widget.fallbackCover;
+        final cover = SaturnBookCover.resolve(
+          widget.bookId,
+          details?.coverUrl.isNotEmpty == true
+              ? details!.coverUrl : widget.fallbackCover);
         return SaturnDetailSection(
           title: 'Sobre o livro',
           icon: Icons.auto_stories_rounded,

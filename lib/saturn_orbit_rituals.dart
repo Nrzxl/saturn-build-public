@@ -100,6 +100,56 @@ class SaturnOrbitRituals {
     return hasAssignedBooks(ops, now, person: person) ? '😊' : '';
   }
 
+  /// A shared show is chosen in turns, unlike weekend film nominations.
+  static const String seriesPrefix = 'series:turn:';
+
+  static List<SaturnSeriesTurn> seriesTurns(Map<String, dynamic> ops) {
+    final items = <SaturnSeriesTurn>[];
+    final pattern = RegExp(r'^series:turn:([0-9]+)$');
+    for (final entry in ops.entries) {
+      final match = pattern.firstMatch(entry.key);
+      if (match == null || entry.value is! Map) continue;
+      final row = entry.value as Map;
+      final number = int.tryParse(match.group(1)!);
+      final id = row['workId'];
+      final person = row['chosenBy'];
+      if (number == null || number < 0 || number > 100000 ||
+          id is! String || id.isEmpty ||
+          (person != 0 && person != 1)) continue;
+      items.add(SaturnSeriesTurn(
+        number: number, workId: id, chosenBy: person as int,
+        finished: row['finished'] == true));
+    }
+    items.sort((a, b) => a.number.compareTo(b.number));
+    return items;
+  }
+
+  static SaturnSeriesTurn? currentSeries(Map<String, dynamic> ops) {
+    final turns = seriesTurns(ops);
+    if (turns.isEmpty || turns.last.finished) return null;
+    return turns.last;
+  }
+
+  static int nextSeriesPicker(Map<String, dynamic> ops) {
+    final turns = seriesTurns(ops);
+    return turns.isEmpty ? 1 : 1 - turns.last.chosenBy;
+  }
+
+  static bool mayChooseSeries(Map<String, dynamic> ops, int person) =>
+      (person == 0 || person == 1) &&
+      currentSeries(ops) == null &&
+      nextSeriesPicker(ops) == person;
+
+  /// An existing show chosen by partner 1 can be registered once without
+  /// impersonating her profile or editing a personal review.
+  static bool canRegisterHerExistingSeries(Map<String, dynamic> ops) =>
+      seriesTurns(ops).isEmpty;
+
+  static int nextSeriesNumber(Map<String, dynamic> ops) {
+    final turns = seriesTurns(ops);
+    return turns.isEmpty ? 0 : turns.last.number + 1;
+  }
+
   static String weekendLabel(DateTime now) {
     final sat = weekendSaturday(now);
     final sun = sat.add(const Duration(days: 1));
@@ -114,4 +164,15 @@ class SaturnOrbitRituals {
 
   static String monthLabel(DateTime now) =>
       '${months[now.month - 1]} de ${now.year}';
+}
+
+class SaturnSeriesTurn {
+  const SaturnSeriesTurn({
+    required this.number, required this.workId,
+    required this.chosenBy, required this.finished,
+  });
+  final int number;
+  final String workId;
+  final int chosenBy;
+  final bool finished;
 }

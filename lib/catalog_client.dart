@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'streaming_links.dart';
 import 'tmdb_catalog_data.dart';
+import 'saturn_book_cover.dart';
 
 /// Catálogos sem credenciais embutidas no APK.
 /// "Disponível para pesquisar" NÃO significa "disponível para assistir no Brasil".
@@ -570,11 +571,15 @@ class CatalogClient {
         if (isbn.isNotEmpty) 'ISBN: ' + isbn,
       ].join(' · '),
       year: year,
-      posterUrl: cover is num && cover > 0
-          ? 'https://covers.openlibrary.org/b/id/' + cover.toInt().toString() + '-M.jpg'
-          : isbn.isNotEmpty
-              ? 'https://covers.openlibrary.org/b/isbn/' + isbn + '-M.jpg'
-              : '',
+      posterUrl: SaturnBookCover.resolve(
+        'openlibrary:' + key,
+        cover is num && cover > 0
+            ? 'https://covers.openlibrary.org/b/id/' +
+                cover.toInt().toString() + '-M.jpg'
+            : isbn.isNotEmpty
+                ? 'https://covers.openlibrary.org/b/isbn/' + isbn + '-M.jpg'
+                : '',
+      ),
       creator: publisher,
       provider: 'Open Library · edição',
       detailUrl: 'https://openlibrary.org' + key,
