@@ -2015,8 +2015,9 @@ class _SaturnHomeState extends State<SaturnHome>
                   ),
                   if (slides.length > 1)
                     Positioned(
-                      top: spacious ? 24 : 72,
-                      left: spacious ? 255 : 19,
+                      top: spacious ? 17 : null,
+                      bottom: spacious ? null : 15,
+                      right: spacious ? 232 : 14,
                       child: Material(
                         color: const Color(0xDB241A2A),
                         borderRadius: BorderRadius.circular(32),
