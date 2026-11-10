@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 
 import 'saturn_premium_details.dart';
@@ -11,10 +12,13 @@ class SaturnNativeTrailer extends StatefulWidget {
     super.key,
     required this.mediaUrl,
     required this.rightsConfirmed,
+    this.subtitleUrl = '',
   });
 
   final String mediaUrl;
   final bool rightsConfirmed;
+  /// Publisher-provided PT-BR WebVTT, not extracted YouTube subtitles.
+  final String subtitleUrl;
 
   static const licensedHost = String.fromEnvironment(
     'SATURN_NATIVE_MEDIA_HOST');
@@ -30,6 +34,14 @@ class SaturnNativeTrailer extends StatefulWidget {
     return path.endsWith('.mp4') || path.endsWith('.m3u8');
   }
 
+  static bool canUseSubtitle(String url, {required bool rightsConfirmed}) {
+    if (!rightsConfirmed || licensedHost.isEmpty) return false;
+    final uri = Uri.tryParse(url);
+    return uri != null && uri.scheme == 'https' &&
+        uri.host == licensedHost && uri.userInfo.isEmpty &&
+        uri.path.toLowerCase().endsWith('.vtt');
+  }
+
   @override
   State<SaturnNativeTrailer> createState() => _SaturnNativeTrailerState();
 }
@@ -39,6 +51,19 @@ class _SaturnNativeTrailerState extends State<SaturnNativeTrailer> {
   bool _muted = true;
   bool _loading = true;
   bool _failed = false;
+  bool _captionsAvailable = false;
+  bool _captionsOn = true;
+
+  Future<ClosedCaptionFile> _licensedCaptions() async {
+    final uri = Uri.parse(widget.subtitleUrl);
+    final response = await http.get(uri).timeout(const Duration(seconds: 8));
+    if (response.statusCode != 200 ||
+        response.bodyBytes.length > 256 * 1024 ||
+        !response.body.trimLeft().startsWith('WEBVTT')) {
+      throw const FormatException('Legenda WebVTT inválida.');
+    }
+    return WebVTTCaptionFile(response.body);
+  }
 
   @override
   void initState() {
@@ -62,6 +87,15 @@ class _SaturnNativeTrailerState extends State<SaturnNativeTrailer> {
     try {
       await controller.initialize();
       if (!mounted) return;
+      if (SaturnNativeTrailer.canUseSubtitle(widget.subtitleUrl,
+          rightsConfirmed: widget.rightsConfirmed)) {
+        try {
+          await controller.setClosedCaptionFile(_licensedCaptions());
+          if (mounted) setState(() => _captionsAvailable = true);
+        } catch (_) {
+          // Unavailable subtitles never block a licensed video.
+        }
+      }
       await controller.setVolume(0);
       await controller.play();
       if (mounted) setState(() => _loading = false);
@@ -115,7 +149,24 @@ class _SaturnNativeTrailerState extends State<SaturnNativeTrailer> {
             borderRadius: BorderRadius.circular(14),
             child: AspectRatio(
               aspectRatio: player.value.aspectRatio,
-              child: VideoPlayer(player),
+              child: Stack(fit: StackFit.expand, children: [
+                VideoPlayer(player),
+                if (_captionsAvailable && _captionsOn)
+                  ValueListenableBuilder<VideoPlayerValue>(
+                    valueListenable: player,
+                    builder: (context, value, child) => IgnorePointer(
+                      child: ClosedCaption(
+                        text: value.caption.text,
+                        textStyle: const TextStyle(
+                          fontSize: 16, color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          shadows: [Shadow(blurRadius: 7,
+                              color: Colors.black)],
+                        ),
+                      ),
+                    ),
+                  ),
+              ]),
             ),
           ),
         const SizedBox(height: 8),
@@ -144,8 +195,18 @@ class _SaturnNativeTrailerState extends State<SaturnNativeTrailer> {
                 : Icons.volume_up_rounded),
             onPressed: _sound,
           ),
+          if (_captionsAvailable)
+            IconButton(
+              key: const Key('saturn-native-subtitles'),
+              tooltip: _captionsOn
+                  ? 'Desativar legendas SATURN PT-BR'
+                  : 'Ativar legendas SATURN PT-BR',
+              icon: Icon(_captionsOn
+                  ? Icons.subtitles_rounded : Icons.subtitles_off_rounded),
+              onPressed: () => setState(() => _captionsOn = !_captionsOn),
+            ),
           const Expanded(child: Text(
-            'Prévia MP4/HLS licenciada, sem depender do YouTube.',
+            'Prévia licenciada · legendas SATURN quando autorizadas.',
             textAlign: TextAlign.end,
             style: TextStyle(
               fontSize: 10, color: satinSubdued),
