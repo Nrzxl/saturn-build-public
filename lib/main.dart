@@ -2876,6 +2876,300 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
+
+  void _saveSeriesTurn(Work work, {required bool registerHerCurrent}) {
+    final chosenBy = registerHerCurrent ? 1 : profile;
+    final allowed = registerHerCurrent
+        ? SaturnOrbitRituals.canRegisterHerExistingSeries(_ritualOps)
+        : SaturnOrbitRituals.mayChooseSeries(_ritualOps, chosenBy);
+    if (!allowed || !const {'Série', 'Anime', 'Dorama'}.contains(work.kind)) {
+      return;
+    }
+    final number = SaturnOrbitRituals.nextSeriesNumber(_ritualOps);
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    setState(() {
+      savedWorks.putIfAbsent(work.id, () => work);
+      _ritualOps[SaturnOrbitRituals.seriesPrefix + number.toString()] = {
+        'workId': work.id,
+        'chosenBy': chosenBy,
+        'finished': false,
+        'updatedAt': stamp,
+      };
+      if (!shared.contains(work.id)) {
+        shared.add(work.id);
+        _sharedOps[work.id] = {
+          'present': true, 'updatedAt': stamp,
+        };
+      }
+    });
+    _save();
+  }
+
+  void _finishSharedSeries(SaturnSeriesTurn current) {
+    final latest = SaturnOrbitRituals.currentSeries(_ritualOps);
+    if (latest == null || latest.number != current.number ||
+        latest.workId != current.workId) return;
+    setState(() {
+      _ritualOps[SaturnOrbitRituals.seriesPrefix +
+          current.number.toString()] = {
+        'workId': current.workId,
+        'chosenBy': current.chosenBy,
+        'finished': true,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      };
+    });
+    // The couple's selection never replaces individual reviews or progress.
+    _save();
+  }
+
+  Future<void> _chooseSharedSeries({required bool registerHerCurrent}) async {
+    if (registerHerCurrent) {
+      if (!SaturnOrbitRituals.canRegisterHerExistingSeries(_ritualOps)) return;
+    } else if (!SaturnOrbitRituals.mayChooseSeries(_ritualOps, profile)) {
+      return;
+    }
+    final client = CatalogClient();
+    final searchController = TextEditingController();
+    var choices = allWorks.where((w) =>
+        const {'Série', 'Anime', 'Dorama'}.contains(w.kind))
+        .toList(growable: true);
+    var loading = false;
+    var initialized = false;
+    String? error;
+    try {
+      final chosen = await showModalBottomSheet<Work>(
+        context: context, isScrollControlled: true, useSafeArea: true,
+        backgroundColor: const Color(0xFF241B29),
+        builder: (sheet) => StatefulBuilder(builder: (ctx, repaint) {
+          Future<void> find({bool discover = false}) async {
+            if (loading) return;
+            final text = searchController.text.trim();
+            if (!discover && text.length < 2) {
+              repaint(() => error = 'Digite duas letras ou mais.');
+              return;
+            }
+            repaint(() { loading = true; error = null; });
+            try {
+              final found = discover
+                  ? await client.discover(CatalogFilter.series)
+                  : await client.search(text, CatalogFilter.all);
+              if (!sheet.mounted) return;
+              repaint(() {
+                final mapped = <String, Work>{
+                  if (discover)
+                    for (final w in choices) w.id: w,
+                  for (final entry in found)
+                    if (const {'Série', 'Anime', 'Dorama'}
+                        .contains(entry.kind))
+                      entry.id: Work.fromCatalog(entry),
+                };
+                choices = mapped.values.toList();
+                if (choices.isEmpty) {
+                  error = 'Nenhuma série encontrada. Tente outro título.';
+                }
+                loading = false;
+              });
+            } catch (_) {
+              if (!sheet.mounted) return;
+              repaint(() {
+                error = 'Busca indisponível. Você pode usar uma série salva.';
+                loading = false;
+              });
+            }
+          }
+          if (!initialized) {
+            initialized = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (sheet.mounted) find(discover: true);
+            });
+          }
+          return Padding(
+            padding: EdgeInsets.fromLTRB(17, 16, 17,
+                MediaQuery.of(sheet).viewInsets.bottom + 16),
+            child: SizedBox(
+              height: (MediaQuery.sizeOf(sheet).height -
+                      MediaQuery.of(sheet).viewInsets.bottom - 90)
+                  .clamp(155.0, 625.0).toDouble(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(registerHerCurrent
+                      ? 'Qual série ela escolheu?'
+                      : 'Minha vez de escolher nossa série',
+                    style: const TextStyle(
+                      color: ivory, fontFamily: 'serif',
+                      fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 7),
+                  const Text('Esta escolha ficará na Nossa Órbita. '
+                      'As notas de vocês continuam individuais.',
+                    style: TextStyle(
+                      color: Color(0xFFDCC8D2), fontSize: 11)),
+                  const SizedBox(height: 13),
+                  Row(children: [
+                    Expanded(child: TextField(
+                      controller: searchController,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => find(),
+                      decoration: const InputDecoration(
+                        hintText: 'Buscar série, dorama ou anime',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder()))),
+                    const SizedBox(width: 6),
+                    IconButton.filled(
+                      key: const Key('saturn-series-search'),
+                      onPressed: loading ? null : () => find(),
+                      icon: const Icon(Icons.search)),
+                  ]),
+                  if (loading) const LinearProgressIndicator(color: gold),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 7),
+                      child: Text(error!, style: const TextStyle(
+                        color: Color(0xFFFFB3C4), fontSize: 11))),
+                  const SizedBox(height: 7),
+                  Expanded(child: ListView.builder(
+                    itemCount: choices.length,
+                    itemBuilder: (context, index) {
+                      final work = choices[index];
+                      return ListTile(
+                        leading: PosterThumbnail(
+                            work: work, width: 42, height: 60),
+                        title: Text(work.title, maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                        subtitle: Text(work.kind),
+                        onTap: () => Navigator.pop(sheet, work),
+                      );
+                    },
+                  )),
+                ],
+              ),
+            ),
+          );
+        }),
+      );
+      if (chosen != null && mounted) {
+        _saveSeriesTurn(chosen, registerHerCurrent: registerHerCurrent);
+      }
+    } finally {
+      client.close();
+      searchController.dispose();
+    }
+  }
+
+  Widget _sharedSeriesRotationCard() {
+    final current = SaturnOrbitRituals.currentSeries(_ritualOps);
+    final turns = SaturnOrbitRituals.seriesTurns(_ritualOps);
+    final next = SaturnOrbitRituals.nextSeriesPicker(_ritualOps);
+    final work = current == null ? null : _ritualWork(current.workId);
+    return Container(
+      key: const Key('saturn-shared-series'),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 15),
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF442439), Color(0xFF261F30), night]),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0x886B4E5B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.live_tv_outlined, color: gold, size: 25),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('Nossa série da vez',
+              style: TextStyle(color: ivory, fontFamily: 'serif',
+                fontSize: 22, fontWeight: FontWeight.bold))),
+          ]),
+          const SizedBox(height: 7),
+          Text(current == null
+              ? (turns.isEmpty
+                  ? 'Ela escolheu a série atual; depois será a sua vez.'
+                  : 'A última série foi concluída. Uma nova escolha pode começar.')
+              : profiles[current.chosenBy] + ' escolheu desta vez.',
+            style: const TextStyle(
+              color: Color(0xFFDCC7D2), fontSize: 12)),
+          const SizedBox(height: 11),
+          Row(children: [
+            const Icon(Icons.autorenew, color: gold, size: 17),
+            const SizedBox(width: 8),
+            Expanded(child: Text(
+              'Próxima escolha: ' + profiles[next],
+              style: const TextStyle(
+                color: gold, fontWeight: FontWeight.w700))),
+          ]),
+          if (current != null) ...[
+            const SizedBox(height: 16),
+            if (work != null)
+              InkWell(
+                onTap: () => _details(work),
+                child: Row(children: [
+                  PosterThumbnail(work: work, width: 68, height: 99),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(work.title, maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: ivory, fontWeight: FontWeight.bold,
+                          fontSize: 16)),
+                      const SizedBox(height: 6),
+                      const Text('Assistindo juntos',
+                        style: TextStyle(color: gold, fontSize: 11)),
+                    ],
+                  )),
+                ]),
+              )
+            else
+              const Text('A série escolhida está salva, mas seus detalhes '
+                'ainda não foram carregados neste aparelho.',
+                style: TextStyle(
+                  color: Color(0xFFD5C1CC), fontSize: 12)),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              key: const Key('saturn-series-finish'),
+              onPressed: () => _finishSharedSeries(current),
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: const Text('Concluímos esta série'),
+            ),
+          ] else ...[
+            const SizedBox(height: 15),
+            if (turns.isEmpty)
+              FilledButton.icon(
+                key: const Key('saturn-series-register-current'),
+                onPressed: () =>
+                    _chooseSharedSeries(registerHerCurrent: true),
+                icon: const Icon(Icons.add_circle_outline, size: 18),
+                label: const Text('Registrar série que ela escolheu')),
+            if (turns.isNotEmpty && profile == next)
+              FilledButton.icon(
+                key: const Key('saturn-series-next-choice'),
+                onPressed: () =>
+                    _chooseSharedSeries(registerHerCurrent: false),
+                icon: const Icon(Icons.add_circle_outline, size: 18),
+                label: const Text('Escolher nossa próxima série')),
+            if (turns.isNotEmpty && profile != next)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'A próxima escolha pertence a ' + profiles[next] + '.',
+                  style: const TextStyle(
+                    color: Color(0xFFDCC7D2), fontSize: 12))),
+          ],
+          if (turns.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(turns.where((item) => item.finished).length.toString() +
+                ' série(s) concluída(s) juntos',
+              style: const TextStyle(
+                color: Color(0xFFBEA9B7), fontSize: 11)),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _pastBookReminders(DateTime now) {
     final current = _ritualId(SaturnOrbitRituals.nomination(
       SaturnOrbitRituals.monthPeriod(now), profile));
@@ -2934,6 +3228,7 @@ class _SaturnHomeState extends State<SaturnHome>
       children: [
         _sharedUniverseHero(insights),
         _heading('Nossos encontros'),
+        _sharedSeriesRotationCard(),
         _ritualCard(
           period: SaturnOrbitRituals.weekendPeriod(DateTime.now()),
           title: 'Filme do fim de semana',
