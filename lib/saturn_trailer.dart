@@ -33,6 +33,27 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   static bool validVideoId(String id) =>
       RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id);
 
+  /// Browsers generally permit *muted* autoplay, but may reject it because
+  /// of user settings. SATURN's existing play button always remains usable.
+  static bool mayAutoplay({required bool web, required bool hero}) =>
+      web && hero;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleMutedAutoplay();
+  }
+
+  void _scheduleMutedAutoplay() {
+    if (!mayAutoplay(web: kIsWeb, hero: widget.heroMode)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _controller == null &&
+          !_exhausted && _candidates.isNotEmpty) {
+        _activateCandidate(0);
+      }
+    });
+  }
+
   List<String> get _candidates => <String>{
     widget.youtubeId, ...widget.alternativeIds,
   }.where(validVideoId).take(4).toList(growable: false);
@@ -49,6 +70,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
     _exhausted = false;
     _muted = true;
     old?.close();
+    _scheduleMutedAutoplay();
   }
 
   @override
@@ -65,7 +87,8 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
     }
     final replacement = YoutubePlayerController.fromVideoId(
       videoId: ids[index],
-      // Only called after the user pressed SATURN's play control.
+      // Silent autoplay is attempted on Web; blocked browsers retain the
+      // SATURN Play button so the viewer can start with a gesture.
       autoPlay: true,
       params: const YoutubePlayerParams(
         mute: true, playsInline: true,
@@ -160,16 +183,9 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   Widget _videoSurface() {
     final player = _controller;
     if (player == null) {
-      return Column(children: [
-        _preview(),
-        if (_exhausted)
-          const Padding(
-            padding: EdgeInsets.all(12),
-            child: Text('Trailers indisponíveis para reprodução aqui. '
-              'Tentamos as alternativas cadastradas.',
-              style: TextStyle(color: Color(0xFFF2E8DF), fontSize: 12)),
-          ),
-      ]);
+      // The old Column overflowed the 16:9 stage and printed an error over
+      // the controls. Keep the art, put error status in the controls row.
+      return _preview();
     }
     return YoutubeValueBuilder(controller: player,
       builder: (context, value) {
