@@ -2149,6 +2149,15 @@ class _SaturnHomeState extends State<SaturnHome>
     final tier = SaturnReviewClassification.of(personal);
     final stars = SaturnReviewClassification.stars(personal);
     final comment = (personal['notes'] ?? '').toString().trim();
+    final inOrbit = shared.contains(work.id);
+    final firstTier = inOrbit
+        ? SaturnReviewClassification.fromRating(records['0:${work.id}'])
+        : null;
+    final secondTier = inOrbit
+        ? SaturnReviewClassification.fromRating(records['1:${work.id}'])
+        : null;
+    final metalColor = inOrbit ? firstTier?.color : tier?.color;
+    final partnerMetalColor = secondTier?.color;
     final selected = _selectedWorkIds.contains(work.id);
     void select() => setState(() {
       if (!_selectedWorkIds.add(work.id)) {
@@ -2172,15 +2181,10 @@ class _SaturnHomeState extends State<SaturnHome>
           ),
         ),
         child: SaturnMetallicHalo(
-          key: Key('saturn-review-halo-' + work.id),
-          color: shared.contains(work.id)
-              ? SaturnReviewClassification.fromRating(
-                  records['0:${work.id}'])?.color
-              : tier?.color,
-          partnerColor: shared.contains(work.id)
-              ? SaturnReviewClassification.fromRating(
-                  records['1:${work.id}'])?.color
-              : null,
+          key: metalColor == null && partnerMetalColor == null
+              ? null : Key('saturn-review-halo-' + work.id),
+          color: metalColor,
+          partnerColor: partnerMetalColor,
           child: Material(
           borderRadius: BorderRadius.circular(15),
           color: const Color(0xFF251C2A),
