@@ -78,7 +78,9 @@ void main() {
           'language': 'pt',
           'authors': ['Agatha Christie'],
         },
-      }]}), 200);
+      }]}), 200, headers: {
+        'content-type': 'application/json; charset=utf-8',
+      });
     }));
     addTearDown(client.close);
     final result = await client.search('Agatha Christie',
