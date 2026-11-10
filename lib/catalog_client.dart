@@ -32,6 +32,7 @@ class CatalogEntry {
   final String nativeTrailerUrl;
   final String nativeTrailerSubtitleUrl;
   final String originalTitle;
+  final String imdbId;
   final String availabilityUpdatedAt;
   final bool availabilityChecked;
 
@@ -58,6 +59,7 @@ class CatalogEntry {
     this.nativeTrailerUrl = '',
     this.nativeTrailerSubtitleUrl = '',
     this.originalTitle = '',
+    this.imdbId = '',
     this.availabilityUpdatedAt = '',
     this.availabilityChecked = false,
   });
@@ -94,6 +96,7 @@ class CatalogClient {
       provider: 'TMDB',
       creator: (row['creator'] ?? '').toString(),
       detailUrl: (row['detailUrl'] ?? '').toString(),
+      imdbId: (row['imdbId'] ?? '').toString(),
       externalRatings: external is Map
           ? external.map((key, value) =>
               MapEntry(key.toString(), value.toString()))
@@ -306,6 +309,7 @@ class CatalogClient {
           provider: 'TMDB',
           detailUrl: (row['detailUrl'] ?? '').toString(),
           originalTitle: (row['originalTitle'] ?? '').toString(),
+          imdbId: (row['imdbId'] ?? '').toString(),
           streamingProviders: row['streamingProviders'] is Map
               ? (row['streamingProviders'] as Map).map(
                   (key, value) => MapEntry(
@@ -523,14 +527,63 @@ class CatalogClient {
     return sorted;
   }
 
-  static List<CatalogEntry> _unique(Iterable<CatalogEntry> entries) {
-    final byId = <String, CatalogEntry>{};
-    for (final entry in entries) {
-      if (entry.title.trim().isEmpty) continue;
-      byId.putIfAbsent(entry.id, () => entry);
+  /// A verified IMDb ID is stronger than a translated title. Also reconcile
+  /// exact name + kind + year across providers when IDs do not contradict.
+  /// Never merge books/editions, different release years, types, or conflicting
+  /// IMDb identities. This only affects discovery cards, not saved user data.
+  static List<CatalogEntry> deduplicate(Iterable<CatalogEntry> entries) {
+    final unique = <CatalogEntry>[];
+    final validImdb = RegExp(r'^tt[0-9]{7,10}$');
+    String normalized(String text) {
+      const accent = 'áàâãäéèêëíìîïóòôõöúùûüçñ';
+      const plain = 'aaaaaeeeeiiiiooooouuuucn';
+      var normalized = text.toLowerCase();
+      for (var i = 0; i < accent.length; i++) {
+        normalized = normalized.replaceAll(accent[i], plain[i]);
+      }
+      return normalized.replaceAll(RegExp(r'[^a-z0-9]'), '');
     }
-    return byId.values.toList(growable: false);
+    int quality(CatalogEntry value) {
+      var quality = 0;
+      if (validImdb.hasMatch(value.imdbId)) quality += 1000;
+      if (value.id.startsWith('tmdb:')) quality += 200;
+      if (value.posterUrl.startsWith('https://')) quality += 25;
+      if (value.backdropUrl.startsWith('https://')) quality += 15;
+      if (value.description.trim().isNotEmpty) quality += 8;
+      if (value.trailerYoutubeId.isNotEmpty) quality += 3;
+      return quality;
+    }
+    for (final value in entries) {
+      if (value.title.trim().isEmpty || value.id.trim().isEmpty) continue;
+      final imdb = validImdb.hasMatch(value.imdbId) ? value.imdbId : '';
+      final match = unique.indexWhere((candidate) {
+        if (candidate.id == value.id) return true;
+        if (candidate.kind == 'Livro' || value.kind == 'Livro') return false;
+        if (candidate.kind != value.kind) return false;
+        final otherImdb = validImdb.hasMatch(candidate.imdbId)
+            ? candidate.imdbId : '';
+        if (imdb.isNotEmpty && otherImdb.isNotEmpty) {
+          return imdb == otherImdb;
+        }
+        // No title-only matches: a year/type is necessary to avoid
+        // collapsing reboots, remakes, book editions and unrelated series.
+        if (candidate.year <= 0 || value.year <= 0 ||
+            candidate.year != value.year) return false;
+        final name = normalized(value.title);
+        final other = normalized(candidate.title);
+        return name.isNotEmpty && other == name;
+      });
+      if (match == -1) {
+        unique.add(value);
+      } else if (quality(value) > quality(unique[match])) {
+        unique[match] = value;
+      }
+    }
+    return unique;
   }
+
+  static List<CatalogEntry> _unique(Iterable<CatalogEntry> entries) =>
+      deduplicate(entries);
 
   Future<dynamic> _get(Uri uri) async {
     final response = await _client.get(
