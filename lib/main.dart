@@ -4294,6 +4294,13 @@ class _SaturnHomeState extends State<SaturnHome>
     // Flutter widget tests emulate Android's TargetPlatform on desktop.
     // Only the browser has the official iframe platform initialized here.
     final canEmbedTrailer = kIsWeb;
+    final trailerFuture = canEmbedTrailer && w.kind != 'Livro'
+        ? RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(w.trailerYoutubeId)
+          ? Future<String?>.value(w.trailerYoutubeId)
+          : _homeCatalog.verifiedTrailerFor(
+              workId: w.id, title: w.title,
+              kind: w.kind, year: w.year)
+        : Future<String?>.value(null);
     final current = entry(w);
     String status = current['status'] ?? 'Quero conhecer';
     double rating = (current['rating'] as num?)?.toDouble() ?? 0;
@@ -4328,19 +4335,57 @@ class _SaturnHomeState extends State<SaturnHome>
                     icon: const Icon(Icons.close_rounded, color: ivory)),
                 ]),
                 const SizedBox(height: 10),
-                if (w.kind != 'Livro' && canEmbedTrailer &&
-                    RegExp(r'^[A-Za-z0-9_-]{11}$')
-                        .hasMatch(w.trailerYoutubeId))
-                  SaturnTrailerPreview(
-                    key: Key('saturn-trailer-' + w.id),
-                    youtubeId: w.trailerYoutubeId,
-                    heroMode: true,
-                    workTitle: w.title,
-                    workMetadata: w.kind + ' · ' +
-                        (w.year > 0 ? w.year.toString() : 'SATURN')),
-                if (w.kind == 'Livro' || !canEmbedTrailer ||
-                    !RegExp(r'^[A-Za-z0-9_-]{11}$')
-                        .hasMatch(w.trailerYoutubeId))
+                if (w.kind != 'Livro' && canEmbedTrailer)
+                  FutureBuilder<String?>(
+                    future: trailerFuture,
+                    builder: (context, snapshot) {
+                      final videoId = snapshot.data ?? '';
+                      final verified = RegExp(r'^[A-Za-z0-9_-]{11}$')
+                          .hasMatch(videoId);
+                      if (verified) {
+                        return SaturnTrailerPreview(
+                          key: Key('saturn-trailer-' + w.id),
+                          youtubeId: videoId,
+                          heroMode: true,
+                          workTitle: w.title,
+                          workMetadata: w.kind + ' · ' +
+                              (w.year > 0 ? w.year.toString() : 'SATURN'),
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _cinematicDetailBanner(w),
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting)
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(4, 7, 4, 0),
+                              child: Text('Consultando trailer disponível…',
+                                style: TextStyle(color: gold, fontSize: 11)),
+                            )
+                          else
+                            TextButton.icon(
+                              key: const Key('saturn-trailer-search-fallback'),
+                              onPressed: () async {
+                                final uri = Uri.https(
+                                  'www.youtube.com', '/results', {
+                                  'search_query': w.title + ' ' +
+                                    w.year.toString() + ' trailer oficial',
+                                });
+                                try {
+                                  await launchUrl(uri,
+                                    mode: LaunchMode.externalApplication);
+                                } catch (_) {}
+                              },
+                              icon: const Icon(Icons.play_circle_outline,
+                                size: 17),
+                              label: const Text('Procurar trailer oficial'),
+                            ),
+                        ],
+                      );
+                    },
+                  )
+                else
                   _cinematicDetailBanner(w),
                 if (w.kind != 'Livro' &&
                     SaturnNativeTrailer.canUseNative(
