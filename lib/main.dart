@@ -16,6 +16,7 @@ import 'streaming_links.dart';
 import 'saturn_star_rating.dart';
 import 'saturn_review_tiers.dart';
 import 'saturn_metallic_halo.dart';
+import 'saturn_zero_star_flies.dart';
 import 'saturn_share.dart';
 import 'saturn_trailer.dart';
 import 'saturn_native_trailer.dart';
@@ -310,7 +311,12 @@ class _SaturnHomeState extends State<SaturnHome>
   DateTime _featuredPausedUntil = DateTime.fromMillisecondsSinceEpoch(0);
   bool _foreground = true;
   List<Work> recommendedMovies = [];
+  List<Work> recommendedSeries = [];
+  List<Work> recommendedAnime = [];
+  List<Work> recommendedDramas = [];
   List<Work> recommendedBooks = [];
+  bool _otherRecommendationsRequested = false;
+  bool _loadingOtherRecommendations = false;
   bool loadingRecommendations = false;
   int _filmRecommendationPage = 0;
   final profiles = ['Eu', 'Ela'];
@@ -412,6 +418,46 @@ class _SaturnHomeState extends State<SaturnHome>
       // Não substituir livros salvos por conteúdo fictício.
     } finally {
       if (mounted) setState(() => loadingRecommendations = false);
+    }
+    // Defer the three television requests until primary films and books
+    // are ready, avoiding a burst of five requests during first paint.
+    if (!_otherRecommendationsRequested && mounted) {
+      _otherRecommendationsRequested = true;
+      await _loadTelevisionRecommendations();
+    }
+  }
+
+  Future<void> _loadTelevisionRecommendations() async {
+    if (!mounted) return;
+    setState(() => _loadingOtherRecommendations = true);
+    Future<void> category(
+        CatalogFilter filter, void Function(List<Work>) assign) async {
+      try {
+        final result = await _homeCatalog.discover(filter, page: 1);
+        if (!mounted) return;
+        final filtered = result.map(Work.fromCatalog).where((work) =>
+          work.posterUrl.startsWith('https://') &&
+          (filter == CatalogFilter.series ? work.kind == 'Série'
+           : filter == CatalogFilter.anime ? work.kind == 'Anime'
+           : work.kind == 'Dorama')).toList(growable: false);
+        setState(() => assign(filtered));
+      } catch (_) {
+        // No invented recommendations or indefinite loading indicators.
+      }
+    }
+
+    try {
+      // Bounded concurrency: two first, one afterward for slower devices.
+      await Future.wait([
+        category(CatalogFilter.series, (works) => recommendedSeries = works),
+        category(CatalogFilter.anime, (works) => recommendedAnime = works),
+      ]);
+      if (mounted) {
+        await category(CatalogFilter.dramas,
+          (works) => recommendedDramas = works);
+      }
+    } finally {
+      if (mounted) setState(() => _loadingOtherRecommendations = false);
     }
   }
 
@@ -2361,6 +2407,34 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
+  List<Widget> _homeGenreRecommendations({
+    required String heading, required CatalogFilter filter,
+    required List<Work> titles, required String emptyText,
+  }) => [
+    _heading(heading),
+    if (_loadingOtherRecommendations && titles.isEmpty)
+      const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('Buscando recomendações no catálogo...',
+          style: TextStyle(color: Color(0xFFBFAEB8))),
+      ),
+    _cinematicShelf(titles.where((work) =>
+      !_isDone(work) && !currentWatchlist.contains(work.id))),
+    if (!_loadingOtherRecommendations && titles.isEmpty)
+      Padding(padding: const EdgeInsets.symmetric(
+          horizontal: 18, vertical: 8),
+        child: Text(emptyText,
+          style: const TextStyle(color: Color(0xFFB5A1A9),
+            fontSize: 12))),
+    Align(alignment: Alignment.centerRight,
+      child: TextButton.icon(
+        onPressed: () => _openCatalogFilter(filter),
+        icon: const Icon(Icons.explore_outlined, size: 18),
+        label: const Text('Explorar catálogo'),
+      ),
+    ),
+  ];
+
   Widget _start() {
     final continuing = allWorks.where(
       (work) => !_isArchived(work) &&
@@ -2457,6 +2531,24 @@ class _SaturnHomeState extends State<SaturnHome>
             icon: const Icon(Icons.casino_outlined, size: 18),
             label: const Text('Outras sugestões'),
           ),
+        ),
+        ..._homeGenreRecommendations(
+          heading: 'Séries para maratonar',
+          filter: CatalogFilter.series,
+          titles: recommendedSeries,
+          emptyText: 'Sem sugestões de séries agora. Explore o catálogo.',
+        ),
+        ..._homeGenreRecommendations(
+          heading: 'Animes para descobrir',
+          filter: CatalogFilter.anime,
+          titles: recommendedAnime,
+          emptyText: 'Sem sugestões de animes agora. Explore o catálogo.',
+        ),
+        ..._homeGenreRecommendations(
+          heading: 'Doramas na sua órbita',
+          filter: CatalogFilter.dramas,
+          titles: recommendedDramas,
+          emptyText: 'Sem sugestões de doramas agora. Explore o catálogo.',
         ),
         _heading('Livros • Minha estante'),
         const Padding(
