@@ -3746,9 +3746,31 @@ class PosterThumbnail extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Image.network(
-        work.posterUrl, width: width, height: height, fit: BoxFit.cover,
-        loadingBuilder: (context, child, loading) =>
-            loading == null ? child : fallback,
+        work.posterUrl,
+        key: ValueKey('cover-' + work.id + '-' + work.posterUrl),
+        width: width, height: height,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.medium,
+        gaplessPlayback: true,
+        // Show the first decoded frame instead of hiding it until the
+        // network loading callback finishes. Crossfade avoids white flashes.
+        frameBuilder: (context, image, frame, synchronous) {
+          if (synchronous) return image;
+          return AnimatedOpacity(
+            opacity: frame == null ? 0 : 1,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            child: Stack(fit: StackFit.passthrough, children: [
+              fallback,
+              image,
+            ]),
+          );
+        },
+        loadingBuilder: (context, image, progress) =>
+            progress == null ? image : Stack(
+              fit: StackFit.passthrough,
+              children: [fallback, image],
+            ),
         errorBuilder: (context, error, stackTrace) => fallback,
       ),
     );

@@ -125,6 +125,17 @@
       }, 25000);
     })();
   </script>
+  <script>
+    // Reuses already-viewed Open Library covers on future visits, including
+    // installed iPhone/Android PWAs. It does not cache personal SATURN data.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./saturn-cover-cache-sw.js', {
+          scope: './'
+        }).catch(() => { /* private mode or browser restriction */ });
+      }, { once: true });
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
