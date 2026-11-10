@@ -43,12 +43,42 @@ class SaturnCoupleSuggestion {
     return result;
   }
 
+  /// Pending or accepted suggestions are considered already sent.
+  /// Dismissed suggestions can be sent again on a later occasion.
+  static SaturnCoupleSuggestion? alreadySent(
+      Map<String, dynamic> ops, {required int from, required String workId}) {
+    for (final item in read(ops)) {
+      if (item.from == from && item.to == 1 - from &&
+          item.workId == workId && item.status != 'dismissed') {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  /// Read-only presentation that collapses historical duplicate sends.
+  /// Never erases existing events from the shared sync document.
+  static List<SaturnCoupleSuggestion> visible(
+      Map<String, dynamic> ops) {
+    final seen = <String>{};
+    return [
+      for (final item in read(ops))
+        if (item.status != 'dismissed' &&
+            seen.add('${item.from}:${item.to}:${item.workId}'))
+          item,
+    ];
+  }
+
   static String send(Map<String, dynamic> ops, {
     required int from, required String workId, required int at,
   }) {
     if (!{0, 1}.contains(from) || workId.trim().isEmpty || at <= 0) {
       throw ArgumentError('Invalid suggestion');
     }
+    // Idempotent even if someone taps twice or a slow iPhone does not
+    // immediately repaint the button after a synced write.
+    final existing = alreadySent(ops, from: from, workId: workId);
+    if (existing != null) return existing.key;
     final to = 1 - from;
     // Preserve distinct recommendations even if sent in the same millisecond.
     var key = '$prefix$from:$at';
