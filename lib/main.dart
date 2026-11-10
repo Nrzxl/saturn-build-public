@@ -225,7 +225,44 @@ class SaturnHome extends StatefulWidget {
 class _SaturnHomeState extends State<SaturnHome>
     with WidgetsBindingObserver {
   int tab = 0;
+  // Avoid rendering all five heavy tabs on a memory-limited mobile browser.
+  // Keep the active tab and the previous one for fast back navigation.
+  final List<int> _recentTabs = [0];
   int profile = 0;
+
+  void _navigateTab(int next) {
+    if (next < 0 || next > 4) return;
+    setState(() {
+      tab = next;
+      _recentTabs.remove(next);
+      _recentTabs.add(next);
+      if (_recentTabs.length > 2) _recentTabs.removeAt(0);
+    });
+  }
+
+  Widget _mobileSyncShortcut(String section) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 9, 16, 4),
+    child: OutlinedButton.icon(
+      key: Key('saturn-' + section + '-sync-shortcut'),
+      onPressed: _showOrbitSync,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 52),
+        alignment: Alignment.centerLeft,
+        side: const BorderSide(color: Color(0x997C6070)),
+        foregroundColor: gold,
+        backgroundColor: const Color(0xFF302334),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15)),
+      ),
+      icon: Icon(_cloud?.connected == true
+          ? Icons.cloud_done_outlined : Icons.cloud_sync_outlined),
+      label: Text(_cloud?.connected == true
+          ? 'Nossa Órbita conectada · gerenciar'
+          : 'Entrar e sincronizar Nossa Órbita',
+        maxLines: 1, overflow: TextOverflow.ellipsis),
+    ),
+  );
+
   Map<String, dynamic> records = {};
   Map<String, dynamic> _watchlistOps = {};
   Map<String, dynamic> _sharedOps = {};
@@ -1395,18 +1432,24 @@ class _SaturnHomeState extends State<SaturnHome>
     final desktop = MediaQuery.sizeOf(context).width >= 1000;
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        titleSpacing: desktop ? NavigationToolbar.kMiddleSpacing : 8,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SaturnMark(size: 34),
-            SizedBox(width: 8),
-            Text('SATURN',
-                style: TextStyle(
-                    fontFamily: 'serif', letterSpacing: 3, color: ivory)),
+            SaturnMark(size: desktop ? 34 : 26),
+            SizedBox(width: desktop ? 8 : 5),
+            Text('SATURN', style: TextStyle(
+              fontFamily: 'serif',
+              fontSize: desktop ? 21 : 18,
+              letterSpacing: desktop ? 3 : 1.1, color: ivory)),
           ],
         ),
         actions: [
           IconButton(
+            key: const Key('saturn-header-sync'),
             tooltip: 'Sincronizar nossa órbita',
+            constraints: const BoxConstraints(
+                minWidth: 48, minHeight: 48),
             icon: Icon(
               _cloud?.connected == true
                   ? Icons.cloud_done_outlined
@@ -1519,7 +1562,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   color: Color(0xFFBDA9B5), fontSize: 12),
                 labelType: NavigationRailLabelType.all,
                 selectedIndex: tab,
-                onDestinationSelected: (value) => setState(() => tab = value),
+                onDestinationSelected: _navigateTab,
                 destinations: const [
                   NavigationRailDestination(
                     icon: Icon(Icons.home_outlined), label: Text('Início')),
@@ -1540,7 +1583,21 @@ class _SaturnHomeState extends State<SaturnHome>
               child: IndexedStack(
                 index: tab,
                 children: [
-                  _start(), _explore(), _collection(), _shared(), _stats(),
+                  if (desktop || _recentTabs.contains(0))
+                    TickerMode(enabled: tab == 0, child: _start())
+                  else const SizedBox.shrink(),
+                  if (desktop || _recentTabs.contains(1))
+                    TickerMode(enabled: tab == 1, child: _explore())
+                  else const SizedBox.shrink(),
+                  if (desktop || _recentTabs.contains(2))
+                    TickerMode(enabled: tab == 2, child: _collection())
+                  else const SizedBox.shrink(),
+                  if (desktop || _recentTabs.contains(3))
+                    TickerMode(enabled: tab == 3, child: _shared())
+                  else const SizedBox.shrink(),
+                  if (desktop || _recentTabs.contains(4))
+                    TickerMode(enabled: tab == 4, child: _stats())
+                  else const SizedBox.shrink(),
                 ],
               ),
             ),
@@ -1549,7 +1606,7 @@ class _SaturnHomeState extends State<SaturnHome>
       ),
       bottomNavigationBar: desktop ? null : NavigationBar(
         selectedIndex: tab,
-        onDestinationSelected: (value) => setState(() => tab = value),
+        onDestinationSelected: _navigateTab,
         destinations: const [
           NavigationDestination(
               icon: Icon(Icons.home_outlined), label: 'Início'),
@@ -1706,7 +1763,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         const SizedBox(height: 18),
                         Wrap(spacing: 8, runSpacing: 8, children: [
                           FilledButton.icon(
-                            onPressed: () => setState(() => tab = 1),
+                            onPressed: () => _navigateTab(1),
                             icon: const Icon(Icons.explore_outlined, size: 18),
                             label: const Text('Descobrir histórias'),
                           ),
@@ -1984,6 +2041,8 @@ class _SaturnHomeState extends State<SaturnHome>
     ).length;
     return ListView(
       children: [
+        if (MediaQuery.sizeOf(context).width < 1000)
+          _mobileSyncShortcut('home'),
         _cinematicHero(ownCount),
         _heading('Minha Watchlist'),
         _collectionSelectionToolbar(
@@ -2016,6 +2075,9 @@ class _SaturnHomeState extends State<SaturnHome>
             child: TextButton.icon(
               onPressed: () => setState(() {
                 tab = 2;
+                _recentTabs.remove(2);
+                _recentTabs.add(2);
+                if (_recentTabs.length > 2) _recentTabs.removeAt(0);
                 _collectionKind = 'Tudo';
               }),
               icon: const Icon(Icons.grid_view_rounded, size: 18),
@@ -2081,6 +2143,9 @@ class _SaturnHomeState extends State<SaturnHome>
             child: TextButton.icon(
               onPressed: () => setState(() {
                 tab = 2;
+                _recentTabs.remove(2);
+                _recentTabs.add(2);
+                if (_recentTabs.length > 2) _recentTabs.removeAt(0);
                 _collectionKind = 'Livros';
               }),
               icon: const Icon(Icons.auto_stories_outlined, size: 18),
@@ -2129,7 +2194,7 @@ class _SaturnHomeState extends State<SaturnHome>
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
           child: TextButton.icon(
-            onPressed: () => setState(() => tab = 1),
+            onPressed: () => _navigateTab(1),
             icon: const Icon(Icons.explore_outlined),
             label: const Text('Abrir o catálogo com capas reais'),
           ),
@@ -2145,6 +2210,9 @@ class _SaturnHomeState extends State<SaturnHome>
     setState(() {
       _catalogFilter = filter;
       tab = 1;
+      _recentTabs.remove(1);
+      _recentTabs.add(1);
+      if (_recentTabs.length > 2) _recentTabs.removeAt(0);
     });
   }
 
@@ -2530,7 +2598,7 @@ class _SaturnHomeState extends State<SaturnHome>
         const SizedBox(height: 16),
         Wrap(spacing: 8, runSpacing: 8, children: [
           FilledButton.icon(
-            onPressed: () => setState(() => tab = 1),
+            onPressed: () => _navigateTab(1),
             icon: const Icon(Icons.explore_outlined, size: 18),
             label: const Text('Descobrir juntos')),
           OutlinedButton.icon(
@@ -3747,6 +3815,8 @@ class _SaturnHomeState extends State<SaturnHome>
     return ListView(
       key: const PageStorageKey('saturn_shared_orbit'),
       children: [
+        if (MediaQuery.sizeOf(context).width < 1000)
+          _mobileSyncShortcut('couple'),
         _sharedUniverseHero(insights),
         _sharedCoverWall(),
         _sharedYearRecap(DateTime.now()),
