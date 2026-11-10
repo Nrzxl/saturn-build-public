@@ -47,6 +47,12 @@ void main() {
         scrollable: find.byType(Scrollable).first, maxScrolls: 70);
     expect(partner, findsOneWidget);
     expect(find.text('O universo de Ela'), findsOneWidget);
+    expect(find.text('1 título(s) · Watchlist'), findsOneWidget);
+    final coverRail = find.byKey(
+        const Key('saturn-partner-cover-rail'));
+    await tester.scrollUntilVisible(coverRail, 85,
+        scrollable: find.byType(Scrollable).first, maxScrolls: 20);
+    await tester.pumpAndSettle();
     expect(find.text('Série da Watchlist da Ela'), findsWidgets);
     final books = find.byKey(const Key('saturn-partner-filter-Livros'));
     await tester.ensureVisible(books);
