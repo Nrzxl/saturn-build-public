@@ -52,6 +52,23 @@ jobs:
           flutter analyze lib
           flutter test --reporter expanded
 
+      - name: Identificar a mesma versão no navegador e na PWA
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          sha = os.environ['GITHUB_SHA']
+          if not re.fullmatch(r'[a-f0-9]{40}', sha):
+              raise SystemExit('SHA do deploy inválido')
+          html = Path('web/index.html')
+          content = html.read_text(encoding='utf-8')
+          marker = 'SATURN_WEB_BUILD_SHA_PLACEHOLDER'
+          if content.count(marker) != 1:
+              raise SystemExit('Marcador de versão HTML ausente ou duplicado')
+          html.write_text(content.replace(marker, sha), encoding='utf-8')
+          PY
+
       - name: Compilar SATURN Web / PWA
         env:
           PUBLIC_BUILD_SHA: ${{ github.sha }}
