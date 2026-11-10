@@ -183,6 +183,78 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   @override
   Widget build(BuildContext context) {
     final player = _controller;
+    if (widget.heroMode) {
+      // One cinematic stage: SATURN poster before Play, official trailer
+      // afterward. No second work title, metadata panel or second card.
+      // Controls stay *outside* the iframe so YouTube labels stay accessible.
+      return Container(
+        key: const Key('saturn-trailer-hero'),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(23),
+          gradient: const LinearGradient(colors: [
+            Color(0xFF402639), Color(0xFF191923),
+          ]),
+          border: Border.all(color: const Color(0x665F465A)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          AspectRatio(
+            key: const Key('saturn-single-cinematic-stage'),
+            aspectRatio: 16 / 9,
+            child: _videoSurface(),
+          ),
+          SizedBox(
+            height: 48,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(13, 3, 8, 3),
+              child: Row(children: [
+                const Icon(Icons.movie_filter_outlined,
+                    color: Color(0xFFC6A477), size: 18),
+                const SizedBox(width: 7),
+                Expanded(child: Text(
+                  _exhausted ? 'TRAILER INDISPONÍVEL'
+                      : player == null ? 'ASSISTIR AO TRAILER'
+                      : 'TRAILER OFICIAL',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFFC6A477),
+                      fontSize: 10, fontWeight: FontWeight.w700,
+                      letterSpacing: 1.3),
+                )),
+                if (_exhausted)
+                  IconButton.filledTonal(
+                    key: const Key('saturn-trailer-find-alternative'),
+                    tooltip: 'Procurar outro trailer oficial',
+                    icon: const Icon(Icons.search_rounded),
+                    onPressed: _searchOfficialTrailer)
+                else if (player == null)
+                  IconButton.filledTonal(
+                    key: const Key('saturn-trailer-play-pause'),
+                    tooltip: 'Reproduzir trailer',
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    onPressed: _togglePlayback)
+                else
+                  YoutubeValueBuilder(
+                    controller: player,
+                    builder: (context, value) => IconButton.filledTonal(
+                      key: const Key('saturn-trailer-play-pause'),
+                      tooltip: value.playerState == PlayerState.playing
+                          ? 'Pausar trailer' : 'Reproduzir trailer',
+                      icon: Icon(value.playerState == PlayerState.playing
+                          ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                      onPressed: _togglePlayback)),
+                const SizedBox(width: 4),
+                IconButton.filledTonal(
+                  key: const Key('saturn-trailer-mute'),
+                  tooltip: _muted ? 'Ativar som' : 'Silenciar trailer',
+                  icon: Icon(_muted
+                      ? Icons.volume_off_rounded : Icons.volume_up_rounded),
+                  onPressed: player == null ? null : _toggleSound),
+              ]),
+            ),
+          ),
+        ]),
+      );
+    }
     return Container(
       key: widget.heroMode
           ? const Key('saturn-trailer-hero')
