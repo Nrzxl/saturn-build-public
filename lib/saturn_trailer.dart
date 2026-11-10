@@ -23,7 +23,6 @@ class SaturnTrailerPreview extends StatefulWidget {
 class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   YoutubePlayerController? _controller;
   bool _muted = true;
-  bool _playing = true;
 
   static bool validVideoId(String value) =>
       RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(value);
@@ -57,7 +56,6 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
     _controller?.close();
     _controller = null;
     _muted = true;
-    _playing = true;
     _setup();
   }
 
@@ -71,14 +69,14 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
     final player = _controller;
     if (player == null) return;
     try {
-      if (_playing) {
+      final state = await player.playerState;
+      if (state == PlayerState.playing) {
         await player.pauseVideo();
       } else {
         await player.playVideo();
       }
-      if (mounted) setState(() => _playing = !_playing);
     } catch (_) {
-      // Safari may disallow autoplay; the control is still available.
+      // iOS may block autoplay, but a direct tap can still start playback.
     }
   }
 
@@ -153,12 +151,20 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
                         color: Color(0xFFD0B8C7), fontSize: 11)),
                   ],
                 )),
-                IconButton.filledTonal(
-                  key: const Key('saturn-trailer-play-pause'),
-                  tooltip: _playing ? 'Pausar trailer' : 'Reproduzir trailer',
-                  icon: Icon(_playing
-                      ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                  onPressed: _togglePlayback),
+                YoutubeValueBuilder(
+                  controller: controller,
+                  builder: (context, value) {
+                    final playing = value.playerState == PlayerState.playing;
+                    return IconButton.filledTonal(
+                      key: const Key('saturn-trailer-play-pause'),
+                      tooltip: playing ? 'Pausar trailer' : 'Reproduzir trailer',
+                      icon: Icon(playing
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded),
+                      onPressed: _togglePlayback,
+                    );
+                  },
+                ),
                 const SizedBox(width: 4),
                 IconButton.filledTonal(
                   key: const Key('saturn-trailer-mute'),

@@ -25,6 +25,7 @@ import 'saturn_premium_details.dart';
 import 'saturn_story_synopsis.dart';
 import 'saturn_book_details.dart';
 import 'saturn_book_cover.dart';
+import 'saturn_artwork.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
 import 'saturn_couple_suggestions.dart';
@@ -288,6 +289,7 @@ class _SaturnHomeState extends State<SaturnHome>
   final CatalogClient _homeCatalog = CatalogClient();
   Timer? _featuredTimer;
   int _featuredIndex = 0;
+  DateTime _featuredPausedUntil = DateTime.fromMillisecondsSinceEpoch(0);
   bool _foreground = true;
   List<Work> recommendedMovies = [];
   List<Work> recommendedBooks = [];
@@ -312,8 +314,9 @@ class _SaturnHomeState extends State<SaturnHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _featuredTimer = Timer.periodic(const Duration(seconds: 9), (_) {
-      if (!mounted || !_foreground || tab != 0) return;
+    _featuredTimer = Timer.periodic(const Duration(seconds: 7), (_) {
+      if (!mounted || !_foreground || tab != 0 ||
+          DateTime.now().isBefore(_featuredPausedUntil)) return;
       final slides = _featuredTitles();
       if (slides.length > 1) {
         setState(() => _featuredIndex = (_featuredIndex + 1) % slides.length);
@@ -1031,6 +1034,15 @@ class _SaturnHomeState extends State<SaturnHome>
   String _ritualId(String key) => SaturnOrbitRituals.workId(_ritualOps, key);
 
   void _suggestToPartner(Work work) {
+    final existing = SaturnCoupleSuggestion.alreadySent(
+        _ritualOps, from: profile, workId: work.id);
+    if (existing != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(existing.status == 'accepted'
+          ? 'Essa sugestão já foi aceita.'
+          : 'Você já sugeriu este título para ' + profiles[1 - profile])));
+      return;
+    }
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
       savedWorks.putIfAbsent(work.id, () => work);
@@ -1058,9 +1070,8 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Widget _coupleSuggestionsCard() {
-    final suggestions = SaturnCoupleSuggestion.read(_ritualOps)
-        .where((item) => item.status == 'pending' ||
-            item.status == 'accepted').take(12).toList(growable: false);
+    final suggestions = SaturnCoupleSuggestion.visible(_ritualOps)
+        .take(12).toList(growable: false);
     return Container(
       key: const Key('saturn-couple-suggestions'),
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
@@ -1776,14 +1787,18 @@ class _SaturnHomeState extends State<SaturnHome>
         likedGenres.addAll(work.genreIds);
       }
     }
-    final catalog = recommendedMovies.where((w) =>
-        w.kind == 'Filme' && w.posterUrl.startsWith('https://')).toList();
+    final catalog = <Work>[
+      ...recommendedMovies,
+      // Include genuine films already in the collection when discovery fails.
+      ...allWorks.where((work) => work.kind == 'Filme'),
+    ].where((w) => w.kind == 'Filme' &&
+        w.posterUrl.startsWith('https://')).toList();
     catalog.sort((a, b) =>
       b.genreIds.where(likedGenres.contains).length.compareTo(
         a.genreIds.where(likedGenres.contains).length));
     final seen = <String>{};
     final slides = <Work>[];
-    for (final work in <Work>[...personal.take(3), ...catalog]) {
+    for (final work in <Work>[...personal.take(4), ...catalog]) {
       if (seen.add(work.id)) slides.add(work);
       if (slides.length >= 8) break;
     }
@@ -1793,6 +1808,7 @@ class _SaturnHomeState extends State<SaturnHome>
   void _moveFeatured(int direction) {
     final slides = _featuredTitles();
     if (slides.length < 2) return;
+    _featuredPausedUntil = DateTime.now().add(const Duration(seconds: 20));
     setState(() => _featuredIndex =
         (_featuredIndex + direction + slides.length) % slides.length);
   }
@@ -1816,18 +1832,25 @@ class _SaturnHomeState extends State<SaturnHome>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF57283D),
-                          Color(0xFF2C1D2E),
-                          night,
-                        ],
-                      ),
-                    ),
+                  FutureBuilder<Color>(
+                    future: SaturnArtwork.toneFor(
+                      featured == null ? '' :
+                      SaturnArtwork.bestUrl(featured.posterUrl,
+                        devicePixels: 580)),
+                    builder: (context, snapshot) {
+                      final tone = snapshot.data ?? SaturnArtwork.fallback;
+                      return DecoratedBox(decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            tone,
+                            Color.lerp(tone, night, .48)!,
+                            night,
+                          ],
+                        ),
+                      ));
+                    },
                   ),
                   if (featured != null)
                     Positioned.fill(
@@ -1836,12 +1859,16 @@ class _SaturnHomeState extends State<SaturnHome>
                         child: spacious
                             ? ImageFiltered(
                                 imageFilter: ui.ImageFilter.blur(
-                                  sigmaX: 12, sigmaY: 12),
-                                child: Image.network(featured.posterUrl,
+                                  sigmaX: 10, sigmaY: 10),
+                                child: Image.network(
+                                  SaturnArtwork.bestUrl(featured.posterUrl,
+                                    devicePixels: 900),
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stack) =>
                                       const SizedBox.shrink()))
-                            : Image.network(featured.posterUrl,
+                            : Image.network(
+                                SaturnArtwork.bestUrl(featured.posterUrl,
+                                  devicePixels: 780),
                                 fit: BoxFit.cover,
                                 alignment: Alignment.centerRight,
                                 errorBuilder: (context, error, stack) =>
@@ -1870,10 +1897,16 @@ class _SaturnHomeState extends State<SaturnHome>
                       width: spacious ? 183 : 124,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(15),
-                        child: PosterThumbnail(
-                          work: featured,
-                          width: spacious ? 183 : 124,
-                          height: spacious ? 265 : 220,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 450),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeIn,
+                          child: PosterThumbnail(
+                            key: ValueKey('featured-' + featured.id),
+                            work: featured,
+                            width: spacious ? 183 : 124,
+                            height: spacious ? 265 : 220,
+                          ),
                         ),
                       ),
                     ),
@@ -4256,9 +4289,18 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Future<void> _details(Work w) async {
+    _featuredPausedUntil = DateTime.now().add(
+        const Duration(minutes: 2));
     // Flutter widget tests emulate Android's TargetPlatform on desktop.
     // Only the browser has the official iframe platform initialized here.
     final canEmbedTrailer = kIsWeb;
+    final trailerFuture = canEmbedTrailer && w.kind != 'Livro'
+        ? RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(w.trailerYoutubeId)
+          ? Future<String?>.value(w.trailerYoutubeId)
+          : _homeCatalog.verifiedTrailerFor(
+              workId: w.id, title: w.title,
+              kind: w.kind, year: w.year)
+        : Future<String?>.value(null);
     final current = entry(w);
     String status = current['status'] ?? 'Quero conhecer';
     double rating = (current['rating'] as num?)?.toDouble() ?? 0;
@@ -4293,19 +4335,57 @@ class _SaturnHomeState extends State<SaturnHome>
                     icon: const Icon(Icons.close_rounded, color: ivory)),
                 ]),
                 const SizedBox(height: 10),
-                if (w.kind != 'Livro' && canEmbedTrailer &&
-                    RegExp(r'^[A-Za-z0-9_-]{11}$')
-                        .hasMatch(w.trailerYoutubeId))
-                  SaturnTrailerPreview(
-                    key: Key('saturn-trailer-' + w.id),
-                    youtubeId: w.trailerYoutubeId,
-                    heroMode: true,
-                    workTitle: w.title,
-                    workMetadata: w.kind + ' · ' +
-                        (w.year > 0 ? w.year.toString() : 'SATURN')),
-                if (w.kind == 'Livro' || !canEmbedTrailer ||
-                    !RegExp(r'^[A-Za-z0-9_-]{11}$')
-                        .hasMatch(w.trailerYoutubeId))
+                if (w.kind != 'Livro' && canEmbedTrailer)
+                  FutureBuilder<String?>(
+                    future: trailerFuture,
+                    builder: (context, snapshot) {
+                      final videoId = snapshot.data ?? '';
+                      final verified = RegExp(r'^[A-Za-z0-9_-]{11}$')
+                          .hasMatch(videoId);
+                      if (verified) {
+                        return SaturnTrailerPreview(
+                          key: Key('saturn-trailer-' + w.id),
+                          youtubeId: videoId,
+                          heroMode: true,
+                          workTitle: w.title,
+                          workMetadata: w.kind + ' · ' +
+                              (w.year > 0 ? w.year.toString() : 'SATURN'),
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _cinematicDetailBanner(w),
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting)
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(4, 7, 4, 0),
+                              child: Text('Consultando trailer disponível…',
+                                style: TextStyle(color: gold, fontSize: 11)),
+                            )
+                          else
+                            TextButton.icon(
+                              key: const Key('saturn-trailer-search-fallback'),
+                              onPressed: () async {
+                                final uri = Uri.https(
+                                  'www.youtube.com', '/results', {
+                                  'search_query': w.title + ' ' +
+                                    w.year.toString() + ' trailer oficial',
+                                });
+                                try {
+                                  await launchUrl(uri,
+                                    mode: LaunchMode.externalApplication);
+                                } catch (_) {}
+                              },
+                              icon: const Icon(Icons.play_circle_outline,
+                                size: 17),
+                              label: const Text('Procurar trailer oficial'),
+                            ),
+                        ],
+                      );
+                    },
+                  )
+                else
                   _cinematicDetailBanner(w),
                 if (w.kind != 'Livro' &&
                     SaturnNativeTrailer.canUseNative(
@@ -4385,12 +4465,38 @@ class _SaturnHomeState extends State<SaturnHome>
                   ),
                   const SizedBox(height: 16),
                 ],
-                OutlinedButton.icon(
-                  key: const Key('saturn-suggest-to-partner'),
-                  onPressed: () => _suggestToPartner(w),
-                  icon: const Icon(Icons.favorite_border_rounded, size: 17),
-                  label: Text('Sugerir para ' + profiles[1 - profile]),
-                ),
+                Builder(builder: (context) {
+                  final sent = SaturnCoupleSuggestion.alreadySent(
+                    _ritualOps, from: profile, workId: w.id);
+                  return OutlinedButton.icon(
+                    key: const Key('saturn-suggest-to-partner'),
+                    onPressed: sent == null ? () {
+                      _suggestToPartner(w);
+                      refresh(() {});
+                    } : null,
+                    style: OutlinedButton.styleFrom(
+                      disabledForegroundColor: sent?.status == 'accepted'
+                          ? const Color(0xFFB8D9BD)
+                          : const Color(0xFFF0B4CC),
+                      side: BorderSide(
+                        color: sent == null
+                          ? gold : const Color(0xFFBC829E),
+                      ),
+                    ),
+                    icon: Icon(sent == null
+                      ? Icons.favorite_border_rounded
+                      : sent.status == 'accepted'
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_rounded,
+                      color: sent == null
+                        ? gold : const Color(0xFFF0B4CC), size: 17),
+                    label: Text(sent == null
+                      ? 'Sugerir para ' + profiles[1 - profile]
+                      : sent.status == 'accepted'
+                        ? 'Sugestão aceita por ' + profiles[1 - profile]
+                        : 'Enviado para ' + profiles[1 - profile] + ' ✓'),
+                  );
+                }),
                 const SizedBox(height: 14),
                 const Text('MINHAS LISTAS',
                   style: TextStyle(color: gold, fontSize: 11,
@@ -4793,50 +4899,54 @@ class PosterThumbnail extends StatelessWidget {
               ? Icons.tv_rounded : Icons.movie_creation_outlined,
           color: gold, size: 26),
     );
-    final coverUrl = SaturnBookCover.resolve(work.id, work.posterUrl);
-    if (!coverUrl.startsWith('https://')) return fallback;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Image.network(
-        coverUrl,
-        key: ValueKey('cover-' + work.id + '-' + coverUrl),
-        width: width, height: height,
-        fit: BoxFit.cover,
-        // Decode smaller thumbnails where supported and keep low-cost
-        // filtering while Safari scrolls hundreds of book/film covers.
-        cacheWidth: width.isFinite && width > 0
-            ? (width * MediaQuery.devicePixelRatioOf(context))
-                .round().clamp(60, 780).toInt() : null,
-        filterQuality: FilterQuality.low,
-        gaplessPlayback: true,
-        // Show the first decoded frame instead of hiding it until the
-        // network loading callback finishes. Crossfade avoids white flashes.
-        frameBuilder: (context, image, frame, synchronous) {
-          if (synchronous) return image;
-          return AnimatedOpacity(
-            opacity: frame == null ? 0 : 1,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            child: Stack(fit: StackFit.passthrough, children: [
-              fallback,
-              image,
-            ]),
-          );
-        },
-        loadingBuilder: (context, image, progress) =>
-            progress == null ? image : Stack(
-              fit: StackFit.passthrough,
-              children: [fallback, image],
-            ),
-        errorBuilder: (context, error, stackTrace) {
-          final second = SaturnBookCover.fallback(work.id);
-          return second == null ? fallback : Image.network(
-            second, width: width, height: height, fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => fallback,
-          );
-        },
-      ),
-    );
+    final original = SaturnBookCover.resolve(work.id, work.posterUrl);
+    if (!original.startsWith('https://')) return fallback;
+    return LayoutBuilder(builder: (context, constraints) {
+      final logicalWidth = width.isFinite && width > 0
+          ? width
+          : constraints.maxWidth.isFinite && constraints.maxWidth > 0
+              ? constraints.maxWidth : 168.0;
+      final pixels = (logicalWidth *
+          MediaQuery.devicePixelRatioOf(context) * 1.16)
+          .round().clamp(100, 1280).toInt();
+      final coverUrl = SaturnArtwork.bestUrl(original,
+          devicePixels: pixels.toDouble());
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.network(
+          coverUrl,
+          key: ValueKey('cover-' + work.id + '-' + coverUrl),
+          width: width, height: height,
+          fit: BoxFit.cover,
+          cacheWidth: pixels,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+          frameBuilder: (context, image, frame, synchronous) {
+            if (synchronous) return image;
+            return AnimatedOpacity(
+              opacity: frame == null ? 0 : 1,
+              duration: const Duration(milliseconds: 200),
+              child: Stack(fit: StackFit.passthrough,
+                children: [fallback, image]),
+            );
+          },
+          loadingBuilder: (context, image, progress) =>
+              progress == null ? image : Stack(
+                fit: StackFit.passthrough,
+                children: [fallback, image]),
+          errorBuilder: (context, error, trace) {
+            final alternate = SaturnBookCover.fallback(work.id) ??
+                (coverUrl != original ? original : '');
+            if (!alternate.startsWith('https://')) return fallback;
+            return Image.network(alternate,
+              width: width, height: height, fit: BoxFit.cover,
+              cacheWidth: pixels,
+              errorBuilder: (context, error, trace) => fallback,
+            );
+          },
+        ),
+      );
+    });
   }
 }
 
@@ -5198,6 +5308,14 @@ class _CatalogExploreState extends State<CatalogExplore> {
   }
 
   void _search() {
+    // Subject chips are discovery presets, not permanent constraints on
+    // explicit author/title searches. The filter must not silently exclude
+    // Agatha Christie after browsing Brazilian literature.
+    if (_filter == CatalogFilter.books &&
+        _query.text.trim().length >= 2 &&
+        _bookSubject == 'brazilian_literature') {
+      setState(() => _bookSubject = null);
+    }
     if (_query.text.trim().isNotEmpty &&
         _query.text.trim().length < 2) {
       setState(() => _error = 'Digite pelo menos duas letras para pesquisar.');
@@ -5311,7 +5429,10 @@ class _CatalogExploreState extends State<CatalogExplore> {
                           size: 16, color: gold),
                         label: const Text('Agatha Christie · português'),
                         onPressed: () {
-                          _query.text = 'Agatha Christie';
+                          setState(() {
+                            _bookSubject = null;
+                            _query.text = 'Agatha Christie';
+                          });
                           _search();
                         },
                       ),
@@ -5339,7 +5460,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                       child: Text(
                         '${labels[_filter.index]}'
                         '${_streamingFilter != null ? ' • ${_streamingFilter!.label}' : ''}'
-                        '${_bookSubject != null ? ' • Livros: $_bookSubject' : ''}'
+                        '${_bookSubject != null ? ' • Livros: ${CatalogClient.bookSubjects.entries.where((item) => item.value == _bookSubject).map((item) => item.key).firstOrNull ?? _bookSubject}' : ''}'
                         '${_genreId != null ? ' • ${_movieGenres[_genreId] ?? 'Gênero'}' : ''}',
                         style: const TextStyle(
                           fontSize: 11, color: Color(0xFFC6A477)),
@@ -5450,97 +5571,129 @@ class _CatalogExploreState extends State<CatalogExplore> {
   /// subtle metallic detailing. No extra network requests per visible card.
   Widget _coverCard(Work work) {
     final loved = widget.isShared(work);
-    return SaturnHoverLift(child: Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [Color(0xFF3A2635), Color(0xFF1C1A24)]),
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: const Color(0x88725265)),
-        boxShadow: const [BoxShadow(
-          color: Color(0x33000000), blurRadius: 12, offset: Offset(0, 5))],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(color: Colors.transparent,
-        child: InkWell(
-          key: Key('saturn-cinematic-cover-' + work.id),
-          onTap: () => widget.onOpen(work),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: Stack(fit: StackFit.expand, children: [
-                PosterThumbnail(work: work,
-                  width: double.infinity, height: double.infinity),
-                const Positioned.fill(child: DecoratedBox(
-                  decoration: BoxDecoration(gradient: LinearGradient(
-                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                    colors: [Color(0x770D0D19), Colors.transparent,
-                      Color(0xC9171420)],
-                    stops: [0, 0.48, 1],
-                  )),
-                )),
-                Positioned(top: 5, left: 5,
-                  child: IconButton.filledTonal(
-                    tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => widget.onToggleWatchlist(work),
-                    icon: Icon(widget.isWatchlisted(work)
-                      ? Icons.bookmark_added : Icons.bookmark_add_outlined,
-                      color: ivory, size: 18))),
-                Positioned(top: 5, right: 5,
-                  child: IconButton.filledTonal(
-                    tooltip: 'Adicionar à Nossa Órbita',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => widget.onToggleShared(work),
-                    icon: Icon(loved
-                      ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
-                      size: 18,
-                      color: loved ? const Color(0xFFF0B6C2) : ivory))),
-                Positioned(bottom: 6, right: 5,
-                  child: IconButton.filledTonal(
-                    tooltip: work.kind == 'Livro'
-                      ? 'Marcar como lido' : 'Marcar como assistido',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => widget.onToggleCompleted(work),
-                    icon: Icon(widget.isCompleted(work)
-                      ? Icons.check_circle : Icons.check_circle_outline,
-                      color: widget.isCompleted(work)
-                        ? const Color(0xFF97CDB4) : ivory, size: 18))),
-                Positioned(bottom: 11, left: 10,
-                  child: Text(work.kind.toUpperCase(),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: gold, letterSpacing: 1.4,
-                      fontSize: 9, fontWeight: FontWeight.w800))),
-              ])),
-              Container(height: 2,
-                decoration: const BoxDecoration(gradient: LinearGradient(
-                  colors: [Color(0xFFB89269), Color(0xFF6C465E),
-                    Colors.transparent]))),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 10, 8, 5),
-                child: Text(work.title, maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: ivory, fontFamily: 'serif',
-                    fontWeight: FontWeight.bold, fontSize: 14,
-                    height: 1.2))),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 1, 8, 9),
-                child: Text([
-                  if (work.year > 0) work.year.toString(),
-                  if (work.kind == 'Livro' && work.creator.isNotEmpty)
-                    work.creator
-                  else if (work.kind != 'Livro') work.provider,
-                ].join(' · '), maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFFC5ADB9), fontSize: 10))),
+    final artUrl = SaturnArtwork.bestUrl(
+      SaturnBookCover.resolve(work.id, work.posterUrl),
+      devicePixels: 460,
+    );
+    return FutureBuilder<Color>(
+      future: SaturnArtwork.toneFor(artUrl),
+      builder: (context, snapshot) {
+        final tone = snapshot.data ?? SaturnArtwork.fallback;
+        final accent = Color.lerp(tone, gold, .48)!;
+        return SaturnHoverLift(child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              colors: [tone, Color.lerp(tone, night, .82)!],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: accent.withValues(alpha: .65)),
+            boxShadow: [
+              BoxShadow(color: tone.withValues(alpha: .25),
+                blurRadius: 15, offset: const Offset(0, 6)),
             ],
           ),
-        ),
-      ),
-    ));
+          clipBehavior: Clip.antiAlias,
+          child: Material(color: Colors.transparent,
+            child: InkWell(
+              key: Key('saturn-cinematic-cover-' + work.id),
+              onTap: () => widget.onOpen(work),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: Stack(fit: StackFit.expand, children: [
+                    PosterThumbnail(work: work,
+                      width: double.infinity, height: double.infinity),
+                    Positioned.fill(child: DecoratedBox(
+                      decoration: BoxDecoration(gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          const Color(0x640C0B15),
+                          Colors.transparent,
+                          tone.withValues(alpha: .30),
+                          tone,
+                        ],
+                        stops: const [0, .45, .73, 1],
+                      )),
+                    )),
+                    Positioned(top: 5, left: 5,
+                      child: IconButton.filledTonal(
+                        tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => widget.onToggleWatchlist(work),
+                        icon: Icon(widget.isWatchlisted(work)
+                          ? Icons.bookmark_added : Icons.bookmark_add_outlined,
+                          color: ivory, size: 18))),
+                    Positioned(top: 5, right: 5,
+                      child: IconButton.filledTonal(
+                        tooltip: 'Adicionar à Nossa Órbita',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => widget.onToggleShared(work),
+                        icon: Icon(loved
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_outline_rounded,
+                          size: 18,
+                          color: loved ? const Color(0xFFF0B6C2) : ivory))),
+                    Positioned(bottom: 7, right: 5,
+                      child: IconButton.filledTonal(
+                        tooltip: work.kind == 'Livro'
+                          ? 'Marcar como lido' : 'Marcar como assistido',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => widget.onToggleCompleted(work),
+                        icon: Icon(widget.isCompleted(work)
+                          ? Icons.check_circle : Icons.check_circle_outline,
+                          color: widget.isCompleted(work)
+                            ? const Color(0xFF97CDB4) : ivory,
+                          size: 18))),
+                    Positioned(bottom: 14, left: 10,
+                      child: Text(work.kind.toUpperCase(),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: ivory, letterSpacing: 1.5,
+                          fontSize: 9, fontWeight: FontWeight.w800))),
+                  ])),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [tone, Color.lerp(tone, night, .62)!],
+                      ),
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 5),
+                          child: Text(work.title, maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: ivory, fontFamily: 'serif',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14, height: 1.2)),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 1, 10, 10),
+                          child: Text([
+                            if (work.year > 0) work.year.toString(),
+                            if (work.kind == 'Livro' &&
+                                work.creator.isNotEmpty) work.creator
+                            else if (work.kind != 'Livro') work.provider,
+                          ].join(' · '), maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFE4CAD6), fontSize: 10)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ));
+      },
+    );
   }
 
 }

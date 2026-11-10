@@ -15,19 +15,20 @@ void main() {
       expect(request.url.path, '/books/v1/volumes');
       expect(request.url.queryParameters['langRestrict'], 'pt');
       expect(request.url.queryParameters['printType'], 'books');
-      expect(request.url.queryParameters['q'],
-          contains('subject:literatura brasileira'));
+      // The author/title query must not inherit a stale subject filter.
+      expect(request.url.queryParameters['q'], 'Machado de Assis');
       return http.Response(jsonEncode({
         'items': [
           {
             'id': 'real-volume-1',
             'volumeInfo': {
               'title': 'Dom Casmurro',
-              'language': 'pt',
+              'language': 'pt-BR',
               'authors': ['Machado de Assis'],
               'publishedDate': '2018-10-11',
               'publisher': 'Editora brasileira',
               'imageLinks': {
+                'large': 'http://books.google.com/edition-hd.jpg',
                 'thumbnail': 'http://books.google.com/example-cover.jpg',
               },
               'industryIdentifiers': [
@@ -52,7 +53,43 @@ void main() {
     expect(books.single.title, 'Dom Casmurro');
     expect(books.single.creator, 'Machado de Assis');
     expect(books.single.description, contains('9788550000000'));
-    expect(books.single.posterUrl, startsWith('https://'));
+    expect(books.single.posterUrl,
+        'https://books.google.com/edition-hd.jpg');
+  });
+
+  test('Agatha Christie busca o autor mesmo após categoria nacional',
+      () async {
+    final calls = <String>[];
+    final client = CatalogClient(client: MockClient((request) async {
+      calls.add(request.url.queryParameters['q'] ?? '');
+      if (request.url.host == 'openlibrary.org') {
+        return http.Response(jsonEncode({'docs': [{
+          'key': '/works/OL777W',
+          'title': 'And Then There Were None',
+          'author_name': ['Agatha Christie'],
+          'cover_i': 420,
+          'first_publish_year': 1939,
+        }]}), 200);
+      }
+      return http.Response(jsonEncode({'items': [{
+        'id': 'pt-volume',
+        'volumeInfo': {
+          'title': 'E Não Sobrou Nenhum',
+          'language': 'pt',
+          'authors': ['Agatha Christie'],
+        },
+      }]}), 200, headers: {
+        'content-type': 'application/json; charset=utf-8',
+      });
+    }));
+    addTearDown(client.close);
+    final result = await client.search('Agatha Christie',
+        CatalogFilter.books, bookSubject: 'brazilian_literature');
+    expect(result.any((book) => book.title == 'E Não Sobrou Nenhum'), isTrue,
+      reason: 'Titles: ${result.map((e) => e.title).toList()}; calls: $calls');
+    expect(calls, contains('Agatha Christie'));
+    expect(calls.where((q) => q.contains('subject:brazilian_literature')),
+      isEmpty);
   });
 
   test('Descoberta nacional pagina autores de verdade sob demanda', () async {

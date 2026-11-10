@@ -102,6 +102,67 @@ class CatalogClient {
     );
   }
 
+  final Map<String, Future<String?>> _trailerLookupCache = {};
+
+  /// Look up a confirmed YouTube trailer from SATURN's public, keyed TMDB
+  /// snapshot. No TMDB API key, guessing video IDs or YouTube scraping.
+  Future<String?> verifiedTrailerFor({
+    required String workId,
+    required String title,
+    required String kind,
+    required int year,
+  }) {
+    final key = '$workId:$title:$year';
+    return _trailerLookupCache.putIfAbsent(key, () async {
+      if (!_enableTmdb ||
+          (kind != 'Filme' && kind != 'Série' &&
+           kind != 'Dorama' && kind != 'Anime')) return null;
+      bool valid(Map row) {
+        final video = (row['trailerYoutubeId'] ?? '').toString();
+        return RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(video);
+      }
+      String normalized(String value) {
+        const from = 'áàâãäéèëíìîïóòôõöúùûüçñ';
+        const into = 'aaaaaeeeeiiiiooooouuuucn';
+        var text = value.toLowerCase();
+        for (var i = 0; i < from.length; i++) {
+          text = text.replaceAll(from[i], into[i]);
+        }
+        return text.replaceAll(RegExp(r'[^a-z0-9]'), '');
+      }
+      try {
+        final exact = await _tmdb.findById(workId);
+        if (exact != null && valid(exact)) {
+          return (exact['trailerYoutubeId'] ?? '').toString();
+        }
+        final group = kind == 'Filme' ? 'movies' : 'series';
+        final groups = <String>[group,
+          if (kind != 'Filme') 'dramas',
+          if (kind == 'Anime') 'anime'];
+        final target = normalized(title);
+        for (final category in groups) {
+          final rows = await _tmdb.query(
+            filter: category, search: title, page: 1, perPage: 40);
+          for (final row in rows) {
+            if (!valid(row)) continue;
+            final name = normalized((row['title'] ?? '').toString());
+            final original =
+                normalized((row['originalTitle'] ?? '').toString());
+            if (target != name && target != original) continue;
+            final catalogYear =
+                row['year'] is num ? (row['year'] as num).toInt() : 0;
+            if (year > 0 && catalogYear > 0 &&
+                (year - catalogYear).abs() > 2) continue;
+            return (row['trailerYoutubeId'] ?? '').toString();
+          }
+        }
+      } catch (_) {
+        // The title's existing details and personal reviews are still usable.
+      }
+      return null;
+    });
+  }
+
   Future<List<CatalogEntry>> _snapshot({
     required CatalogFilter filter,
     required String query,
@@ -224,13 +285,15 @@ class CatalogClient {
       requests.add(safe('animes', () => _anime(query: query, page: p)));
     }
     if (filter == CatalogFilter.all || filter == CatalogFilter.books) {
+      // An explicit author/title search must not be constrained by a
+      // previously selected discovery subject (e.g. Agatha Christie while
+      // Literatura brasileira was active).
       requests.add(safe('livros',
-          () => _books(query, page: p, subject: bookSubject)));
+          () => _books(query, page: p)));
       // Broaden PT-BR edition coverage without harvesting a full catalog.
       if (filter == CatalogFilter.books) {
         requests.add(safe('livros nacionais e em português',
-          () => _googleBooks(query: query, page: p,
-            national: bookSubject == 'brazilian_literature')));
+          () => _googleBooks(query: query, page: p)));
       }
     }
 
@@ -240,7 +303,8 @@ class CatalogClient {
     if (works.isEmpty && errors.isNotEmpty) {
       throw StateError('Não foi possível consultar ${errors.join(', ')}. Tente novamente.');
     }
-    return works;
+    return filter == CatalogFilter.books
+        ? _prioritizePortuguese(works) : works;
   }
 
   /// Descoberta por categorias: carregamento real a partir de serviços
@@ -315,7 +379,31 @@ class CatalogClient {
     if (works.isEmpty && errors.isNotEmpty) {
       throw StateError('Sem acesso aos catálogos (${errors.join(', ')}). Verifique a rede.');
     }
-    return works;
+    return filter == CatalogFilter.books
+        ? _prioritizePortuguese(works) : works;
+  }
+
+  static List<CatalogEntry> _prioritizePortuguese(
+      List<CatalogEntry> entries) {
+    final sorted = [...entries];
+    int quality(CatalogEntry book) {
+      final provider = book.provider.toLowerCase();
+      var score = 0;
+      if (provider.contains('português') ||
+          provider.contains('brasil') ||
+          provider.contains('brasileira')) score += 8;
+      if (book.posterUrl.startsWith('https://')) score += 2;
+      if (book.creator.trim().isNotEmpty) score += 1;
+      if (book.description.contains('ISBN:')) score += 1;
+      return score;
+    }
+    sorted.sort((a, b) {
+      final byQuality = quality(b).compareTo(quality(a));
+      if (byQuality != 0) return byQuality;
+      // With equally strong editions, retain source relevance/order.
+      return entries.indexOf(a).compareTo(entries.indexOf(b));
+    });
+    return sorted;
   }
 
   static List<CatalogEntry> _unique(Iterable<CatalogEntry> entries) {
@@ -528,13 +616,22 @@ class CatalogClient {
       'Carlos Drummond de Andrade', 'Milton Hatoum',
       'Graciliano Ramos', 'Carolina Maria de Jesus', 'Paulo Coelho',
       'Cecília Meireles', 'Guimarães Rosa',
+      'Lima Barreto', 'Rachel de Queiroz', 'Érico Veríssimo',
+      'José de Alencar', 'Monteiro Lobato', 'Ariano Suassuna',
+      'Rubem Fonseca', 'Hilda Hilst', 'João Ubaldo Ribeiro',
+      'Raduan Nassar', 'Vinicius de Moraes', 'Itamar Vieira Junior',
+      'Socorro Acioli', 'Marina Colasanti', 'Ailton Krenak',
+      'Daniel Munduruku', 'Djamila Ribeiro', 'José Mauro de Vasconcelos',
+      'Ana Maria Machado', 'Lúcio Cardoso',
     ];
+    // Do not concatenate an author with a multi-word subject filter:
+    // that exact combination frequently returns zero volumes.
     final search = input.isNotEmpty
-        ? (national ? input + ' subject:literatura brasileira' : input)
+        ? input
         : national
           ? 'inauthor:' + nationalAuthors[
               (page - 1) % nationalAuthors.length]
-          : 'subject:ficção';
+          : 'subject:fiction';
     // Rotate Brazilian writers on national discovery pages and paginate
     // without flooding Google or Open Library with background requests.
     final nationalPage = national && input.isEmpty
@@ -546,7 +643,7 @@ class CatalogClient {
         'printType': 'books',
         'maxResults': '40',
         'startIndex': (nationalPage * 40).toString(),
-        'projection': 'lite',
+        'projection': 'full',
       }));
     if (data is! Map || data['items'] is! List) return [];
     final result = <CatalogEntry>[];
@@ -557,7 +654,8 @@ class CatalogClient {
       if (id.isEmpty || volume is! Map) continue;
       final title = (volume['title'] ?? '').toString().trim();
       final language = (volume['language'] ?? '').toString().toLowerCase();
-      if (title.isEmpty || language != 'pt') continue;
+      if (title.isEmpty ||
+          !(language == 'pt' || language.startsWith('pt-'))) continue;
       final authors = volume['authors'];
       final creator = authors is List
           ? authors.map((a) => a.toString()).join(', ') : '';
@@ -573,8 +671,11 @@ class CatalogClient {
         }
       }
       final images = volume['imageLinks'];
+      // Prefer the actual volume's high-resolution art when available.
       var cover = images is Map
-          ? (images['thumbnail'] ?? images['smallThumbnail'] ?? '').toString()
+          ? (images['extraLarge'] ?? images['large'] ??
+             images['medium'] ?? images['small'] ??
+             images['thumbnail'] ?? images['smallThumbnail'] ?? '').toString()
           : '';
       if (cover.startsWith('http://books.google.com/') ||
           cover.startsWith('http://books.googleusercontent.com/')) {
@@ -837,10 +938,22 @@ class CatalogClient {
           'editions.isbn_13,editions.isbn_10',
       }));
     } catch (_) {
-      // A verified bibliographic entry remains discoverable during OL
-      // outages; never create fake OL IDs or erase locally saved books.
-      if (verified.isNotEmpty) return verified;
-      rethrow;
+      // Some OL work queries time out while expanding all editions.
+      // Retry the same real catalog with a leaner fields projection.
+      try {
+        data = await _get(Uri.https('openlibrary.org', '/search.json', {
+          'q': search,
+          'lang': 'pt',
+          'limit': '35',
+          'page': page.clamp(1, 150).toString(),
+          'fields': 'key,title,author_name,cover_i,first_publish_year,'
+              'edition_count,language,isbn',
+        })).timeout(const Duration(seconds: 7));
+      } catch (_) {
+        // Retain only bibliographically verified offline fallback entries.
+        if (verified.isNotEmpty) return verified;
+        rethrow;
+      }
     }
     if (data is! Map || data['docs'] is! List) return verified;
     final result = <CatalogEntry>[...verified];

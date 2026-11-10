@@ -1,0 +1,69 @@
+import 'package:flutter/material.dart';
+
+/// High-definition, edition-preserving art and compact color extraction.
+/// Network palette work is deferred until a card is actually on screen.
+class SaturnArtwork {
+  const SaturnArtwork._();
+
+  static const fallback = Color(0xFF342333);
+  static final Map<String, Future<Color>> _tones = {};
+
+  /// Upgrade known, immutable asset URLs without guessing an image/edition.
+  static String bestUrl(String original, {double devicePixels = 0}) {
+    final uri = Uri.tryParse(original);
+    if (uri == null || uri.scheme != 'https') return original;
+    if (uri.host == 'image.tmdb.org' ||
+        uri.host == 'img.amodb.dev') {
+      final parts = uri.pathSegments.toList();
+      if (parts.length >= 4 && parts[0] == 't' && parts[1] == 'p') {
+        const candidates = {
+          'w92', 'w154', 'w185', 'w342', 'w500', 'w780',
+        };
+        if (candidates.contains(parts[2])) {
+          parts[2] = devicePixels >= 390 ? 'w780' : 'w500';
+          return uri.replace(pathSegments: parts).toString();
+        }
+      }
+    }
+    if (uri.host == 'static.tvmaze.com' &&
+        uri.path.contains('/medium_portrait/')) {
+      return uri.replace(
+        path: uri.path.replaceFirst(
+          '/medium_portrait/', '/original_untouched/'),
+      ).toString();
+    }
+    if (uri.host == 'covers.openlibrary.org' &&
+        devicePixels >= 360 &&
+        RegExp(r'-M[.]jpg$', caseSensitive: false).hasMatch(uri.path)) {
+      return uri.replace(path: uri.path.replaceFirst(
+        RegExp(r'-M[.]jpg$', caseSensitive: false), '-L.jpg')).toString();
+    }
+    return original;
+  }
+
+  /// Dominant color is extracted from the actual cover, never from a title
+  /// hash. Flutter scales samples to a small image for bounded CPU use.
+  /// Failures (network/CORS/unsupported media) safely retain SATURN burgundy.
+  static Future<Color> toneFor(String artworkUrl) {
+    if (!artworkUrl.startsWith('https://')) {
+      return Future.value(fallback);
+    }
+    if (_tones.length >= 72 && !_tones.containsKey(artworkUrl)) {
+      _tones.remove(_tones.keys.first);
+    }
+    return _tones.putIfAbsent(artworkUrl, () async {
+      try {
+        final colors = await ColorScheme.fromImageProvider(
+          provider: ResizeImage(
+            NetworkImage(artworkUrl),
+            width: 72,
+          ),
+          brightness: Brightness.dark,
+        );
+        return Color.lerp(fallback, colors.primary, .52) ?? fallback;
+      } catch (_) {
+        return fallback;
+      }
+    });
+  }
+}
