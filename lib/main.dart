@@ -1925,16 +1925,30 @@ class _SaturnHomeState extends State<SaturnHome>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (featured != null)
-                    _cinematicArtworkBackground(featured)
-                  else
-                    const DecoratedBox(decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [wine, night],
-                      ),
-                    )),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 760),
+                    reverseDuration: const Duration(milliseconds: 570),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder: (current, previous) => Stack(
+                      fit: StackFit.expand,
+                      children: [...previous, if (current != null) current],
+                    ),
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: KeyedSubtree(
+                      key: ValueKey('saturn-hero-art-${featured?.id ?? 'empty'}'),
+                      child: featured != null
+                          ? _cinematicArtworkBackground(featured)
+                          : const DecoratedBox(decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [wine, night],
+                              ),
+                            )),
+                    ),
+                  ),
                   if (featured != null)
                     Positioned(
                       top: spacious ? 21 : 24,
@@ -1952,6 +1966,7 @@ class _SaturnHomeState extends State<SaturnHome>
                             work: featured,
                             width: spacious ? 183 : 124,
                             height: spacious ? 265 : 220,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
@@ -1988,14 +2003,22 @@ class _SaturnHomeState extends State<SaturnHome>
                           constraints: BoxConstraints(maxWidth:
                             featured == null ? constraints.maxWidth
                                 : constraints.maxWidth * (spacious ? 0.60 : 0.58)),
-                          child: Text(
-                            featured?.title ?? 'Seu universo de histórias',
-                             key: const Key('saturn-featured-title'),
-                            maxLines: 3, overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'serif', color: ivory,
-                              fontWeight: FontWeight.bold,
-                              fontSize: spacious ? 35 : 25, height: 1.12),
+                          child: TweenAnimationBuilder<double>(
+                            key: ValueKey('saturn-hero-copy-${featured?.id ?? 'empty'}'),
+                            tween: Tween(begin: 0.15, end: 1),
+                            duration: const Duration(milliseconds: 620),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, opacity, text) =>
+                                Opacity(opacity: opacity, child: text),
+                            child: Text(
+                              featured?.title ?? 'Seu universo de histórias',
+                              key: const Key('saturn-featured-title'),
+                              maxLines: 3, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'serif', color: ivory,
+                                fontWeight: FontWeight.bold,
+                                fontSize: spacious ? 35 : 25, height: 1.12),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 9),
@@ -2039,8 +2062,6 @@ class _SaturnHomeState extends State<SaturnHome>
                             tooltip: 'Destaque anterior',
                             icon: const Icon(Icons.chevron_left, color: ivory),
                             onPressed: () => _moveFeatured(-1)),
-                          Text('${(_featuredIndex % slides.length) + 1}/${slides.length}',
-                            style: const TextStyle(color: gold, fontSize: 11)),
                           IconButton(
                             key: const Key('saturn-feature-next'),
                             visualDensity: VisualDensity.compact,
@@ -4318,21 +4339,21 @@ class _SaturnHomeState extends State<SaturnHome>
               SaturnArtwork.bestUrl(backdrop, devicePixels: 1400),
               fit: BoxFit.cover,
               alignment: Alignment.center,
-              filterQuality: FilterQuality.medium,
+              filterQuality: FilterQuality.high,
               gaplessPlayback: true,
               errorBuilder: (context, error, trace) =>
                   const SizedBox.shrink(),
             ))
           else if (poster.startsWith('https://'))
             Positioned.fill(child: Opacity(
-              opacity: 0.65,
+              opacity: 0.88,
               child: ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(sigmaX: 17, sigmaY: 17),
+                imageFilter: ui.ImageFilter.blur(sigmaX: 7, sigmaY: 7),
                 child: Image.network(
                   poster,
                   fit: BoxFit.cover,
                   alignment: Alignment.centerRight,
-                  filterQuality: FilterQuality.medium,
+                  filterQuality: FilterQuality.high,
                   errorBuilder: (context, error, trace) =>
                       const SizedBox.shrink(),
                 ),
@@ -4347,8 +4368,8 @@ class _SaturnHomeState extends State<SaturnHome>
               colors: hasBackdrop
                   ? const [Color(0xE91A1522), Color(0x9F231829),
                            Color(0x281B1525)]
-                  : const [Color(0xEA1A1522), Color(0xA5231829),
-                           Color(0x161B1525)],
+                  : const [Color(0xCA1A1522), Color(0x6B231829),
+                           Color(0x111B1525)],
             ),
           )),
           const DecoratedBox(decoration: BoxDecoration(
@@ -4377,13 +4398,19 @@ class _SaturnHomeState extends State<SaturnHome>
           child: Stack(fit: StackFit.expand, children: [
             _cinematicArtworkBackground(work),
             Positioned(
-              top: wide ? 16 : 31, bottom: wide ? 16 : 31,
-              right: wide ? 25 : 11, width: wide ? 162 : 104,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: PosterThumbnail(
-                  work: work, width: wide ? 162 : 104,
-                  height: wide ? 250 : 175))),
+              top: wide ? 17 : 12,
+              bottom: wide ? 17 : 12,
+              right: wide ? 25 : 11,
+              width: wide ? 173 : 104,
+              child: Center(child: AspectRatio(
+                aspectRatio: 2 / 3,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: PosterThumbnail(
+                    work: work, width: double.infinity,
+                    height: double.infinity, fit: BoxFit.contain),
+                ),
+              ))),
             Padding(
               padding: EdgeInsets.fromLTRB(
                 wide ? 27 : 15, 22, 16, wide ? 23 : 19),
