@@ -67,4 +67,48 @@ void main() {
       workId: 'openlibrary:/books/1', title: 'Livro',
       kind: 'Livro', year: 2026), isNull);
   });
+  test('Exact work returns multiple genuine fallback trailer IDs in priority',
+      () async {
+    final catalog = CatalogClient(enableTmdb: true,
+      client: MockClient((request) async {
+        return http.Response(jsonEncode({
+          'schema': 1, 'country': 'BR',
+          'results': request.url.path.endsWith('/movies.json') ? [
+            {
+              'id': 'tmdb:movie:555', 'title': 'Cinema original',
+              'year': 2020,
+              'trailerYoutubeId': 'abcdefghijk',
+              'trailerYoutubeIds': [
+                'abcdefghijk', '123456789ab', '123456789ac',
+              ],
+            },
+          ] : [],
+        }), 200);
+      }));
+    addTearDown(catalog.close);
+    final found = await catalog.verifiedTrailerCandidatesFor(
+      workId: 'tmdb:movie:555', title: 'Cinema original',
+      kind: 'Filme', year: 2020, savedYoutubeId: '123456789ad');
+    expect(found, [
+      'abcdefghijk', '123456789ab', '123456789ac', '123456789ad']);
+    expect(await catalog.verifiedTrailerCandidatesFor(
+      workId: 'tmdb:movie:555', title: 'Cinema original',
+      kind: 'Filme', year: 2020, savedYoutubeId: '123456789ad'), found);
+    expect(await catalog.verifiedTrailerCandidatesFor(
+      workId: 'tmdb:movie:999', title: 'Filme diferente',
+      kind: 'Filme', year: 2020), isEmpty);
+  });
+
+  test('Without TMDB only a verified saved trailer can be played', () async {
+    final catalog = CatalogClient(enableTmdb: false);
+    addTearDown(catalog.close);
+    expect(await catalog.verifiedTrailerCandidatesFor(
+      workId: 'tmdb:movie:555', title: 'Filme',
+      kind: 'Filme', year: 2020, savedYoutubeId: 'abcdefghijk'),
+      ['abcdefghijk']);
+    expect(await catalog.verifiedTrailerCandidatesFor(
+      workId: 'tmdb:movie:555', title: 'Filme',
+      kind: 'Filme', year: 2020, savedYoutubeId: 'not-valid'), isEmpty);
+  });
+
 }
