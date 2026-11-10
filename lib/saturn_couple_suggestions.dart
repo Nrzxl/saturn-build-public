@@ -15,7 +15,7 @@ class SaturnCoupleSuggestion {
   final String status;
 
   static const prefix = 'suggestion:';
-  static const statuses = <String>{'pending', 'accepted', 'dismissed'};
+  static const statuses = <String>{'pending', 'accepted', 'dismissed', 'withdrawn'};
 
   static List<SaturnCoupleSuggestion> read(
       Map<String, dynamic> data, {int? recipient}) {
@@ -49,7 +49,8 @@ class SaturnCoupleSuggestion {
       Map<String, dynamic> ops, {required int from, required String workId}) {
     for (final item in read(ops)) {
       if (item.from == from && item.to == 1 - from &&
-          item.workId == workId && item.status != 'dismissed') {
+          item.workId == workId &&
+          item.status != 'dismissed' && item.status != 'withdrawn') {
         return item;
       }
     }
@@ -63,7 +64,7 @@ class SaturnCoupleSuggestion {
     final seen = <String>{};
     return [
       for (final item in read(ops))
-        if (item.status != 'dismissed' &&
+        if (item.status != 'dismissed' && item.status != 'withdrawn' &&
             seen.add('${item.from}:${item.to}:${item.workId}'))
           item,
     ];
@@ -91,6 +92,25 @@ class SaturnCoupleSuggestion {
       'status': 'pending', 'updatedAt': at,
     };
     return key;
+  }
+
+  /// Only the sender may withdraw their own sent recommendation. Preserve
+  /// the original event as a timestamped tombstone for safe orbit merging.
+  /// Any watchlist addition previously made by the recipient stays theirs.
+  static bool withdraw(Map<String, dynamic> ops, String key, {
+    required int by, required int at,
+  }) {
+    final value = ops[key];
+    if (value is! Map || value['from'] != by ||
+        !{'pending', 'accepted'}.contains(value['status'])) return false;
+    final previous = value['updatedAt'] is num
+        ? (value['updatedAt'] as num).toInt() : 0;
+    ops[key] = {
+      ...value.map((key, value) => MapEntry(key.toString(), value)),
+      'status': 'withdrawn',
+      'updatedAt': at > previous ? at : previous + 1,
+    };
+    return true;
   }
 
   static bool answer(Map<String, dynamic> ops, String key, {

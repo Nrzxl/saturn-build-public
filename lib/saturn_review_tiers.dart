@@ -57,11 +57,21 @@ class SaturnReviewClassification {
   static bool hasWrittenReview(Object? row) =>
       row is Map && (row['notes'] ?? '').toString().trim().isNotEmpty;
 
-  static SaturnReviewTier? of(Object? row) {
+  static SaturnReviewTier? fromRating(Object? row) {
     final value = stars(row);
-    if (value == null || !hasWrittenReview(row)) return null;
+    if (value == null) return null;
     if (value >= 4) return SaturnReviewTier.ouro;
     if (value >= 2) return SaturnReviewTier.prata;
     return SaturnReviewTier.bronze;
+  }
+
+  static bool sameCoupleTier(Object? mine, Object? theirs) {
+    final myTier = fromRating(mine);
+    return myTier != null && myTier == fromRating(theirs);
+  }
+
+  static SaturnReviewTier? of(Object? row) {
+    if (!hasWrittenReview(row)) return null;
+    return fromRating(row);
   }
 }

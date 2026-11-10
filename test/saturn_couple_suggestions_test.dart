@@ -68,4 +68,27 @@ void main() {
       ops, b, by: 1, status: 'dismissed', at: 1500), isTrue);
     expect(SaturnCoupleSuggestion.read(ops).first.key, b);
   });
+  test('Sender may withdraw pending/accepted suggestions without deleting history', () {
+    final ops = <String, dynamic>{};
+    final first = SaturnCoupleSuggestion.send(
+      ops, from: 0, workId: 'tmdb:movie:24', at: 1000);
+    expect(SaturnCoupleSuggestion.withdraw(
+      ops, first, by: 1, at: 1001), isFalse);
+    expect(SaturnCoupleSuggestion.withdraw(
+      ops, first, by: 0, at: 1002), isTrue);
+    expect((ops[first] as Map)['status'], 'withdrawn');
+    expect(SaturnCoupleSuggestion.visible(ops), isEmpty);
+    expect(SaturnCoupleSuggestion.alreadySent(
+      ops, from: 0, workId: 'tmdb:movie:24'), isNull);
+    final again = SaturnCoupleSuggestion.send(
+      ops, from: 0, workId: 'tmdb:movie:24', at: 1010);
+    expect(again, isNot(first));
+    expect(SaturnCoupleSuggestion.answer(
+      ops, again, by: 1, status: 'accepted', at: 1020), isTrue);
+    expect(SaturnCoupleSuggestion.withdraw(
+      ops, again, by: 0, at: 1030), isTrue);
+    expect(SaturnCoupleSuggestion.visible(ops), isEmpty);
+    expect(ops, hasLength(2));
+  });
+
 }

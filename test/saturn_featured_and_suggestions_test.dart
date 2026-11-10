@@ -83,4 +83,34 @@ void main() {
     final ops = jsonDecode(prefs.getString('saturn_ritual_ops_v1')!) as Map;
     expect((ops['suggestion:1:100'] as Map)['status'], 'accepted');
   });
+  testWidgets('Carousel is no longer artificially restricted to eight films',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final works = [
+      for (var i = 0; i < 11; i++)
+        Work('tmdb:movie:${10000 + i}', 'Filme ${i + 1}', 'Filme',
+            'Filme com capa', 2025,
+            posterUrl: 'https://example.com/poster-$i.jpg'),
+    ];
+    SharedPreferences.setMockInitialValues({
+      'catalog_saved': jsonEncode({
+        for (final work in works) work.id: work.toJson(),
+      }),
+      'watchlist_v1': jsonEncode({
+        '0': [for (final work in works) work.id], '1': [],
+      }),
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    expect(find.text('1/11'), findsOneWidget);
+    for (var i = 0; i < 9; i++) {
+      await tester.tap(find.byKey(const Key('saturn-feature-next')));
+      await tester.pump();
+    }
+    expect(find.text('10/11'), findsOneWidget);
+  });
+
 }

@@ -87,6 +87,28 @@ class CatalogGenerationTests(unittest.TestCase):
         self.assertEqual(MODULE.TITLES["tmdb:movie:100"]["backdropUrl"],
                          "https://image.tmdb.org/t/p/w1280/cinema.jpg")
 
+    def test_enriches_only_real_panoramas_for_the_correct_tmdb_id(self):
+        images = {"backdrops": [
+            {"file_path": "/wrong-portrait.jpg", "width": 700,
+             "height": 1200, "aspect_ratio": 0.58},
+            {"file_path": "/low-resolution.jpg", "width": 800,
+             "height": 450, "aspect_ratio": 1.77},
+            {"file_path": "/cinematic.jpg", "width": 1920,
+             "height": 1080, "aspect_ratio": 1.777,
+             "iso_639_1": None, "vote_average": 7.9,
+             "vote_count": 30},
+        ]}
+        self.assertEqual(MODULE.best_panorama(images),
+            "https://image.tmdb.org/t/p/w1280/cinematic.jpg")
+        self.assertEqual(MODULE.best_panorama({"backdrops": [
+            {"file_path": "/portrait.jpg", "width": 620,
+             "height": 900, "aspect_ratio": .7},
+        ]}), "")
+        self.assertEqual(MODULE.best_panorama({"backdrops": [
+            {"file_path": "/../escape.jpg", "width": 1920,
+             "height": 1080, "aspect_ratio": 1.77},
+        ]}), "")
+
     def test_uses_brazilian_subscription_only_not_rental(self):
         def fake_get(path, params=None):
             if path.startswith("/watch/providers/"):
@@ -135,7 +157,8 @@ class CatalogGenerationTests(unittest.TestCase):
                  mock.patch.object(MODULE, "OUT", pathlib.Path(folder)), \
                  mock.patch.object(MODULE, "MAX_PAGES", 1), \
                  mock.patch.object(MODULE, "MAX_DETAILS", 1), \
-                 mock.patch.object(MODULE, "MAX_TRAILERS", 0):
+                 mock.patch.object(MODULE, "MAX_TRAILERS", 0), \
+                 mock.patch.object(MODULE, "MAX_PANORAMA_LOOKUPS", 0):
                 MODULE.build()
                 data = json.loads(
                     (pathlib.Path(folder) / "movies.json").read_text(

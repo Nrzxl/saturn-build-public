@@ -373,8 +373,14 @@ class _SaturnHomeState extends State<SaturnHome>
           CatalogFilter.movies, page: nextPage);
         if (!mounted) return;
         setState(() {
-          recommendedMovies = films.map(Work.fromCatalog).toList(growable: false);
-          _filmRecommendationPage = nextPage;
+          final additions = films.map(Work.fromCatalog).toList(growable: false);
+          recommendedMovies = refreshMovies
+              ? <String, Work>{
+                  for (final work in recommendedMovies) work.id: work,
+                  for (final work in additions) work.id: work,
+                }.values.toList(growable: false)
+              : additions;
+          if (additions.isNotEmpty) _filmRecommendationPage = nextPage;
         });
       }
     } catch (_) {
@@ -1073,6 +1079,17 @@ class _SaturnHomeState extends State<SaturnHome>
     }
   }
 
+  void _withdrawSuggestion(SaturnCoupleSuggestion suggestion) {
+    if (!SaturnCoupleSuggestion.withdraw(
+      _ritualOps, suggestion.key, by: profile,
+      at: DateTime.now().millisecondsSinceEpoch)) return;
+    setState(() {});
+    _save();
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Sugestão retirada da Nossa Órbita.'),
+    ));
+  }
+
   Widget _coupleSuggestionsCard() {
     final suggestions = SaturnCoupleSuggestion.visible(_ritualOps)
         .take(12).toList(growable: false);
@@ -1147,6 +1164,13 @@ class _SaturnHomeState extends State<SaturnHome>
                                     _answerSuggestion(item, 'dismissed'),
                                 child: const Text('Agora não')),
                             ]),
+                          if (mine)
+                            TextButton.icon(
+                              key: Key('saturn-suggestion-withdraw-' + item.key),
+                              onPressed: () => _withdrawSuggestion(item),
+                              icon: const Icon(Icons.undo_rounded, size: 15),
+                              label: const Text('Retirar sugestão'),
+                            ),
                         ],
                       )),
                     ]),
@@ -1159,9 +1183,34 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
 
-  void _setRitualNomination(String period, int person, Work? work) {
+  Future<void> _setRitualNomination(String period, int person, Work? work) async {
     if (person != profile) return;
     final book = period.startsWith('month:');
+    final nominationKey = SaturnOrbitRituals.nomination(period, person);
+    final previousId = _ritualId(nominationKey);
+    if (!book && work != null && previousId.isNotEmpty &&
+        previousId != work.id) {
+      final previous = _ritualWork(previousId);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('Substituir filme do fim de semana?'),
+          content: Text('Você já indicou ${previous?.title ?? "um filme"} '
+              'para este fim de semana. Quer substituir por ${work.title}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Manter filme atual')),
+            FilledButton(
+              key: const Key('saturn-weekend-confirm-replace-nomination'),
+              onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Substituir indicação')),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true ||
+          previousId != _ritualId(nominationKey)) return;
+    }
     if (work != null && (book ? work.kind != 'Livro' : work.kind != 'Filme')) {
       return;
     }
@@ -1205,7 +1254,7 @@ class _SaturnHomeState extends State<SaturnHome>
     _save();
   }
 
-  void _chooseRitualWork(String period, Work work) {
+  Future<void> _chooseRitualWork(String period, Work work) async {
     // Monthly books are personal choices, never a shared final vote.
     if (!period.startsWith('weekend:')) return;
     if (work.id != _ritualId(SaturnOrbitRituals.nomination(period, 0)) &&
@@ -1213,6 +1262,31 @@ class _SaturnHomeState extends State<SaturnHome>
       return; // Only one of the two proposals can be chosen.
     }
     if (work.kind != 'Filme') return;
+    final selectedKey = SaturnOrbitRituals.selection(period);
+    final previousId = _ritualId(selectedKey);
+    if (previousId == work.id) return;
+    if (previousId.isNotEmpty) {
+      final existing = _ritualWork(previousId);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('Já temos um filme para o fim de semana'),
+          content: Text('O escolhido é ${existing?.title ?? "o filme atual"}. '
+              'Quer substituir por ${work.title}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Manter nossa escolha')),
+            FilledButton(
+              key: const Key('saturn-weekend-confirm-replace-selected'),
+              onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Substituir filme')),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true ||
+          previousId != _ritualId(selectedKey)) return;
+    }
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
       if (!savedWorks.containsKey(work.id)) {
@@ -1559,7 +1633,7 @@ class _SaturnHomeState extends State<SaturnHome>
         ),
       );
       if (chosen != null && mounted) {
-        _setRitualNomination(period, profile, chosen);
+        await _setRitualNomination(period, profile, chosen);
       }
     } finally {
       searchController.dispose();
@@ -1802,9 +1876,8 @@ class _SaturnHomeState extends State<SaturnHome>
         a.genreIds.where(likedGenres.contains).length));
     final seen = <String>{};
     final slides = <Work>[];
-    for (final work in <Work>[...personal.take(4), ...catalog]) {
+    for (final work in <Work>[...personal, ...catalog]) {
       if (seen.add(work.id)) slides.add(work);
-      if (slides.length >= 8) break;
     }
     return slides;
   }
@@ -1815,6 +1888,11 @@ class _SaturnHomeState extends State<SaturnHome>
     _featuredPausedUntil = DateTime.now().add(const Duration(seconds: 20));
     setState(() => _featuredIndex =
         (_featuredIndex + direction + slides.length) % slides.length);
+    // New pages extend the carousel instead of resetting it to eight films.
+    if (direction > 0 && _featuredIndex >= slides.length - 4 &&
+        !loadingRecommendations) {
+      _loadHomeRecommendations(refreshMovies: true);
+    }
   }
 
   /// Usa capas realmente retornadas pelo catálogo; sem título fictício no destaque.
@@ -1937,7 +2015,9 @@ class _SaturnHomeState extends State<SaturnHome>
                   ),
                   if (slides.length > 1)
                     Positioned(
-                      top: 12, right: 12,
+                      top: spacious ? 17 : null,
+                      bottom: spacious ? null : 15,
+                      right: spacious ? 232 : 14,
                       child: Material(
                         color: const Color(0xDB241A2A),
                         borderRadius: BorderRadius.circular(32),
@@ -2069,6 +2149,15 @@ class _SaturnHomeState extends State<SaturnHome>
     final tier = SaturnReviewClassification.of(personal);
     final stars = SaturnReviewClassification.stars(personal);
     final comment = (personal['notes'] ?? '').toString().trim();
+    final inOrbit = shared.contains(work.id);
+    final firstTier = inOrbit
+        ? SaturnReviewClassification.fromRating(records['0:${work.id}'])
+        : null;
+    final secondTier = inOrbit
+        ? SaturnReviewClassification.fromRating(records['1:${work.id}'])
+        : null;
+    final metalColor = inOrbit ? firstTier?.color : tier?.color;
+    final partnerMetalColor = secondTier?.color;
     final selected = _selectedWorkIds.contains(work.id);
     void select() => setState(() {
       if (!_selectedWorkIds.add(work.id)) {
@@ -2092,8 +2181,10 @@ class _SaturnHomeState extends State<SaturnHome>
           ),
         ),
         child: SaturnMetallicHalo(
-          key: tier == null ? null : Key('saturn-review-halo-' + work.id),
-          color: tier?.color,
+          key: metalColor == null && partnerMetalColor == null
+              ? null : Key('saturn-review-halo-' + work.id),
+          color: metalColor,
+          partnerColor: partnerMetalColor,
           child: Material(
           borderRadius: BorderRadius.circular(15),
           color: const Color(0xFF251C2A),
@@ -2875,7 +2966,15 @@ class _SaturnHomeState extends State<SaturnHome>
                     letterSpacing: 1.6, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  PosterThumbnail(work: work, width: 103, height: 145),
+                  SaturnMetallicHalo(
+                    key: Key('saturn-shared-halo-featured-' + work.id),
+                    color: SaturnReviewClassification.fromRating(
+                        insights.profile(0, work.id))?.color,
+                    partnerColor: SaturnReviewClassification.fromRating(
+                        insights.profile(1, work.id))?.color,
+                    child: PosterThumbnail(
+                        work: work, width: 103, height: 145),
+                  ),
                   const SizedBox(width: 14),
                   Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2918,7 +3017,14 @@ class _SaturnHomeState extends State<SaturnHome>
         child: Padding(
           padding: const EdgeInsets.all(13),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            PosterThumbnail(work: work, width: 62, height: 88),
+            SaturnMetallicHalo(
+              key: Key('saturn-shared-halo-memory-' + work.id),
+              color: SaturnReviewClassification.fromRating(
+                  insights.profile(0, work.id))?.color,
+              partnerColor: SaturnReviewClassification.fromRating(
+                  insights.profile(1, work.id))?.color,
+              child: PosterThumbnail(work: work, width: 62, height: 88),
+            ),
             const SizedBox(width: 12),
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -4161,13 +4267,13 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
 
-  /// Poster and landscape scene are separate TMDB images. The latter keeps
-  /// its native aspect and resolution; a restrained vignette connects both
-  /// without magnifying the vertical cover behind the entire banner.
+  /// Independent HD panoramic artwork when present, or a deliberately
+  /// luminous, blurred rendering of the actual cover for books/old titles.
+  /// No blank dark hero when a valid poster exists but a panorama does not.
   Widget _cinematicArtworkBackground(Work work) {
     final poster = SaturnArtwork.bestUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl),
-      devicePixels: 900,
+      devicePixels: 1200,
     );
     return FutureBuilder<String?>(
       future: _homeCatalog.verifiedBackdropFor(
@@ -4188,9 +4294,9 @@ class _SaturnHomeState extends State<SaturnHome>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color.lerp(tone, night, .20)!,
-                    Color.lerp(tone, wine, .48)!,
-                    night,
+                    Color.lerp(tone, night, .16)!,
+                    Color.lerp(tone, wine, .26)!,
+                    Color.lerp(tone, night, .48)!,
                   ],
                 ),
               ));
@@ -4208,37 +4314,38 @@ class _SaturnHomeState extends State<SaturnHome>
             ))
           else if (poster.startsWith('https://'))
             Positioned.fill(child: Opacity(
-              opacity: 0.12,
+              opacity: 0.65,
               child: ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                imageFilter: ui.ImageFilter.blur(sigmaX: 17, sigmaY: 17),
                 child: Image.network(
                   poster,
                   fit: BoxFit.cover,
                   alignment: Alignment.centerRight,
+                  filterQuality: FilterQuality.medium,
                   errorBuilder: (context, error, trace) =>
                       const SizedBox.shrink(),
                 ),
               ),
             )),
-          // Scene stays legible on the right, copy stays readable on the left.
-          const DecoratedBox(decoration: BoxDecoration(
+          // Protect reading contrast on the left while preserving the art.
+          DecoratedBox(decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [
-                Color(0xFA1A1522),
-                Color(0xD0231829),
-                Color(0x57201827),
-              ],
-              stops: [0, .51, 1],
+              stops: const [0, 0.48, 1],
+              colors: hasBackdrop
+                  ? const [Color(0xE91A1522), Color(0x9F231829),
+                           Color(0x281B1525)]
+                  : const [Color(0xEA1A1522), Color(0xA5231829),
+                           Color(0x161B1525)],
             ),
           )),
           const DecoratedBox(decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0x461B1525), Color(0x001B1525),
-                       Color(0x621B1525)],
+              colors: [Color(0x311B1525), Color(0x001B1525),
+                       Color(0x431B1525)],
             ),
           )),
         ]);
@@ -4468,12 +4575,12 @@ class _SaturnHomeState extends State<SaturnHome>
                       letterSpacing: 1.5)),
                   const SizedBox(height: 7),
                   OutlinedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
                       final period = w.kind == 'Livro'
                           ? SaturnOrbitRituals.monthPeriod(DateTime.now())
                           : SaturnOrbitRituals.weekendPeriod(DateTime.now());
-                      _setRitualNomination(period, profile, w);
-                      refresh(() {});
+                      await _setRitualNomination(period, profile, w);
+                      if (ctx.mounted) refresh(() {});
                     },
                     icon: const Icon(Icons.favorite_border_rounded),
                     label: Text(w.kind == 'Livro'
@@ -4487,31 +4594,27 @@ class _SaturnHomeState extends State<SaturnHome>
                     _ritualOps, from: profile, workId: w.id);
                   return OutlinedButton.icon(
                     key: const Key('saturn-suggest-to-partner'),
-                    onPressed: sent == null ? () {
-                      _suggestToPartner(w);
-                      refresh(() {});
-                    } : null,
+                    onPressed: () {
+                      if (sent == null) {
+                        _suggestToPartner(w);
+                      } else {
+                        _withdrawSuggestion(sent);
+                      }
+                      if (ctx.mounted) refresh(() {});
+                    },
                     style: OutlinedButton.styleFrom(
-                      disabledForegroundColor: sent?.status == 'accepted'
-                          ? const Color(0xFFB8D9BD)
-                          : const Color(0xFFF0B4CC),
-                      side: BorderSide(
-                        color: sent == null
-                          ? gold : const Color(0xFFBC829E),
-                      ),
+                      side: BorderSide(color: sent == null
+                        ? gold : const Color(0xFFBC829E)),
                     ),
                     icon: Icon(sent == null
-                      ? Icons.favorite_border_rounded
-                      : sent.status == 'accepted'
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_rounded,
+                      ? Icons.favorite_border_rounded : Icons.undo_rounded,
                       color: sent == null
                         ? gold : const Color(0xFFF0B4CC), size: 17),
                     label: Text(sent == null
                       ? 'Sugerir para ' + profiles[1 - profile]
                       : sent.status == 'accepted'
-                        ? 'Sugestão aceita por ' + profiles[1 - profile]
-                        : 'Enviado para ' + profiles[1 - profile] + ' ✓'),
+                        ? 'Sugestão aceita · Retirar'
+                        : 'Enviado para ' + profiles[1 - profile] + ' ✓ · Retirar'),
                   );
                 }),
                 const SizedBox(height: 14),
