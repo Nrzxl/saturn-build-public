@@ -668,6 +668,24 @@ class CatalogClient {
       return const [];
     }
     return const [
+      // Exact 2020 HarperCollins edition with a matching cover published
+      // in the bookseller's bibliographic record (ISBN 9786555110029).
+      CatalogEntry(
+        id: 'isbn:9786555110029',
+        title: 'Morte no Nilo',
+        kind: 'Livro',
+        description: 'Agatha Christie · Hercule Poirot · '
+            'Edição brasileira HarperCollins (2020) · '
+            'ISBN: 9786555110029 · Português · Capa dura',
+        year: 2020,
+        posterUrl: 'https://plenitudedistribuidora.com.br/cdn/shop/'
+            'files/284941-1.jpg?v=1772146096',
+        creator: 'Agatha Christie',
+        provider: 'HarperCollins Brasil · edição 2020',
+        detailUrl: 'https://plenitudedistribuidora.com.br/'
+            'products/morte-no-nilo-agatha-christie',
+        originalTitle: 'Death on the Nile',
+      ),
       CatalogEntry(
         id: nileBrazilianId,
         title: 'Morte no Nilo',
