@@ -44,10 +44,9 @@ class SaturnDetailSection extends StatelessWidget {
   );
 }
 
-/// Ratings are attributable metadata, not the couple's own scores.
-///
-/// A public TMDB vote average is NOT the Rotten Tomatoes audience
-/// Popcornmeter; Rotten Tomatoes and other sources need explicit feeds.
+/// Personal star ratings stay separate. The only external score displayed
+/// in SATURN is a verified Metacritic critic score (0-100). It is never
+/// computed from TMDB, IMDb, Rotten Tomatoes, or partner reviews.
 class SaturnExternalRatings extends StatelessWidget {
   const SaturnExternalRatings({
     super.key, required this.ratings, required this.isBook,
@@ -57,14 +56,10 @@ class SaturnExternalRatings extends StatelessWidget {
   final Map<String, String> ratings;
   final String workTitle;
   final bool isBook;
+  // Keep compatibility with existing catalog entries, but do not display
+  // these values or use them as a fallback for the Metacritic score.
   final double? tmdbScore;
   final int? tmdbVoteCount;
-
-  static const _sources = [
-    ('imdb', 'IMDb', Icons.movie_filter_outlined),
-    ('rottenTomatoes', 'Rotten Tomatoes · crítica', Icons.local_movies_outlined),
-    ('metacritic', 'Metacritic · crítica', Icons.insights_outlined),
-  ];
 
   static bool validRating(String key, String? value) {
     if (value == null) return false;
@@ -80,7 +75,6 @@ class SaturnExternalRatings extends StatelessWidget {
     };
   }
 
-  /// Official source search, never an unlicensed API/rating scraper.
   static Uri sourceSearch(String key, String title) {
     final query = title.trim();
     return switch (key) {
@@ -93,100 +87,53 @@ class SaturnExternalRatings extends StatelessWidget {
     };
   }
 
-  Future<void> _openSource(String key) async {
+  Future<void> _openMetacritic() async {
     if (workTitle.trim().isEmpty) return;
     try {
-      await launchUrl(sourceSearch(key, workTitle),
+      await launchUrl(sourceSearch('metacritic', workTitle),
           mode: LaunchMode.externalApplication);
     } catch (_) {
-      // A disabled external browser cannot affect personal reviews.
+      // External browser availability must not affect saved private reviews.
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (isBook) return const SizedBox.shrink();
-    final hasAudience = tmdbScore != null && tmdbScore! > 0 &&
-        tmdbScore! <= 10 && (tmdbVoteCount ?? 0) > 0;
-    final external = [
-      for (final source in _sources)
-        if (validRating(source.$1, ratings[source.$1])) source,
-    ];
+    final valid = validRating('metacritic', ratings['metacritic']);
     return SaturnDetailSection(
-      title: 'Crítica e audiência',
-      icon: Icons.stars_rounded,
+      title: 'Metacritic · crítica',
+      icon: Icons.insights_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('AUDIÊNCIA · COMUNIDADE TMDB',
-            style: TextStyle(color: satinGold,
-                fontSize: 10, fontWeight: FontWeight.w700,
-                letterSpacing: 1.2)),
-          const SizedBox(height: 7),
-          if (hasAudience)
+          if (valid)
             _RatingChip(
-              title: 'Público TMDB',
-              value: '${tmdbScore!.toStringAsFixed(1)}/10',
-              icon: Icons.people_alt_outlined,
+              title: 'Metascore · crítica',
+              value: ratings['metacritic']!.trim(),
+              icon: Icons.insights_outlined,
             )
           else
             const Text(
-              'Ainda não há uma nota de público TMDB verificada para este título.',
+              'Nota Metacritic não disponível para esta obra. '
+              'Não estimamos pontuações de crítica usando outros serviços.',
               style: TextStyle(color: satinSubdued, fontSize: 12, height: 1.4),
             ),
-          if (hasAudience) ...[
-            const SizedBox(height: 5),
-            Text(
-              '${tmdbVoteCount!} votos da comunidade TMDB. '
-              'Não é a nota do público Rotten Tomatoes.',
-              style: const TextStyle(
-                color: satinSubdued, fontSize: 11, height: 1.4),
-            ),
-          ],
-          const SizedBox(height: 17),
-          const Text('OUTRAS FONTES · NOTAS PUBLICADAS',
-            style: TextStyle(color: satinGold,
-                fontSize: 10, fontWeight: FontWeight.w700,
-                letterSpacing: 1.2)),
-          const SizedBox(height: 8),
-          if (external.isEmpty)
-            const Text(
-              'As notas IMDb, Rotten Tomatoes e Metacritic não estão '
-              'disponíveis neste catálogo. Elas exigem uma fonte '
-              'autorizada e podem não existir para todas as obras.',
-              style: TextStyle(color: satinSubdued, fontSize: 12, height: 1.4),
-            )
-          else
-            Wrap(spacing: 9, runSpacing: 9, children: [
-              for (final source in external)
-                _RatingChip(
-                  title: source.$2,
-                  value: ratings[source.$1]!.trim(),
-                  icon: source.$3,
-                ),
-            ]),
           if (workTitle.trim().isNotEmpty) ...[
-            const SizedBox(height: 13),
-            Wrap(spacing: 7, runSpacing: 7, children: [
-              for (final source in _sources)
-                ActionChip(
-                  tooltip: 'Pesquisar críticas no site oficial',
-                  avatar: Icon(source.$3, size: 15, color: satinGold),
-                  label: Text('Ver no ' + source.$2.split(' · ').first,
-                    style: const TextStyle(fontSize: 11)),
-                  onPressed: () => _openSource(source.$1),
-                ),
-            ]),
+            const SizedBox(height: 11),
+            ActionChip(
+              tooltip: 'Consultar a obra diretamente no site oficial',
+              avatar: const Icon(Icons.open_in_new, size: 15, color: satinGold),
+              label: const Text('Ver no Metacritic',
+                  style: TextStyle(fontSize: 11)),
+              onPressed: _openMetacritic,
+            ),
           ],
           const SizedBox(height: 11),
-          Text(
-            external.isEmpty
-                ? 'SATURN não inventa pontuações ausentes. '
-                  'As avaliações pessoais de vocês ficam separadas.'
-                : 'Notas externas fornecidas por fonte atribuída via OMDb. '
-                  'Elas não equivalem às estrelas de vocês nem a '
-                  'uma pontuação de audiência Rotten Tomatoes.',
-            style: const TextStyle(
+          const Text(
+            'Exibimos apenas o Metascore quando há fonte atribuída. '
+            'Suas notas pessoais e as do casal não são alteradas.',
+            style: TextStyle(
               color: satinSubdued, fontSize: 11, height: 1.35),
           ),
         ],
@@ -267,11 +214,10 @@ class _SaturnRatingsFromCatalogState extends State<SaturnRatingsFromCatalog> {
           ...widget.cachedRatings,
           if (refreshed != null) ...refreshed.externalRatings,
         };
-        final hasFreshScores = refreshed?.externalRatings.isNotEmpty == true ||
-            ((refreshed?.tmdbScore ?? 0) > 0 &&
-                (refreshed?.tmdbVoteCount ?? 0) > 0);
-        final initialHasScores = widget.cachedRatings.isNotEmpty ||
-            (widget.tmdbScore != null && (widget.tmdbVoteCount ?? 0) > 0);
+        final hasFreshScores = SaturnExternalRatings.validRating(
+            'metacritic', refreshed?.externalRatings['metacritic']);
+        final initialHasScores = SaturnExternalRatings.validRating(
+            'metacritic', widget.cachedRatings['metacritic']);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -292,8 +238,8 @@ class _SaturnRatingsFromCatalogState extends State<SaturnRatingsFromCatalog> {
                 !hasFreshScores && !initialHasScores)
               const Padding(
                 padding: EdgeInsets.only(left: 12, bottom: 6),
-                child: Text('O catálogo atual também não informa notas '
-                  'verificadas para esta obra.',
+                child: Text('O catálogo não informa uma nota Metacritic verificada '
+                  'para esta obra.',
                   style: TextStyle(color: satinSubdued, fontSize: 11)),
               ),
           ],
