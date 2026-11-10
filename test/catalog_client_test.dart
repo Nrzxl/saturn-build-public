@@ -88,4 +88,42 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+  test('IMDb verified identity wins duplicate cards without merging remakes', () {
+    CatalogEntry media(String id, String title, int year, {
+      String kind = 'Filme', String imdbId = '', String provider = 'Apple',
+    }) => CatalogEntry(
+      id: id, title: title, kind: kind, description: 'História',
+      year: year, posterUrl: 'https://example.com/cover.jpg',
+      creator: '', provider: provider, detailUrl: '', imdbId: imdbId,
+    );
+
+    final sameTitleWithoutId = media('itunes:1', 'Aventura', 2024);
+    final verified = media('tmdb:movie:200', 'Aventura', 2024,
+      imdbId: 'tt12345678', provider: 'TMDB');
+    final duplicateDifferentLocale = media('tvmaze:900', 'Other name', 2024,
+      imdbId: 'tt12345678', provider: 'TVMaze');
+    final remake = media('tmdb:movie:201', 'Aventura', 2025,
+      imdbId: 'tt12345679', provider: 'TMDB');
+    final conflictingImdb = media('itunes:2', 'Aventura', 2024,
+      imdbId: 'tt12345680');
+    final bookFirst = media('openlibrary:edition:1', 'Aventura', 2024,
+      kind: 'Livro');
+    final bookSecond = media('openlibrary:edition:2', 'Aventura', 2024,
+      kind: 'Livro');
+    final picked = CatalogClient.deduplicate([
+      sameTitleWithoutId, verified, duplicateDifferentLocale, remake,
+      conflictingImdb, bookFirst, bookSecond,
+    ]);
+    expect(picked.map((e) => e.id), [
+      'tmdb:movie:200', 'tmdb:movie:201', 'itunes:2',
+      'openlibrary:edition:1', 'openlibrary:edition:2',
+    ]);
+    expect(picked.first.imdbId, 'tt12345678');
+    // Zero-year works are not collapsed simply because their names match.
+    expect(CatalogClient.deduplicate([
+      media('itunes:3', 'Sem data', 0),
+      media('tvmaze:3', 'Sem data', 0, kind: 'Filme'),
+    ]), hasLength(2));
+  });
+
 }
