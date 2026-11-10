@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
@@ -284,6 +285,9 @@ class _SaturnHomeState extends State<SaturnHome>
   Set<String> get currentWatchlist =>
       watchlists.putIfAbsent(profile, () => <String>{});
   final CatalogClient _homeCatalog = CatalogClient();
+  Timer? _featuredTimer;
+  int _featuredIndex = 0;
+  bool _foreground = true;
   List<Work> recommendedMovies = [];
   List<Work> recommendedBooks = [];
   bool loadingRecommendations = false;
@@ -307,6 +311,13 @@ class _SaturnHomeState extends State<SaturnHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _featuredTimer = Timer.periodic(const Duration(seconds: 9), (_) {
+      if (!mounted || !_foreground || tab != 0) return;
+      final slides = _featuredTitles();
+      if (slides.length > 1) {
+        setState(() => _featuredIndex = (_featuredIndex + 1) % slides.length);
+      }
+    });
     if (_saturnCloudReady) {
       _cloud = SaturnOrbitCloud(
         readLocal: _orbitDocument,
@@ -331,13 +342,15 @@ class _SaturnHomeState extends State<SaturnHome>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _cloud?.scheduleSync();
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground) _cloud?.scheduleSync();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _cloud?.dispose();
+    _featuredTimer?.cancel();
     _homeCatalog.close();
     super.dispose();
   }
@@ -1751,11 +1764,43 @@ class _SaturnHomeState extends State<SaturnHome>
       );
 
 
+
+  List<Work> _featuredTitles() {
+    final personal = allWorks.where((w) =>
+        w.kind == 'Filme' && currentWatchlist.contains(w.id) &&
+        w.posterUrl.startsWith('https://')).toList(growable: false);
+    final likedGenres = <int>{};
+    for (final film in personal) {
+      likedGenres.addAll(film.genreIds);
+    }
+    final catalog = recommendedMovies.where((w) =>
+        w.kind == 'Filme' && w.posterUrl.startsWith('https://')).toList();
+    catalog.sort((a, b) =>
+      b.genreIds.where(likedGenres.contains).length.compareTo(
+        a.genreIds.where(likedGenres.contains).length));
+    final seen = <String>{};
+    final slides = <Work>[];
+    for (final work in <Work>[...personal.take(3), ...catalog]) {
+      if (seen.add(work.id)) slides.add(work);
+      if (slides.length >= 8) break;
+    }
+    return slides;
+  }
+
+  void _moveFeatured(int direction) {
+    final slides = _featuredTitles();
+    if (slides.length < 2) return;
+    setState(() => _featuredIndex =
+        (_featuredIndex + direction + slides.length) % slides.length);
+  }
+
   /// Usa capas realmente retornadas pelo catálogo; sem título fictício no destaque.
   Widget _cinematicHero(int ownCount) {
-    final Work? featured = recommendedMovies
-        .where((work) => work.posterUrl.startsWith('https://'))
-        .firstOrNull;
+    final slides = _featuredTitles();
+    final Work? featured = slides.isEmpty
+        ? null : slides[_featuredIndex % slides.length];
+    final fromWatchlist = featured != null &&
+        currentWatchlist.contains(featured.id);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
       child: LayoutBuilder(
@@ -1847,7 +1892,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         const Spacer(),
                         Text(
                           featured != null
-                              ? 'EM DESTAQUE · CATÁLOGO'
+                              ? fromWatchlist ? 'DA SUA WATCHLIST · PARA VOCÊ' : 'EM DESTAQUE · DESCUBRA'
                               : 'NOSSO UNIVERSO DE HISTÓRIAS',
                           style: const TextStyle(
                             fontSize: 10, color: gold,
@@ -1893,6 +1938,30 @@ class _SaturnHomeState extends State<SaturnHome>
                       ],
                     ),
                   ),
+                  if (slides.length > 1)
+                    Positioned(
+                      top: 12, right: 12,
+                      child: Material(
+                        color: const Color(0xDB241A2A),
+                        borderRadius: BorderRadius.circular(32),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          IconButton(
+                            key: const Key('saturn-feature-previous'),
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Destaque anterior',
+                            icon: const Icon(Icons.chevron_left, color: ivory),
+                            onPressed: () => _moveFeatured(-1)),
+                          Text('${(_featuredIndex % slides.length) + 1}/${slides.length}',
+                            style: const TextStyle(color: gold, fontSize: 11)),
+                          IconButton(
+                            key: const Key('saturn-feature-next'),
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Próximo destaque',
+                            icon: const Icon(Icons.chevron_right, color: ivory),
+                            onPressed: () => _moveFeatured(1)),
+                        ]),
+                      ),
+                    ),
                 ],
               ),
             ),
