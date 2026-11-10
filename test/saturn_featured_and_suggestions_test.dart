@@ -32,12 +32,16 @@ void main() {
     expect(find.text('DA SUA WATCHLIST · PARA VOCÊ'), findsOneWidget);
     final label = find.byKey(const Key('saturn-featured-title'));
     expect(tester.widget<Text>(label).data, first.title);
-    await tester.tap(find.byKey(const Key('saturn-feature-next')));
+    // Timed rotation must happen without any user input.
+    await tester.pump(const Duration(seconds: 8));
     await tester.pump();
     expect(tester.widget<Text>(label).data, second.title);
     await tester.tap(find.byKey(const Key('saturn-feature-previous')));
     await tester.pump();
     expect(tester.widget<Text>(label).data, first.title);
+    await tester.tap(find.byKey(const Key('saturn-feature-next')));
+    await tester.pump();
+    expect(tester.widget<Text>(label).data, second.title);
   });
 
   testWidgets('Sugestão de outra pessoa só altera Watchlist quando aceita',
