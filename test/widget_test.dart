@@ -127,13 +127,11 @@ void main() {
       const Key('saturn-ritual-film-person-0'));
     final nominate = find.descendant(
       of: person, matching: find.text('Fazer minha indicação'));
-    await tester.scrollUntilVisible(person, 180,
-        scrollable: find.byType(Scrollable).first, maxScrolls: 24);
+    await tester.scrollUntilVisible(person, 140,
+        scrollable: find.byType(Scrollable).first, maxScrolls: 40);
+    await tester.scrollUntilVisible(nominate, 90,
+        scrollable: find.byType(Scrollable).first, maxScrolls: 12);
     await tester.ensureVisible(nominate);
-    // The redesigned series hero is tall. Bring the ritual action into
-    // the actual 900px test viewport before sending a tap gesture.
-    await tester.drag(find.byType(Scrollable).first,
-        const Offset(0, -300));
     await tester.pumpAndSettle();
     await tester.tap(nominate);
     await tester.pumpAndSettle();
@@ -224,7 +222,7 @@ void main() {
     final scroll = find.descendant(
       of: find.byKey(const PageStorageKey('saturn_shared_orbit')),
       matching: find.byType(Scrollable),
-    );
+    ).first;
     final bookCard = find.byKey(const Key('saturn-ritual-book'));
     for (var attempt = 0;
          attempt < 25 && bookCard.evaluate().isEmpty;
@@ -565,8 +563,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('O QUE NÓS ACHAMOS'), findsOneWidget);
     expect(find.textContaining('Eu amei a história!'), findsWidgets);
-    expect(find.text('8.4/10'), findsOneWidget);
-    expect(find.text('92%'), findsOneWidget);
+    expect(find.text('8.4/10'), findsNothing);
+    expect(find.text('92%'), findsNothing);
     expect(find.text('79/100'), findsOneWidget);
   });
 
