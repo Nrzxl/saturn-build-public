@@ -32,10 +32,13 @@ void main() {
     expect(find.text('DA SUA WATCHLIST · PARA VOCÊ'), findsOneWidget);
     final label = find.byKey(const Key('saturn-featured-title'));
     expect(tester.widget<Text>(label).data, first.title);
-    // Timed rotation must happen without any user input.
+    expect(find.byKey(Key('saturn-hero-art-${first.id}')), findsOneWidget);
+    expect(find.text('1/2'), findsNothing);
+    // Timed rotation must crossfade the artwork without input.
     await tester.pump(const Duration(seconds: 8));
     await tester.pump();
     expect(tester.widget<Text>(label).data, second.title);
+    expect(find.byKey(Key('saturn-hero-art-${second.id}')), findsOneWidget);
     await tester.tap(find.byKey(const Key('saturn-feature-previous')));
     await tester.pump();
     expect(tester.widget<Text>(label).data, first.title);
@@ -105,12 +108,17 @@ void main() {
     });
     await tester.pumpWidget(const SaturnApp());
     await tester.pumpAndSettle();
-    expect(find.text('1/11'), findsOneWidget);
+    // Controls remain, while numeric overlays no longer cover hero artwork.
+    expect(find.text('1/11'), findsNothing);
+    expect(find.byKey(const Key('saturn-feature-previous')), findsOneWidget);
+    expect(find.byKey(const Key('saturn-feature-next')), findsOneWidget);
     for (var i = 0; i < 9; i++) {
       await tester.tap(find.byKey(const Key('saturn-feature-next')));
       await tester.pump();
     }
-    expect(find.text('10/11'), findsOneWidget);
+    expect(find.text('10/11'), findsNothing);
+    expect(tester.widget<Text>(
+      find.byKey(const Key('saturn-featured-title'))).data, 'Filme 10');
   });
 
 }

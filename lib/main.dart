@@ -1925,16 +1925,30 @@ class _SaturnHomeState extends State<SaturnHome>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (featured != null)
-                    _cinematicArtworkBackground(featured)
-                  else
-                    const DecoratedBox(decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [wine, night],
-                      ),
-                    )),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 760),
+                    reverseDuration: const Duration(milliseconds: 570),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder: (current, previous) => Stack(
+                      fit: StackFit.expand,
+                      children: [...previous, if (current != null) current],
+                    ),
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: KeyedSubtree(
+                      key: ValueKey('saturn-hero-art-${featured?.id ?? 'empty'}'),
+                      child: featured != null
+                          ? _cinematicArtworkBackground(featured)
+                          : const DecoratedBox(decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [wine, night],
+                              ),
+                            )),
+                    ),
+                  ),
                   if (featured != null)
                     Positioned(
                       top: spacious ? 21 : 24,
@@ -1952,6 +1966,7 @@ class _SaturnHomeState extends State<SaturnHome>
                             work: featured,
                             width: spacious ? 183 : 124,
                             height: spacious ? 265 : 220,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
@@ -1988,14 +2003,22 @@ class _SaturnHomeState extends State<SaturnHome>
                           constraints: BoxConstraints(maxWidth:
                             featured == null ? constraints.maxWidth
                                 : constraints.maxWidth * (spacious ? 0.60 : 0.58)),
-                          child: Text(
-                            featured?.title ?? 'Seu universo de histórias',
-                             key: const Key('saturn-featured-title'),
-                            maxLines: 3, overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'serif', color: ivory,
-                              fontWeight: FontWeight.bold,
-                              fontSize: spacious ? 35 : 25, height: 1.12),
+                          child: TweenAnimationBuilder<double>(
+                            key: ValueKey('saturn-hero-copy-${featured?.id ?? 'empty'}'),
+                            tween: Tween(begin: 0.15, end: 1),
+                            duration: const Duration(milliseconds: 620),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, opacity, text) =>
+                                Opacity(opacity: opacity, child: text),
+                            child: Text(
+                              featured?.title ?? 'Seu universo de histórias',
+                              key: const Key('saturn-featured-title'),
+                              maxLines: 3, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'serif', color: ivory,
+                                fontWeight: FontWeight.bold,
+                                fontSize: spacious ? 35 : 25, height: 1.12),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 9),
@@ -2039,8 +2062,6 @@ class _SaturnHomeState extends State<SaturnHome>
                             tooltip: 'Destaque anterior',
                             icon: const Icon(Icons.chevron_left, color: ivory),
                             onPressed: () => _moveFeatured(-1)),
-                          Text('${(_featuredIndex % slides.length) + 1}/${slides.length}',
-                            style: const TextStyle(color: gold, fontSize: 11)),
                           IconButton(
                             key: const Key('saturn-feature-next'),
                             visualDensity: VisualDensity.compact,
@@ -4318,21 +4339,21 @@ class _SaturnHomeState extends State<SaturnHome>
               SaturnArtwork.bestUrl(backdrop, devicePixels: 1400),
               fit: BoxFit.cover,
               alignment: Alignment.center,
-              filterQuality: FilterQuality.medium,
+              filterQuality: FilterQuality.high,
               gaplessPlayback: true,
               errorBuilder: (context, error, trace) =>
                   const SizedBox.shrink(),
             ))
           else if (poster.startsWith('https://'))
             Positioned.fill(child: Opacity(
-              opacity: 0.65,
+              opacity: 0.88,
               child: ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(sigmaX: 17, sigmaY: 17),
+                imageFilter: ui.ImageFilter.blur(sigmaX: 7, sigmaY: 7),
                 child: Image.network(
                   poster,
                   fit: BoxFit.cover,
                   alignment: Alignment.centerRight,
-                  filterQuality: FilterQuality.medium,
+                  filterQuality: FilterQuality.high,
                   errorBuilder: (context, error, trace) =>
                       const SizedBox.shrink(),
                 ),
@@ -4347,8 +4368,8 @@ class _SaturnHomeState extends State<SaturnHome>
               colors: hasBackdrop
                   ? const [Color(0xE91A1522), Color(0x9F231829),
                            Color(0x281B1525)]
-                  : const [Color(0xEA1A1522), Color(0xA5231829),
-                           Color(0x161B1525)],
+                  : const [Color(0xCA1A1522), Color(0x6B231829),
+                           Color(0x111B1525)],
             ),
           )),
           const DecoratedBox(decoration: BoxDecoration(
@@ -4377,13 +4398,19 @@ class _SaturnHomeState extends State<SaturnHome>
           child: Stack(fit: StackFit.expand, children: [
             _cinematicArtworkBackground(work),
             Positioned(
-              top: wide ? 16 : 31, bottom: wide ? 16 : 31,
-              right: wide ? 25 : 11, width: wide ? 162 : 104,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: PosterThumbnail(
-                  work: work, width: wide ? 162 : 104,
-                  height: wide ? 250 : 175))),
+              top: wide ? 17 : 12,
+              bottom: wide ? 17 : 12,
+              right: wide ? 25 : 11,
+              width: wide ? 173 : 104,
+              child: Center(child: AspectRatio(
+                aspectRatio: 2 / 3,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: PosterThumbnail(
+                    work: work, width: double.infinity,
+                    height: double.infinity, fit: BoxFit.contain),
+                ),
+              ))),
             Padding(
               padding: EdgeInsets.fromLTRB(
                 wide ? 27 : 15, 22, 16, wide ? 23 : 19),
@@ -5011,7 +5038,11 @@ class PosterThumbnail extends StatelessWidget {
   final Work work;
   final double width;
   final double height;
-  const PosterThumbnail({super.key, required this.work, this.width = 54, this.height = 74});
+  final BoxFit fit;
+  final Alignment alignment;
+  const PosterThumbnail({super.key, required this.work,
+    this.width = 54, this.height = 74,
+    this.fit = BoxFit.cover, this.alignment = Alignment.center});
 
   @override
   Widget build(BuildContext context) {
@@ -5036,9 +5067,11 @@ class PosterThumbnail extends StatelessWidget {
           ? width
           : constraints.maxWidth.isFinite && constraints.maxWidth > 0
               ? constraints.maxWidth : 168.0;
+      // The frame often expands on hover, desktop zoom or retina screens.
+      // Decode crisp artwork rather than magnifying a tiny thumbnail.
       final pixels = (logicalWidth *
-          MediaQuery.devicePixelRatioOf(context) * 1.16)
-          .round().clamp(100, 1280).toInt();
+          MediaQuery.devicePixelRatioOf(context) * 1.85)
+          .round().clamp(320, 1400).toInt();
       final coverUrl = SaturnArtwork.bestUrl(original,
           devicePixels: pixels.toDouble());
       return ClipRRect(
@@ -5047,9 +5080,9 @@ class PosterThumbnail extends StatelessWidget {
           coverUrl,
           key: ValueKey('cover-' + work.id + '-' + coverUrl),
           width: width, height: height,
-          fit: BoxFit.cover,
+          fit: fit, alignment: alignment,
           cacheWidth: pixels,
-          filterQuality: FilterQuality.medium,
+          filterQuality: FilterQuality.high,
           gaplessPlayback: true,
           // One image at a time: avoid stacked loading frames that can
           // paint two covers across the same card during rapid scrolling.
@@ -5060,8 +5093,9 @@ class PosterThumbnail extends StatelessWidget {
                 (coverUrl != original ? original : '');
             if (!alternate.startsWith('https://')) return fallback;
             return Image.network(alternate,
-              width: width, height: height, fit: BoxFit.cover,
-              cacheWidth: pixels,
+              width: width, height: height,
+              fit: fit, alignment: alignment,
+              cacheWidth: pixels, filterQuality: FilterQuality.high,
               errorBuilder: (context, error, trace) => fallback,
             );
           },
@@ -5693,146 +5727,129 @@ class _CatalogExploreState extends State<CatalogExplore> {
 
   /// Cinematic card: edge-to-edge original cover, restrained metadata and
   /// subtle metallic detailing. No extra network requests per visible card.
+  /// One continuous illustration surface, with an integrated soft-bottom
+  /// gradient instead of two separate layers with a visible horizontal seam.
   Widget _coverCard(Work work) {
     final loved = widget.isShared(work);
     final artUrl = SaturnArtwork.bestUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl),
-      devicePixels: 460,
+      devicePixels: 540,
     );
     return FutureBuilder<Color>(
       future: SaturnArtwork.toneFor(artUrl),
       builder: (context, snapshot) {
         final tone = snapshot.data ?? SaturnArtwork.fallback;
         final accent = Color.lerp(tone, gold, .48)!;
-        return SaturnHoverLift(child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
-              colors: [tone, Color.lerp(tone, night, .82)!],
+        final base = Color.lerp(tone, night, .82)!;
+        return SaturnHoverLift(
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: base,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: accent.withValues(alpha: .65)),
+              boxShadow: [
+                BoxShadow(color: tone.withValues(alpha: .25),
+                    blurRadius: 15, offset: const Offset(0, 6)),
+              ],
             ),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: accent.withValues(alpha: .65)),
-            boxShadow: [
-              BoxShadow(color: tone.withValues(alpha: .25),
-                blurRadius: 15, offset: const Offset(0, 6)),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Material(color: Colors.transparent,
-            child: InkWell(
-              key: Key('saturn-cinematic-cover-' + work.id),
-              onTap: () => widget.onOpen(work),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: Stack(fit: StackFit.expand, children: [
-                    PosterThumbnail(work: work,
-                      width: double.infinity, height: double.infinity),
-                    Positioned.fill(child: DecoratedBox(
-                      decoration: BoxDecoration(gradient: LinearGradient(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: Key('saturn-cinematic-cover-' + work.id),
+                onTap: () => widget.onOpen(work),
+                child: Stack(fit: StackFit.expand, children: [
+                  // Fit the *entire* poster from its top edge. The
+                  // bottom fades into one continuous matte surface.
+                  PosterThumbnail(work: work, width: double.infinity,
+                      height: double.infinity, fit: BoxFit.fitWidth,
+                      alignment: Alignment.topCenter),
+                  Positioned.fill(child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
+                        stops: const [0, .42, .64, .81, 1],
                         colors: [
-                          const Color(0x640C0B15),
+                          const Color(0x540C0B15),
                           Colors.transparent,
-                          tone.withValues(alpha: .30),
-                          tone,
+                          tone.withValues(alpha: .10),
+                          base.withValues(alpha: .90),
+                          base,
                         ],
-                        stops: const [0, .45, .73, 1],
-                      )),
-                    )),
-                    Positioned(top: 5, left: 5,
-                      child: IconButton.filledTonal(
-                        tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => widget.onToggleWatchlist(work),
-                        icon: Icon(widget.isWatchlisted(work)
-                          ? Icons.bookmark_added : Icons.bookmark_add_outlined,
-                          color: ivory, size: 18))),
-                    Positioned(top: 5, right: 5,
-                      child: IconButton.filledTonal(
-                        tooltip: 'Adicionar à Nossa Órbita',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => widget.onToggleShared(work),
-                        icon: Icon(loved
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_outline_rounded,
-                          size: 18,
-                          color: loved ? const Color(0xFFF0B6C2) : ivory))),
-                    Positioned(bottom: 7, right: 5,
-                      child: IconButton.filledTonal(
-                        tooltip: work.kind == 'Livro'
-                          ? 'Marcar como lido' : 'Marcar como assistido',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => widget.onToggleCompleted(work),
-                        icon: Icon(widget.isCompleted(work)
-                          ? Icons.check_circle : Icons.check_circle_outline,
-                          color: widget.isCompleted(work)
-                            ? const Color(0xFF97CDB4) : ivory,
-                          size: 18))),
-                    Positioned(bottom: 14, left: 10,
-                      child: Text(work.kind.toUpperCase(),
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ivory, letterSpacing: 1.5,
-                          fontSize: 9, fontWeight: FontWeight.w800))),
-                  ])),
-                  SizedBox(
-                    height: 80,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [tone, Color.lerp(tone, night, .62)!],
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              height: 40,
-                              child: Align(
-                                alignment: Alignment.topLeft,
-                                child: Text(
-                                  work.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  softWrap: true,
-                                  style: const TextStyle(
-                                    color: ivory, fontFamily: 'serif',
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14, height: 1.17,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const Spacer(),
-                            Text([
-                              if (work.year > 0) work.year.toString(),
-                              if (work.kind == 'Livro' &&
-                                  work.creator.isNotEmpty) work.creator
-                              else if (work.kind != 'Livro') work.provider,
-                            ].join(' · '),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xFFE4CAD6), fontSize: 10),
-                            ),
-                          ],
-                        ),
                       ),
                     ),
+                  )),
+                  Positioned(top: 5, left: 5,
+                    child: IconButton.filledTonal(
+                      tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => widget.onToggleWatchlist(work),
+                      icon: Icon(widget.isWatchlisted(work)
+                        ? Icons.bookmark_added : Icons.bookmark_add_outlined,
+                        color: ivory, size: 18))),
+                  Positioned(top: 5, right: 5,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Adicionar à Nossa Órbita',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => widget.onToggleShared(work),
+                      icon: Icon(loved
+                        ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
+                        size: 18,
+                        color: loved ? const Color(0xFFF0B6C2) : ivory))),
+                  Positioned(bottom: 102, right: 5,
+                    child: IconButton.filledTonal(
+                      tooltip: work.kind == 'Livro'
+                        ? 'Marcar como lido' : 'Marcar como assistido',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => widget.onToggleCompleted(work),
+                      icon: Icon(widget.isCompleted(work)
+                        ? Icons.check_circle : Icons.check_circle_outline,
+                        color: widget.isCompleted(work)
+                          ? const Color(0xFF97CDB4) : ivory,
+                        size: 18))),
+                  Positioned(bottom: 114, left: 11, right: 51,
+                    child: Text(work.kind.toUpperCase(),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: ivory, letterSpacing: 1.5,
+                        fontSize: 9, fontWeight: FontWeight.w800))),
+                  Positioned(bottom: 9, left: 11, right: 10,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(height: 41,
+                          child: Align(alignment: Alignment.topLeft,
+                            child: Text(work.title,
+                              maxLines: 2, overflow: TextOverflow.ellipsis,
+                              softWrap: true,
+                              style: const TextStyle(
+                                color: ivory, fontFamily: 'serif',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14, height: 1.17)),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text([
+                          if (work.year > 0) work.year.toString(),
+                          if (work.kind == 'Livro' &&
+                              work.creator.isNotEmpty) work.creator
+                          else if (work.kind != 'Livro') work.provider,
+                        ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFE4CAD6), fontSize: 10)),
+                      ],
+                    ),
                   ),
-                ],
+                ]),
               ),
             ),
           ),
-        ));
+        );
       },
     );
   }
-
 }
