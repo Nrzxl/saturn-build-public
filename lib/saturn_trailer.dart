@@ -19,6 +19,11 @@ class SaturnTrailerPreview extends StatefulWidget {
   final String workTitle;
   final String workMetadata;
 
+  /// Browser Web/PWA: silent autoplay can start without a click when allowed.
+  /// Never force an audible play; native builds retain their current behavior.
+  static bool shouldAutoplay({required bool web, required bool hero}) =>
+      web && hero;
+
   @override
   State<SaturnTrailerPreview> createState() => _SaturnTrailerPreviewState();
 }
@@ -33,11 +38,8 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   static bool validVideoId(String id) =>
       RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id);
 
-  /// Browsers generally permit *muted* autoplay, but may reject it because
-  /// of user settings. SATURN's existing play button always remains usable.
-  static bool mayAutoplay({required bool web, required bool hero}) =>
-      web && hero;
-
+  /// Browsers may reject autoplay because of local settings. Keep the
+  /// SATURN Play button operational as a user-gesture fallback.
   @override
   void initState() {
     super.initState();
@@ -45,7 +47,8 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   }
 
   void _scheduleMutedAutoplay() {
-    if (!mayAutoplay(web: kIsWeb, hero: widget.heroMode)) return;
+    if (!SaturnTrailerPreview.shouldAutoplay(
+        web: kIsWeb, hero: widget.heroMode)) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _controller == null &&
           !_exhausted && _candidates.isNotEmpty) {
