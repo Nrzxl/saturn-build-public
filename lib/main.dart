@@ -25,6 +25,7 @@ import 'saturn_book_details.dart';
 import 'saturn_book_cover.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
+import 'saturn_couple_suggestions.dart';
 import 'saturn_year_recap.dart';
 import 'update_center.dart';
 
@@ -1014,6 +1015,120 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   String _ritualId(String key) => SaturnOrbitRituals.workId(_ritualOps, key);
+
+  void _suggestToPartner(Work work) {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    setState(() {
+      savedWorks.putIfAbsent(work.id, () => work);
+      SaturnCoupleSuggestion.send(_ritualOps,
+          from: profile, workId: work.id, at: stamp);
+    });
+    _save();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Sugestão enviada para ' + profiles[1 - profile])));
+  }
+
+  void _answerSuggestion(SaturnCoupleSuggestion suggestion, String decision) {
+    final accepted = decision == 'accepted';
+    if (!SaturnCoupleSuggestion.answer(_ritualOps, suggestion.key,
+        by: profile, status: decision,
+        at: DateTime.now().millisecondsSinceEpoch)) return;
+    setState(() {});
+    _save();
+    if (accepted) {
+      final work = savedWorks[suggestion.workId];
+      if (work != null && !currentWatchlist.contains(work.id)) {
+        _toggleWatchlist(work);
+      }
+    }
+  }
+
+  Widget _coupleSuggestionsCard() {
+    final suggestions = SaturnCoupleSuggestion.read(_ritualOps)
+        .where((item) => item.status == 'pending' ||
+            item.status == 'accepted').take(12).toList(growable: false);
+    return Container(
+      key: const Key('saturn-couple-suggestions'),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(colors: [
+          Color(0xFF42283C), Color(0xFF251E2D)]),
+        border: Border.all(color: const Color(0x886A5364))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.mark_chat_unread_outlined, color: gold, size: 20),
+          SizedBox(width: 9),
+          Text('DE MIM PARA VOCÊ',
+            style: TextStyle(color: gold, letterSpacing: 1.4,
+              fontSize: 11, fontWeight: FontWeight.bold)),
+        ]),
+        const SizedBox(height: 6),
+        const Text('Uma história escolhida especialmente para o outro.',
+          style: TextStyle(color: Color(0xFFE6CFDA), fontSize: 11)),
+        const SizedBox(height: 12),
+        if (suggestions.isEmpty)
+          const Text('Abra a ficha de um título e toque em Sugerir.',
+            style: TextStyle(color: ivory, fontSize: 12))
+        else
+          for (final item in suggestions)
+            Builder(builder: (context) {
+              final work = savedWorks[item.workId];
+              if (work == null) return const SizedBox.shrink();
+              final mine = item.from == profile;
+              final pending = item.status == 'pending';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Material(
+                  color: const Color(0xFF211B29),
+                  borderRadius: BorderRadius.circular(15),
+                  child: Padding(
+                    padding: const EdgeInsets.all(9),
+                    child: Row(children: [
+                      InkWell(onTap: () => _details(work),
+                        child: PosterThumbnail(
+                          work: work, width: 58, height: 84)),
+                      const SizedBox(width: 11),
+                      Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(work.title, maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: ivory,
+                              fontSize: 13, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 4),
+                          Text(mine
+                              ? 'Para ' + profiles[item.to] +
+                                  (pending ? ' · enviada' : ' · aceita')
+                              : 'De ' + profiles[item.from] +
+                                  (pending ? ' · para você' : ' · aceita'),
+                            style: const TextStyle(
+                              color: gold, fontSize: 10)),
+                          if (!mine && pending)
+                            Wrap(spacing: 4, children: [
+                              TextButton(
+                                key: Key('saturn-suggestion-accept-' + item.key),
+                                onPressed: () =>
+                                    _answerSuggestion(item, 'accepted'),
+                                child: Text(work.kind == 'Livro'
+                                    ? 'Quero ler' : '+ Minha Watchlist')),
+                              TextButton(
+                                onPressed: () =>
+                                    _answerSuggestion(item, 'dismissed'),
+                                child: const Text('Agora não')),
+                            ]),
+                        ],
+                      )),
+                    ]),
+                  ),
+                ),
+              );
+            }),
+      ]),
+    );
+  }
+
 
   void _setRitualNomination(String period, int person, Work? work) {
     if (person != profile) return;
@@ -3806,6 +3921,7 @@ class _SaturnHomeState extends State<SaturnHome>
           _mobileSyncShortcut('couple'),
         _sharedUniverseHero(insights),
         _sharedCoverWall(),
+        _coupleSuggestionsCard(),
         _sharedYearRecap(DateTime.now()),
         _heading('Nossos encontros'),
         _sharedSeriesRotationCard(),
@@ -4193,6 +4309,13 @@ class _SaturnHomeState extends State<SaturnHome>
                   ),
                   const SizedBox(height: 16),
                 ],
+                OutlinedButton.icon(
+                  key: const Key('saturn-suggest-to-partner'),
+                  onPressed: () => _suggestToPartner(w),
+                  icon: const Icon(Icons.favorite_border_rounded, size: 17),
+                  label: Text('Sugerir para ' + profiles[1 - profile]),
+                ),
+                const SizedBox(height: 14),
                 const Text('MINHAS LISTAS',
                   style: TextStyle(color: gold, fontSize: 11,
                     letterSpacing: 1.8)),
