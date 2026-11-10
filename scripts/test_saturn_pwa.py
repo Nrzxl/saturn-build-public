@@ -50,7 +50,15 @@ class SaturnPwaTests(unittest.TestCase):
 
     def test_pwa_does_not_pretend_to_cache_the_whole_catalog(self):
         html = (WEB / "index.html").read_text(encoding="utf-8")
-        self.assertNotIn("serviceWorker.register(", html)
+        # Cover-only cache is allowed. The app bundle, user data, and
+        # catalog snapshots must never be cached/cleared by custom workers.
+        self.assertIn("saturn-cover-cache-sw.js", html)
+        worker = (WEB / "saturn-cover-cache-sw.js").read_text(encoding="utf-8")
+        self.assertIn("url.origin !== 'https://covers.openlibrary.org'", worker)
+        self.assertIn("MAX_CACHED_COVERS = 180", worker)
+        self.assertNotIn("supabase.co", worker)
+        self.assertNotIn("main.dart.js", worker)
+        self.assertNotIn("catalog/v1", worker)
         self.assertNotIn("localStorage.clear(", html)
         self.assertNotIn("caches.delete(", html)
         self.assertNotIn("indexedDB.deleteDatabase(", html)
