@@ -64,7 +64,7 @@ class SaturnStarRating extends StatelessWidget {
             padding: const EdgeInsets.only(left: 8),
             child: Text(
               value == 0 && !zeroIsRating
-                  ? 'Sem nota' : '${value.toStringAsFixed(1)} / 5',
+                  ? 'Sem nota' : '${value.toStringAsFixed(1)} ★',
               style: const TextStyle(
                 fontSize: 13,
                 color: Color(0xFFF2E8DF),

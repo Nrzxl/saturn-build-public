@@ -14,11 +14,17 @@ void main() {
         workTitle: 'Gladiador',
         heroMode: true,
         storyPreview: SizedBox(height: 225,
-          child: Text('Arte cinematográfica SATURN')),
+          child: Column(children: [
+            Text('Arte cinematográfica SATURN'),
+            Text('Gladiador'),
+          ])),
       ),
     )));
     expect(find.text('Arte cinematográfica SATURN'), findsOneWidget);
     expect(find.text('Gladiador'), findsOneWidget);
+    expect(find.byKey(const Key('saturn-single-cinematic-stage')),
+        findsOneWidget);
+    expect(find.text('ASSISTIR AO TRAILER'), findsOneWidget);
     expect(find.byKey(const Key('saturn-trailer-play-pause')),
         findsOneWidget);
     expect(find.byKey(const Key('saturn-trailer-mute')),

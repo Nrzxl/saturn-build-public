@@ -16,7 +16,7 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(
       body: SaturnStarRating(stars: 0, zeroIsRating: true),
     )));
-    expect(find.text('0.0 / 5'), findsOneWidget);
+    expect(find.text('0.0 ★'), findsOneWidget);
     expect(find.text('Sem nota'), findsNothing);
   });
 

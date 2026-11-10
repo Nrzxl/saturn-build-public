@@ -71,6 +71,7 @@ class Work {
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
   final String nativeTrailerSubtitleUrl;
+  final String imdbId;
   final String availabilityUpdatedAt;
   final bool availabilityChecked;
 
@@ -82,6 +83,7 @@ class Work {
        this.watchUrl = '', this.trailerYoutubeId = '',
        this.nativeTrailerUrl = '',
        this.nativeTrailerSubtitleUrl = '',
+       this.imdbId = '',
        this.genreIds = const [], this.externalRatings = const {},
        this.tmdbScore, this.tmdbVoteCount,
        this.availabilityUpdatedAt = '',
@@ -103,6 +105,7 @@ class Work {
         trailerYoutubeId: entry.trailerYoutubeId,
         nativeTrailerUrl: entry.nativeTrailerUrl,
         nativeTrailerSubtitleUrl: entry.nativeTrailerSubtitleUrl,
+        imdbId: entry.imdbId,
         availabilityChecked: entry.availabilityChecked,
         availabilityUpdatedAt: entry.availabilityUpdatedAt,
       );
@@ -147,6 +150,7 @@ class Work {
         nativeTrailerUrl: (data['nativeTrailerUrl'] ?? '').toString(),
         nativeTrailerSubtitleUrl:
             (data['nativeTrailerSubtitleUrl'] ?? '').toString(),
+        imdbId: (data['imdbId'] ?? '').toString(),
         availabilityChecked: data['availabilityChecked'] == true,
         availabilityUpdatedAt:
             (data['availabilityUpdatedAt'] ?? '').toString(),
@@ -169,6 +173,7 @@ class Work {
         'trailerYoutubeId': trailerYoutubeId,
         'nativeTrailerUrl': nativeTrailerUrl,
         'nativeTrailerSubtitleUrl': nativeTrailerSubtitleUrl,
+        'imdbId': imdbId,
         'availabilityChecked': availabilityChecked,
         'availabilityUpdatedAt': availabilityUpdatedAt,
       };
@@ -2231,7 +2236,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         ? (work.year > 0
                             ? work.kind + ' · ' + work.year.toString()
                             : work.kind)
-                        : stars.toStringAsFixed(1) + ' ★ / 5',
+                        : stars.toStringAsFixed(1) + ' ★',
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: tier?.color ?? const Color(0xFFCEB9C6),
@@ -4367,8 +4372,8 @@ class _SaturnHomeState extends State<SaturnHome>
           .clamp(142.0, 640.0).toDouble();
       return ClipRRect(
         borderRadius: BorderRadius.circular(23),
-        child: SizedBox(
-          height: wide ? 282 : 237,
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
           child: Stack(fit: StackFit.expand, children: [
             _cinematicArtworkBackground(work),
             Positioned(

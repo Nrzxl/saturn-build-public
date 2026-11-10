@@ -30,6 +30,9 @@ MAX_DETAILS = max(0, min(1200, int(os.environ.get("SATURN_WATCH_LOOKUPS", "500")
 MAX_TRAILERS = max(0, min(800, int(os.environ.get("SATURN_TRAILER_LOOKUPS", "360"))))
 MAX_PANORAMA_LOOKUPS = max(0, min(900,
     int(os.environ.get("SATURN_PANORAMA_LOOKUPS", "350"))))
+# IMDb IDs are verified from TMDB external_ids (not guessed from names).
+MAX_IMDB_LOOKUPS = max(0, min(500,
+    int(os.environ.get("SATURN_IMDB_LOOKUPS", "250"))))
 # Public snapshots must not redistribute licensed scores without approval.
 OMDB_PUBLICATION_ALLOWED = os.environ.get("SATURN_CRITIC_PUBLICATION_ALLOWED") == "true"
 OMDB_API_KEY = (os.environ.get("SATURN_OMDB_API_KEY", "").strip()
@@ -129,6 +132,10 @@ def save_result(media: str, record: dict) -> str | None:
         "title": title,
         "originalTitle": (record.get("original_title") or
                           record.get("original_name") or title).strip(),
+        "imdbId": record.get("imdb_id")
+            if isinstance(record.get("imdb_id"), str) and
+            re.fullmatch(r"tt[0-9]{7,10}", record["imdb_id"])
+            else "",
         "kind": kind,
         "description": description[:1400],
         "year": year(record.get("release_date") or
@@ -410,6 +417,23 @@ def build() -> None:
                   file=sys.stderr)
         if (i + 1) % 100 == 0:
             print(f"Watch provider details: {i + 1}")
+
+    verified_imdb_count = 0
+    for ident in prioritized[:MAX_IMDB_LOOKUPS]:
+        if TITLES[ident].get("imdbId"):
+            continue
+        try:
+            _, media, sid = ident.split(":")
+            external = get(f"/{media}/{sid}/external_ids")
+            imdb_id = external.get("imdb_id")
+            if isinstance(imdb_id, str) and re.fullmatch(
+                r"tt[0-9]{7,10}", imdb_id):
+                TITLES[ident]["imdbId"] = imdb_id
+                verified_imdb_count += 1
+        except Exception as exc:
+            print(f"IMDb ID unavailable for {ident}: {type(exc).__name__}",
+                  file=sys.stderr)
+    print(f"Verified extra IMDb identifiers: {verified_imdb_count}")
 
     missing_artwork = [ident for ident in prioritized
                        if not TITLES[ident]["backdropUrl"]]
