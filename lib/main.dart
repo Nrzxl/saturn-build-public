@@ -71,6 +71,7 @@ class Work {
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
   final String nativeTrailerSubtitleUrl;
+  final String imdbId;
   final String availabilityUpdatedAt;
   final bool availabilityChecked;
 
@@ -82,6 +83,7 @@ class Work {
        this.watchUrl = '', this.trailerYoutubeId = '',
        this.nativeTrailerUrl = '',
        this.nativeTrailerSubtitleUrl = '',
+       this.imdbId = '',
        this.genreIds = const [], this.externalRatings = const {},
        this.tmdbScore, this.tmdbVoteCount,
        this.availabilityUpdatedAt = '',
@@ -103,6 +105,7 @@ class Work {
         trailerYoutubeId: entry.trailerYoutubeId,
         nativeTrailerUrl: entry.nativeTrailerUrl,
         nativeTrailerSubtitleUrl: entry.nativeTrailerSubtitleUrl,
+        imdbId: entry.imdbId,
         availabilityChecked: entry.availabilityChecked,
         availabilityUpdatedAt: entry.availabilityUpdatedAt,
       );
@@ -147,6 +150,7 @@ class Work {
         nativeTrailerUrl: (data['nativeTrailerUrl'] ?? '').toString(),
         nativeTrailerSubtitleUrl:
             (data['nativeTrailerSubtitleUrl'] ?? '').toString(),
+        imdbId: (data['imdbId'] ?? '').toString(),
         availabilityChecked: data['availabilityChecked'] == true,
         availabilityUpdatedAt:
             (data['availabilityUpdatedAt'] ?? '').toString(),
@@ -169,6 +173,7 @@ class Work {
         'trailerYoutubeId': trailerYoutubeId,
         'nativeTrailerUrl': nativeTrailerUrl,
         'nativeTrailerSubtitleUrl': nativeTrailerSubtitleUrl,
+        'imdbId': imdbId,
         'availabilityChecked': availabilityChecked,
         'availabilityUpdatedAt': availabilityUpdatedAt,
       };
