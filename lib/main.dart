@@ -1770,8 +1770,10 @@ class _SaturnHomeState extends State<SaturnHome>
         w.kind == 'Filme' && currentWatchlist.contains(w.id) &&
         w.posterUrl.startsWith('https://')).toList(growable: false);
     final likedGenres = <int>{};
-    for (final film in personal) {
-      likedGenres.addAll(film.genreIds);
+    for (final work in allWorks) {
+      if (currentWatchlist.contains(work.id)) {
+        likedGenres.addAll(work.genreIds);
+      }
     }
     final catalog = recommendedMovies.where((w) =>
         w.kind == 'Filme' && w.posterUrl.startsWith('https://')).toList();
@@ -1908,6 +1910,7 @@ class _SaturnHomeState extends State<SaturnHome>
                                 : constraints.maxWidth * (spacious ? 0.60 : 0.58)),
                           child: Text(
                             featured?.title ?? 'Seu universo de histórias',
+                             key: const Key('saturn-featured-title'),
                             maxLines: 3, overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontFamily: 'serif', color: ivory,
