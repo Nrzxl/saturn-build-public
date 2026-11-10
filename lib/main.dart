@@ -1832,18 +1832,25 @@ class _SaturnHomeState extends State<SaturnHome>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF57283D),
-                          Color(0xFF2C1D2E),
-                          night,
-                        ],
-                      ),
-                    ),
+                  FutureBuilder<Color>(
+                    future: SaturnArtwork.toneFor(
+                      featured == null ? '' :
+                      SaturnArtwork.bestUrl(featured.posterUrl,
+                        devicePixels: 580)),
+                    builder: (context, snapshot) {
+                      final tone = snapshot.data ?? SaturnArtwork.fallback;
+                      return DecoratedBox(decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            tone,
+                            Color.lerp(tone, night, .48)!,
+                            night,
+                          ],
+                        ),
+                      ));
+                    },
                   ),
                   if (featured != null)
                     Positioned.fill(
