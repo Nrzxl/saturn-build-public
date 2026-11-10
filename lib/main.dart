@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -4256,9 +4256,9 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Future<void> _details(Work w) async {
-    final canEmbedTrailer = kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.android;
+    // Flutter widget tests emulate Android's TargetPlatform on desktop.
+    // Only the browser has the official iframe platform initialized here.
+    final canEmbedTrailer = kIsWeb;
     final current = entry(w);
     String status = current['status'] ?? 'Quero conhecer';
     double rating = (current['rating'] as num?)?.toDouble() ?? 0;
