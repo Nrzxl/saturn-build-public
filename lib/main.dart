@@ -2770,88 +2770,132 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
 
+
+  // Cover-first ritual: actions remain available in the contextual menu
+  // without filling each couple card with multiple labels and instructions.
   Widget _ritualProposer(String period, bool book, int person) {
     final key = SaturnOrbitRituals.nomination(period, person);
     final nominatedId = _ritualId(key);
     final work = _ritualWork(nominatedId);
     final chosenId = _ritualId(SaturnOrbitRituals.selection(period));
+    final mine = person == profile;
+    final done = book && work != null &&
+        SaturnOrbitRituals.bookFinishedAndRated(records, person, work.id);
     return Container(
-      key: Key('saturn-ritual-${book ? 'book' : 'film'}-person-$person'),
-      padding: const EdgeInsets.all(13),
+      key: Key('saturn-ritual-' + (book ? 'book' : 'film') +
+          '-person-' + person.toString()),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xCC241A2B),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0x665B4150)),
+        color: const Color(0xAA251E2A),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0x665B4756)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Icon(Icons.person_outline, size: 17, color: gold),
+          Text(profileAvatars[person],
+              style: const TextStyle(fontSize: 17)),
           const SizedBox(width: 7),
           Expanded(child: Text(profiles[person],
+            maxLines: 1, overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: ivory, fontWeight: FontWeight.w700))),
+              color: ivory, fontWeight: FontWeight.w700, fontSize: 13))),
           if (!book && work?.id == chosenId && work != null)
-            const Icon(Icons.check_circle, size: 18, color: gold),
+            const Icon(Icons.check_circle_rounded, color: gold, size: 18),
+          if (mine && nominatedId.isNotEmpty)
+            PopupMenuButton<String>(
+              key: Key('saturn-ritual-actions-' +
+                  (book ? 'book' : 'film') + '-' + person.toString()),
+              tooltip: 'Opções da minha escolha',
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.more_horiz_rounded, color: gold),
+              onSelected: (action) {
+                if (action == 'change') {
+                  _nominateRitual(period, book);
+                } else if (action == 'remove') {
+                  _setRitualNomination(period, person, null);
+                }
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'change',
+                  child: Text(book ? 'Trocar meu livro' : 'Trocar indicação'),
+                ),
+                PopupMenuItem(
+                  value: 'remove',
+                  child: Text(book ? 'Retirar meu livro' : 'Retirar indicação'),
+                ),
+              ],
+            ),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 9),
         if (work != null)
           InkWell(
             onTap: () => _details(work),
-            child: Row(children: [
-              PosterThumbnail(work: work, width: 48, height: 71),
-              const SizedBox(width: 10),
-              Expanded(child: Text(work.title,
-                maxLines: 3, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: ivory, fontSize: 13,
-                  fontWeight: FontWeight.w600))),
-            ]),
+            borderRadius: BorderRadius.circular(12),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                PosterThumbnail(work: work, width: 80, height: 112),
+                const SizedBox(width: 12),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(work.title, maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: ivory,
+                        fontSize: 14, fontWeight: FontWeight.bold,
+                        height: 1.3)),
+                    if (book) ...[
+                      const SizedBox(height: 10),
+                      _ritualBookFace(person, work),
+                    ] else if (work.id == chosenId) ...[
+                      const SizedBox(height: 8),
+                      const Text('Nossa escolha',
+                        style: TextStyle(color: gold, fontSize: 11)),
+                    ],
+                  ],
+                )),
+              ],
+            ),
           )
         else
-          Text(nominatedId.isNotEmpty
-              ? 'A indicação ainda não está disponível neste catálogo.'
-              : 'Ainda não indicou ${book ? 'um livro' : 'um filme'}.',
-            style: const TextStyle(
-              color: Color(0xFFCCB7C2), fontSize: 12)),
-        if (book && work != null) ...[
-          const SizedBox(height: 10),
-          _ritualBookFace(person, work),
-          if (person == profile &&
-              !SaturnOrbitRituals.bookFinishedAndRated(
-                  records, person, work.id))
-            Padding(
-              padding: const EdgeInsets.only(top: 7),
-              child: FilledButton.icon(
-                onPressed: () => _details(work),
-                icon: const Icon(Icons.rate_review_outlined, size: 17),
-                label: const Text('Marcar leitura e dar nota'),
-              ),
-            ),
-        ],
-        const SizedBox(height: 12),
-        if (person == profile)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 17),
+            child: Row(children: [
+              const Icon(Icons.add_circle_outline, size: 19,
+                color: Color(0xFFB9A1B0)),
+              const SizedBox(width: 10),
+              Expanded(child: Text(nominatedId.isEmpty
+                  ? 'Aguardando escolha'
+                  : 'Título não disponível neste aparelho',
+                style: const TextStyle(
+                  color: Color(0xFFD8C3CE), fontSize: 12))),
+            ]),
+          ),
+        if (mine && work == null) ...[
+          const SizedBox(height: 9),
           OutlinedButton.icon(
             onPressed: () => _nominateRitual(period, book),
-            icon: Icon(work == null
-                ? Icons.add_circle_outline : Icons.edit_outlined,
-              size: 16),
-            label: Text(book
-                ? (work == null ? 'Escolher meu livro' : 'Trocar meu livro')
-                : (work == null ? 'Fazer minha indicação' : 'Trocar indicação')),
-          )
-        else
-          Text('Troque para o perfil ${profiles[person]} para indicar.',
-            style: const TextStyle(
-              color: Color(0xFFBDA9B3), fontSize: 11)),
-        if (person == profile && nominatedId.isNotEmpty)
-          TextButton(
-            onPressed: () => _setRitualNomination(period, person, null),
-            child: Text(book ? 'Retirar meu livro' : 'Retirar indicação')),
-        if (!book && work != null && work.id != chosenId)
+            icon: const Icon(Icons.add, size: 17),
+            label: Text(book ? 'Escolher meu livro'
+                : 'Fazer minha indicação'),
+          ),
+        ],
+        if (book && work != null && mine && !done) ...[
+          const SizedBox(height: 9),
+          TextButton.icon(
+            onPressed: () => _details(work),
+            icon: const Icon(Icons.rate_review_outlined, size: 16),
+            label: const Text('Marcar leitura e dar nota'),
+          ),
+        ],
+        if (!book && work != null && work.id != chosenId) ...[
+          const SizedBox(height: 8),
           TextButton.icon(
             onPressed: () => _chooseRitualWork(period, work),
-            icon: const Icon(Icons.favorite_border, size: 16),
-            label: const Text('Escolher nosso filme')),
+            icon: const Icon(Icons.favorite_border_rounded, size: 16),
+            label: const Text('Escolher nosso filme'),
+          ),
+        ],
       ]),
     );
   }
@@ -2863,12 +2907,15 @@ class _SaturnHomeState extends State<SaturnHome>
       message: finished
           ? 'Leitura concluída e avaliada.'
           : 'Leitura do mês em andamento · o prazo ainda não terminou.',
-      child: Chip(
-        avatar: Text(finished ? '😊' : '📖',
-          style: const TextStyle(fontSize: 17)),
-        label: Text(profiles[person] +
-            (finished ? ': Lido e avaliado' : ': Em leitura')),
-      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(finished ? Icons.check_circle_outline : Icons.auto_stories_outlined,
+            size: 14, color: gold),
+        const SizedBox(width: 5),
+        Flexible(child: Text(profiles[person] +
+            (finished ? ': Lido e avaliado' : ': Em leitura'),
+          maxLines: 2, overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: gold, fontSize: 10.5))),
+      ]),
     );
   }
 
@@ -2881,100 +2928,57 @@ class _SaturnHomeState extends State<SaturnHome>
     final chosenId = _ritualId(SaturnOrbitRituals.selection(period));
     final selected = _ritualWork(chosenId);
     return Container(
-      key: Key('saturn-ritual-${book ? 'book' : 'film'}'),
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 15),
-      padding: const EdgeInsets.all(17),
+      key: Key('saturn-ritual-' + (book ? 'book' : 'film')),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [Color(0xFF4D283E), Color(0xFF271E2B), night]),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0x886B4E5B)),
+        gradient: const LinearGradient(colors: [
+          Color(0xFF392433), Color(0xFF231E29), Color(0xFF191A22),
+        ]),
+        borderRadius: BorderRadius.circular(23),
+        border: Border.all(color: const Color(0x66765B67)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Icon(book ? Icons.menu_book_outlined
-              : Icons.local_movies_outlined, color: gold, size: 26),
+          Icon(book ? Icons.menu_book_outlined : Icons.local_movies_outlined,
+            color: gold, size: 20),
           const SizedBox(width: 10),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(
-                color: ivory, fontFamily: 'serif', fontSize: 22,
-                fontWeight: FontWeight.bold)),
-              Text(dateLabel, style: const TextStyle(
-                color: gold, fontSize: 11)),
-            ],
-          )),
+          Expanded(child: Text(title,
+            style: const TextStyle(color: ivory, fontFamily: 'serif',
+              fontSize: 21, fontWeight: FontWeight.bold))),
+          Text(dateLabel,
+            style: const TextStyle(color: gold, fontSize: 10)),
         ]),
-        const SizedBox(height: 9),
-        Text(book
-            ? 'Uma leitura diferente para cada pessoa, com nota e resenha '
-              'individuais. Não há votação de livro.'
-            : 'Um filme indicado por cada um. Escolham juntos o que assistir.',
-          style: const TextStyle(
-            color: Color(0xFFD6C2CE), fontSize: 12, height: 1.35)),
-        const SizedBox(height: 14),
+        const SizedBox(height: 13),
         LayoutBuilder(builder: (context, constraints) {
           final large = constraints.maxWidth >= 570;
           final cardWidth = large
               ? (constraints.maxWidth - 10) / 2 : constraints.maxWidth;
           return Wrap(spacing: 10, runSpacing: 10, children: [
             for (var person = 0; person < 2; person++)
-              SizedBox(
-                width: cardWidth,
+              SizedBox(width: cardWidth,
                 child: _ritualProposer(period, book, person)),
           ]);
         }),
-        if (!book) ...[
-          const SizedBox(height: 14),
-          const Divider(color: Color(0x665F4355)),
-          const SizedBox(height: 6),
-          const Text('NOSSA ESCOLHA',
-            style: TextStyle(color: gold, fontSize: 10,
-              fontWeight: FontWeight.bold, letterSpacing: 1.6)),
-          const SizedBox(height: 10),
-          if (selected == null)
-            Text(chosenId.isEmpty
-                ? 'Aguardando vocês escolherem uma das indicações.'
-                : 'O título escolhido ainda não foi carregado neste aparelho.',
-              style: const TextStyle(color: ivory, fontSize: 12))
-          else
-            InkWell(
-              onTap: () => _details(selected),
-              child: Row(children: [
-                PosterThumbnail(work: selected, width: 63, height: 92),
-                const SizedBox(width: 12),
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(selected.title, maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: ivory, fontSize: 17,
-                        fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    const Text('Nosso filme para este fim de semana',
-                      style: TextStyle(color: gold, fontSize: 11)),
-                    const SizedBox(height: 7),
-                    const Text('Toque para abrir a ficha',
-                      style: TextStyle(
-                        color: Color(0xFFC9B6C0), fontSize: 11)),
-                  ],
-                )),
-              ]),
-            ),
-        ] else ...[
+        if (!book && selected != null) ...[
           const SizedBox(height: 12),
-          const Text(
-            'Cada perfil escolhe e avalia seu próprio livro. '
-            'A carinha muda quando a leitura e a nota estiverem concluídas.',
-            style: TextStyle(
-              color: Color(0xFFCDB9C4), fontSize: 11, height: 1.35),
+          InkWell(
+            onTap: () => _details(selected),
+            borderRadius: BorderRadius.circular(14),
+            child: Row(children: [
+              const Icon(Icons.favorite_rounded, color: gold, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Filme escolhido · ' + selected.title,
+                maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: ivory,
+                  fontSize: 12, fontWeight: FontWeight.w600))),
+              const Icon(Icons.arrow_outward_rounded, color: gold, size: 17),
+            ]),
           ),
         ],
       ]),
     );
   }
-
 
   void _saveSeriesTurn(Work work, {
     required bool registerHerCurrent,
