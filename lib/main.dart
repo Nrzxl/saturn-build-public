@@ -2231,7 +2231,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         ? (work.year > 0
                             ? work.kind + ' · ' + work.year.toString()
                             : work.kind)
-                        : stars.toStringAsFixed(1) + ' ★ / 5',
+                        : stars.toStringAsFixed(1) + ' ★',
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: tier?.color ?? const Color(0xFFCEB9C6),
@@ -4367,8 +4367,8 @@ class _SaturnHomeState extends State<SaturnHome>
           .clamp(142.0, 640.0).toDouble();
       return ClipRRect(
         borderRadius: BorderRadius.circular(23),
-        child: SizedBox(
-          height: wide ? 282 : 237,
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
           child: Stack(fit: StackFit.expand, children: [
             _cinematicArtworkBackground(work),
             Positioned(
