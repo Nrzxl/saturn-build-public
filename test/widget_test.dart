@@ -47,6 +47,64 @@ void main() {
     expect(first['finished'], true);
   });
 
+  testWidgets('Nós exibe escolhas antecipadas e promove a próxima série',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1440, 1400);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final current = Work('series:current', 'Atual escolhida por ela',
+        'Série', 'A nossa série atual.', 2026);
+    final mine = Work('series:mine', 'Minha próxima série',
+        'Série', 'Escolhida antecipadamente.', 2026);
+    final hers = Work('series:hers', 'Próxima escolha dela',
+        'Série', 'Escolhida depois da minha.', 2026);
+    SharedPreferences.setMockInitialValues({
+      'catalog_saved': jsonEncode({
+        current.id: current.toJson(),
+        mine.id: mine.toJson(),
+        hers.id: hers.toJson(),
+      }),
+      'saturn_ritual_ops_v1': jsonEncode({
+        'series:turn:0': {
+          'workId': current.id, 'chosenBy': 1,
+          'finished': false, 'updatedAt': 100,
+        },
+        'series:turn:1': {
+          'workId': mine.id, 'chosenBy': 0,
+          'finished': false, 'queued': true, 'updatedAt': 200,
+        },
+        'series:turn:2': {
+          'workId': hers.id, 'chosenBy': 1,
+          'finished': false, 'queued': true, 'updatedAt': 300,
+        },
+      }),
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nós dois'));
+    await tester.pumpAndSettle();
+    final card = find.byKey(const Key('saturn-shared-series'));
+    await tester.scrollUntilVisible(card, 180,
+        scrollable: find.byType(Scrollable).first, maxScrolls: 18);
+    expect(find.byKey(const Key('saturn-series-queued-0')), findsOneWidget);
+    expect(find.byKey(const Key('saturn-series-queued-1')), findsOneWidget);
+    expect(find.byKey(const Key('saturn-series-edit-1')), findsOneWidget);
+    expect(find.byKey(const Key('saturn-series-edit-2')), findsNothing);
+    expect(find.byKey(const Key('saturn-series-next-choice')),
+        findsOneWidget);
+    final done = find.byKey(const Key('saturn-series-finish'));
+    await tester.ensureVisible(done);
+    await tester.tap(done);
+    await tester.pumpAndSettle();
+    final prefs = await SharedPreferences.getInstance();
+    final saved = jsonDecode(prefs.getString('saturn_ritual_ops_v1')!)
+        as Map<String, dynamic>;
+    expect((saved['series:turn:0'] as Map)['finished'], isTrue);
+    expect((saved['series:turn:1'] as Map)['queued'], isFalse);
+    expect((saved['series:turn:2'] as Map)['queued'], isTrue);
+  });
+
   testWidgets('Indicar e escolher filme salva ritual e Nossa Órbita',
       (tester) async {
     tester.view.devicePixelRatio = 1;
