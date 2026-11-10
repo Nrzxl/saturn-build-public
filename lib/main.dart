@@ -24,6 +24,7 @@ import 'saturn_book_details.dart';
 import 'saturn_book_cover.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
+import 'saturn_year_recap.dart';
 import 'update_center.dart';
 
 bool _saturnCloudReady = false;
@@ -256,6 +257,7 @@ class _SaturnHomeState extends State<SaturnHome>
   String _collectionKind = 'Tudo';
   String _sharedKind = 'Tudo';
   String _sharedMoment = 'Todas';
+  String _partnerShelfView = 'Watchlist';
   static const _collectionTypes = <String, String>{
     'Tudo': '', 'Filmes': 'Filme', 'Séries': 'Série',
     'Doramas': 'Dorama', 'Animes': 'Anime', 'Livros': 'Livro',
@@ -3213,10 +3215,10 @@ class _SaturnHomeState extends State<SaturnHome>
                   InkWell(
                     onTap: () => _details(work),
                     child: PosterThumbnail(
-                        work: work, width: 82, height: 119),
+                        work: work, width: 106, height: 155),
                   )
                 else
-                  Container(width: 82, height: 119,
+                  Container(width: 106, height: 155,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: const Color(0xFF322632),
@@ -3327,9 +3329,9 @@ class _SaturnHomeState extends State<SaturnHome>
                     InkWell(
                       onTap: () => _details(upcoming),
                       child: PosterThumbnail(
-                          work: upcoming, width: 48, height: 68))
+                          work: upcoming, width: 70, height: 102))
                   else
-                    Container(width: 48, height: 68,
+                    Container(width: 70, height: 102,
                       decoration: BoxDecoration(
                         color: wine,
                         borderRadius: BorderRadius.circular(7)),
@@ -3492,6 +3494,242 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
+
+  /// Prominent true cover art. Opens the original title without changing data.
+  Widget _orbitCoverRail(List<Work> works, {String keyName = 'saturn-orbit-rail'}) {
+    return SizedBox(height: 219, child: ListView.separated(
+      key: Key(keyName),
+      scrollDirection: Axis.horizontal,
+      itemCount: works.length,
+      separatorBuilder: (_, __) => const SizedBox(width: 11),
+      itemBuilder: (context, index) {
+        final w = works[index];
+        return SizedBox(width: 122, child: InkWell(
+          onTap: () => _details(w),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              PosterThumbnail(work: w, width: 119, height: 176),
+              const SizedBox(height: 6),
+              Text(w.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: ivory, fontSize: 11, fontWeight: FontWeight.w700)),
+            ]),
+        ));
+      },
+    ));
+  }
+
+  Widget _sharedCoverWall() {
+    final active = SaturnOrbitRituals.currentSeries(_ritualOps);
+    final queue = SaturnOrbitRituals.queuedSeries(_ritualOps);
+    final seen = <String>{};
+    final works = <Work>[];
+    for (final id in <String>[
+      if (active != null) active.workId,
+      ...queue.map((turn) => turn.workId),
+      ...shared.reversed,
+    ]) {
+      final w = savedWorks[id];
+      if (w != null && seen.add(id)) works.add(w);
+      if (works.length >= 12) break;
+    }
+    if (works.isEmpty) return const SizedBox.shrink();
+    return Container(
+      key: const Key('saturn-shared-cover-wall'),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      padding: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(23),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4B293D), Color(0xFF201E2E)]),
+        border: Border.all(color: const Color(0x88795669))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('CAPAS DA NOSSA HISTÓRIA',
+            style: TextStyle(color: gold, fontSize: 11,
+              fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+          const SizedBox(height: 6),
+          const Text('Nossas escolhas merecem o primeiro plano.',
+            style: TextStyle(color: Color(0xFFE6D0D9), fontSize: 12)),
+          const SizedBox(height: 13),
+          _orbitCoverRail(works, keyName: 'saturn-shared-cover-rail'),
+        ]),
+    );
+  }
+
+  /// Only the other profile's data is read; personal records are not edited.
+  Widget _partnerShelves() {
+    final other = 1 - profile;
+    final list = watchlists[other] ?? <String>{};
+    final month = SaturnOrbitRituals.monthPeriod(DateTime.now());
+    final bookId = _ritualId(SaturnOrbitRituals.nomination(month, other));
+    final book = _ritualWork(bookId);
+    final works = <Work>[];
+    for (final w in allWorks) {
+      if (_archivedFromCollection.contains(
+          other.toString() + ':' + w.id)) continue;
+      final record = records[other.toString() + ':' + w.id];
+      final inCollection = (record is Map && record['status'] != null)
+          || list.contains(w.id);
+      final show = switch (_partnerShelfView) {
+        'Watchlist' => list.contains(w.id) && w.kind != 'Livro',
+        'Coleção' => inCollection,
+        _ => w.kind == 'Livro' && (inCollection || w.id == bookId),
+      };
+      if (show) works.add(w);
+    }
+    if (_partnerShelfView == 'Livros' &&
+        book != null && !works.any((w) => w.id == book.id)) {
+      works.insert(0, book);
+    }
+    return Container(
+      key: const Key('saturn-partner-shelves'),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A202F),
+        borderRadius: BorderRadius.circular(23),
+        border: Border.all(color: const Color(0x88765966))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(profileAvatars[other], style: const TextStyle(fontSize: 26)),
+          const SizedBox(width: 10),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('A OUTRA METADE DA ÓRBITA',
+                style: TextStyle(color: gold, fontSize: 10,
+                  letterSpacing: 1.5, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('O universo de ' + profiles[other],
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: ivory, fontFamily: 'serif',
+                  fontSize: 21, fontWeight: FontWeight.bold)),
+            ])),
+          const Icon(Icons.visibility_outlined, color: gold),
+        ]),
+        const SizedBox(height: 8),
+        const Text('Explore as escolhas do outro perfil sem alterar '
+          'suas listas, notas ou leituras.',
+          style: TextStyle(color: Color(0xFFE2CED6), fontSize: 11)),
+        const SizedBox(height: 13),
+        Wrap(spacing: 7, runSpacing: 5, children: [
+          for (final option in const ['Watchlist', 'Coleção', 'Livros'])
+            ChoiceChip(
+              key: Key('saturn-partner-filter-' + option),
+              label: Text(option),
+              selected: option == _partnerShelfView,
+              selectedColor: wine,
+              onSelected: (_) => setState(() => _partnerShelfView = option)),
+        ]),
+        if (_partnerShelfView == 'Livros' && book != null) ...[
+          const SizedBox(height: 12),
+          InkWell(
+            key: const Key('saturn-partner-book-of-month'),
+            onTap: () => _details(book),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(17),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF4A2D42), Color(0xFF2A2635)])),
+              child: Row(children: [
+                PosterThumbnail(work: book, width: 89, height: 132),
+                const SizedBox(width: 13),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('LIVRO DO MÊS',
+                      style: TextStyle(color: gold, fontSize: 10,
+                        fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 7),
+                    Text(book.title, maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: ivory,
+                        fontFamily: 'serif', fontSize: 17,
+                        fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text('Escolha de ' + profiles[other],
+                      style: const TextStyle(
+                        color: Color(0xFFE5CBD5), fontSize: 11)),
+                  ])),
+              ]),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Text(works.length.toString() + ' título(s) · ' + _partnerShelfView,
+          style: const TextStyle(color: gold, fontSize: 11)),
+        const SizedBox(height: 9),
+        if (works.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            child: Text(_cloud?.connected == true
+                ? 'Nenhum título registrado nesta lista do outro perfil.'
+                : 'Ainda não há títulos sincronizados neste aparelho. '
+                  'Conecte a Nossa Órbita para compartilhar os registros.',
+              style: const TextStyle(
+                color: Color(0xFFD9C1CD), fontSize: 12)),
+          )
+        else
+          _orbitCoverRail(works, keyName: 'saturn-partner-cover-rail'),
+      ]),
+    );
+  }
+
+  Widget _sharedYearRecap(DateTime today) {
+    if (!SaturnYearRecap.visibleOn(today)) {
+      return const SizedBox.shrink();
+    }
+    final ids = SaturnYearRecap.updatedSharedIds(
+        records, shared, today.year);
+    final reviews = SaturnYearRecap.reviewsUpdatedInYear(
+        records, shared, today.year);
+    final covers = ids.map(_ritualWork)
+        .whereType<Work>().take(10).toList(growable: false);
+    return Container(
+      key: const Key('saturn-year-recap'),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      padding: const EdgeInsets.all(19),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: const Color(0xAAA58A76)),
+        gradient: const LinearGradient(colors: [
+          Color(0xFF60314D), Color(0xFF37263C), Color(0xFF1D1D2A),
+        ])),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('RETROSPECTIVA · NOSSA ÓRBITA',
+          style: TextStyle(color: gold, fontSize: 11,
+            letterSpacing: 1.5, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Text('O nosso ' + today.year.toString() + ' em histórias',
+          style: const TextStyle(color: ivory, fontFamily: 'serif',
+            fontSize: 25, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        const Text('Os momentos que registramos juntos neste ano.',
+          style: TextStyle(color: Color(0xFFE6D2DC), fontSize: 12)),
+        const SizedBox(height: 15),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _orbitMetric('títulos registrados', ids.length,
+              Icons.auto_stories_outlined),
+          _orbitMetric('resenhas do ano', reviews,
+              Icons.rate_review_outlined),
+        ]),
+        if (covers.isNotEmpty) ...[
+          const SizedBox(height: 15),
+          _orbitCoverRail(covers, keyName: 'saturn-recap-covers'),
+        ] else ...[
+          const SizedBox(height: 12),
+          const Text('Sem registros datados neste ano.',
+            style: TextStyle(color: ivory, fontSize: 12)),
+        ],
+        const SizedBox(height: 10),
+        const Text('Resumo de registros datados, sem inventar '
+          'quando os títulos foram assistidos.',
+          style: TextStyle(
+            color: Color(0xFFDCC6D0), fontSize: 10)),
+      ]),
+    );
+  }
+
   Widget _shared() {
     final all = allWorks.where((work) => shared.contains(work.id)).toList();
     final insights = SaturnCoupleInsights(
@@ -3510,6 +3748,8 @@ class _SaturnHomeState extends State<SaturnHome>
       key: const PageStorageKey('saturn_shared_orbit'),
       children: [
         _sharedUniverseHero(insights),
+        _sharedCoverWall(),
+        _sharedYearRecap(DateTime.now()),
         _heading('Nossos encontros'),
         _sharedSeriesRotationCard(),
         _ritualCard(
@@ -3525,6 +3765,7 @@ class _SaturnHomeState extends State<SaturnHome>
           book: true,
         ),
         _pastBookReminders(DateTime.now()),
+        _partnerShelves(),
         _sharedMomentFilters(),
         _collectionFilters(true),
         if (featured != null)
