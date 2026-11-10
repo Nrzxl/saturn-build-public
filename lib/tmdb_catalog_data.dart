@@ -13,8 +13,55 @@ class TmdbCatalogData {
   final http.Client client;
   final String base;
   final Map<String, Future<List<Map<String, dynamic>>>> _cache = {};
+  Future<Map<String, String>>? _backdropFallback;
 
   TmdbCatalogData(this.client, {this.base = baseUrl});
+
+  /// Small public, exact-ID artwork index for old snapshots. This does not
+  /// change saved ratings, personal data or the main TMDB catalog.
+  Future<Map<String, String>> _loadBackdropFallback() {
+    return _backdropFallback ??= () async {
+      try {
+        final response = await client.get(
+          Uri.parse('$base/backdrops-fallback.json'),
+          headers: const {'Accept': 'application/json'},
+        ).timeout(const Duration(seconds: 8));
+        if (response.statusCode != 200) return <String, String>{};
+        final doc = jsonDecode(utf8.decode(response.bodyBytes));
+        if (doc is! Map || doc['schema'] != 1 ||
+            doc['country'] != 'BR' || doc['overrides'] is! Map) {
+          return <String, String>{};
+        }
+        final rows = doc['overrides'] as Map;
+        final ids = RegExp(r'^tmdb:(movie|tv):[0-9]+$');
+        final images = RegExp(
+          r'^https://image\.tmdb\.org/t/p/(w1280|original)/[A-Za-z0-9_./-]+\.(jpg|jpeg|png|webp)$',
+        );
+        return <String, String>{
+          for (final row in rows.entries)
+            if (row.key is String && row.value is String &&
+                ids.hasMatch(row.key as String) &&
+                images.hasMatch(row.value as String))
+              row.key as String: row.value as String,
+        };
+      } catch (_) {
+        return <String, String>{};
+      }
+    }();
+  }
+
+  /// Real background by catalog ID; direct TMDB art wins over rescue data.
+  Future<String?> backdropForId(String id) async {
+    if (!RegExp(r'^tmdb:(movie|tv):[0-9]+$').hasMatch(id)) return null;
+    try {
+      final row = await findById(id);
+      final panorama = (row?['backdropUrl'] ?? '').toString();
+      if (panorama.isNotEmpty) return panorama;
+    } catch (_) {
+      // Rescue art remains available when the main snapshot cannot load.
+    }
+    return (await _loadBackdropFallback())[id];
+  }
 
   Future<List<Map<String, dynamic>>> load(String group) async {
     if (!groups.contains(group)) return [];

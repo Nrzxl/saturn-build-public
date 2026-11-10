@@ -127,8 +127,8 @@ class CatalogClient {
     }
     return _backdropLookupCache.putIfAbsent(workId, () async {
       try {
-        final row = await _tmdb.findById(workId);
-        return valid((row?['backdropUrl'] ?? '').toString());
+        final background = await _tmdb.backdropForId(workId);
+        return valid(background ?? '');
       } catch (_) {
         // An unavailable feed must not hide the poster or title details.
         return null;
