@@ -5039,8 +5039,10 @@ class PosterThumbnail extends StatelessWidget {
   final double width;
   final double height;
   final BoxFit fit;
+  final Alignment alignment;
   const PosterThumbnail({super.key, required this.work,
-    this.width = 54, this.height = 74, this.fit = BoxFit.cover});
+    this.width = 54, this.height = 74,
+    this.fit = BoxFit.cover, this.alignment = Alignment.center});
 
   @override
   Widget build(BuildContext context) {
@@ -5078,7 +5080,7 @@ class PosterThumbnail extends StatelessWidget {
           coverUrl,
           key: ValueKey('cover-' + work.id + '-' + coverUrl),
           width: width, height: height,
-          fit: fit,
+          fit: fit, alignment: alignment,
           cacheWidth: pixels,
           filterQuality: FilterQuality.high,
           gaplessPlayback: true,
@@ -5091,7 +5093,8 @@ class PosterThumbnail extends StatelessWidget {
                 (coverUrl != original ? original : '');
             if (!alternate.startsWith('https://')) return fallback;
             return Image.network(alternate,
-              width: width, height: height, fit: fit,
+              width: width, height: height,
+              fit: fit, alignment: alignment,
               cacheWidth: pixels, filterQuality: FilterQuality.high,
               errorBuilder: (context, error, trace) => fallback,
             );
@@ -5756,8 +5759,11 @@ class _CatalogExploreState extends State<CatalogExplore> {
                 key: Key('saturn-cinematic-cover-' + work.id),
                 onTap: () => widget.onOpen(work),
                 child: Stack(fit: StackFit.expand, children: [
+                  // Fit the *entire* poster from its top edge. The
+                  // bottom fades into one continuous matte surface.
                   PosterThumbnail(work: work, width: double.infinity,
-                      height: double.infinity),
+                      height: double.infinity, fit: BoxFit.fitWidth,
+                      alignment: Alignment.topCenter),
                   Positioned.fill(child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
