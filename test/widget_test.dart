@@ -130,6 +130,11 @@ void main() {
     await tester.scrollUntilVisible(person, 180,
         scrollable: find.byType(Scrollable).first, maxScrolls: 24);
     await tester.ensureVisible(nominate);
+    // The redesigned series hero is tall. Bring the ritual action into
+    // the actual 900px test viewport before sending a tap gesture.
+    await tester.drag(find.byType(Scrollable).first,
+        const Offset(0, -300));
+    await tester.pumpAndSettle();
     await tester.tap(nominate);
     await tester.pumpAndSettle();
     expect(find.text('Indicar o filme do fim de semana'), findsOneWidget);
