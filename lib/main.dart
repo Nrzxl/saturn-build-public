@@ -2486,6 +2486,33 @@ class _SaturnHomeState extends State<SaturnHome>
           style: TextStyle(
             color: Color(0xFFE4CCD5), fontSize: 12, height: 1.4)),
         const SizedBox(height: 17),
+        Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 13, vertical: 11),
+          decoration: BoxDecoration(
+            color: const Color(0x55322438),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0x77765C68))),
+          child: Row(children: [
+            const Text('🪐', style: TextStyle(fontSize: 23)),
+            const SizedBox(width: 7),
+            Text(profiles[0], style: const TextStyle(
+              color: ivory, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 10),
+            const Expanded(child: Divider(color: Color(0x997A5868))),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Icon(Icons.favorite_rounded,
+                color: Color(0xFFF0B6C2), size: 20)),
+            const Expanded(child: Divider(color: Color(0x997A5868))),
+            const SizedBox(width: 10),
+            Text(profiles[1], style: const TextStyle(
+              color: ivory, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 7),
+            const Text('🌙', style: TextStyle(fontSize: 23)),
+          ]),
+        ),
+        const SizedBox(height: 15),
         Wrap(spacing: 8, runSpacing: 8, children: [
           _orbitMetric('histórias', insights.ids.length,
             Icons.auto_stories_outlined),
@@ -2877,15 +2904,31 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
 
-  void _saveSeriesTurn(Work work, {required bool registerHerCurrent}) {
+  void _saveSeriesTurn(Work work, {
+    required bool registerHerCurrent,
+    SaturnSeriesTurn? editTurn,
+  }) {
     final chosenBy = registerHerCurrent ? 1 : profile;
-    final allowed = registerHerCurrent
-        ? SaturnOrbitRituals.canRegisterHerExistingSeries(_ritualOps)
-        : SaturnOrbitRituals.mayChooseSeries(_ritualOps, chosenBy);
+    final allowed = editTurn != null
+        ? SaturnOrbitRituals.mayEditQueuedSeries(
+            _ritualOps, editTurn, profile)
+        : registerHerCurrent
+            ? SaturnOrbitRituals.canRegisterHerExistingSeries(_ritualOps)
+            : SaturnOrbitRituals.mayChooseSeries(_ritualOps, chosenBy);
     if (!allowed || !const {'Série', 'Anime', 'Dorama'}.contains(work.kind)) {
       return;
     }
-    final number = SaturnOrbitRituals.nextSeriesNumber(_ritualOps);
+    if (!SaturnOrbitRituals.canUseSeriesWork(
+        _ritualOps, work.id, replacingNumber: editTurn?.number)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Esta série já está na maratona de vocês.')));
+      return;
+    }
+    final number = editTurn?.number ??
+        SaturnOrbitRituals.nextSeriesNumber(_ritualOps);
+    final isQueued = editTurn != null ||
+        SaturnOrbitRituals.currentSeries(_ritualOps) != null ||
+        SaturnOrbitRituals.queuedSeries(_ritualOps).isNotEmpty;
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
       savedWorks.putIfAbsent(work.id, () => work);
@@ -2893,6 +2936,7 @@ class _SaturnHomeState extends State<SaturnHome>
         'workId': work.id,
         'chosenBy': chosenBy,
         'finished': false,
+        'queued': isQueued,
         'updatedAt': stamp,
       };
       if (!shared.contains(work.id)) {
@@ -2906,24 +2950,44 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   void _finishSharedSeries(SaturnSeriesTurn current) {
-    final latest = SaturnOrbitRituals.currentSeries(_ritualOps);
-    if (latest == null || latest.number != current.number ||
-        latest.workId != current.workId) return;
+    final active = SaturnOrbitRituals.currentSeries(_ritualOps);
+    if (active == null || active.number != current.number ||
+        active.workId != current.workId) return;
+    final upcoming = SaturnOrbitRituals.queuedSeries(_ritualOps);
+    final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
       _ritualOps[SaturnOrbitRituals.seriesPrefix +
           current.number.toString()] = {
         'workId': current.workId,
         'chosenBy': current.chosenBy,
         'finished': true,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        'queued': false,
+        'updatedAt': stamp,
       };
+      if (upcoming.isNotEmpty) {
+        final next = upcoming.first;
+        final key = SaturnOrbitRituals.seriesPrefix + next.number.toString();
+        _ritualOps[key] = {
+          'workId': next.workId,
+          'chosenBy': next.chosenBy,
+          'finished': false,
+          'queued': false,
+          'updatedAt': stamp + 1,
+        };
+      }
     });
-    // The couple's selection never replaces individual reviews or progress.
+    // A shared choice never overwrites personal progress or ratings.
     _save();
   }
 
-  Future<void> _chooseSharedSeries({required bool registerHerCurrent}) async {
-    if (registerHerCurrent) {
+  Future<void> _chooseSharedSeries({
+    required bool registerHerCurrent,
+    SaturnSeriesTurn? editing,
+  }) async {
+    if (editing != null) {
+      if (!SaturnOrbitRituals.mayEditQueuedSeries(
+          _ritualOps, editing, profile)) return;
+    } else if (registerHerCurrent) {
       if (!SaturnOrbitRituals.canRegisterHerExistingSeries(_ritualOps)) return;
     } else if (!SaturnOrbitRituals.mayChooseSeries(_ritualOps, profile)) {
       return;
@@ -2993,9 +3057,11 @@ class _SaturnHomeState extends State<SaturnHome>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(registerHerCurrent
-                      ? 'Qual série ela escolheu?'
-                      : 'Minha vez de escolher nossa série',
+                  Text(editing != null
+                      ? 'Trocar minha escolha da fila'
+                      : registerHerCurrent
+                          ? 'Qual série ela escolheu?'
+                          : 'Minha vez de escolher nossa série',
                     style: const TextStyle(
                       color: ivory, fontFamily: 'serif',
                       fontSize: 22, fontWeight: FontWeight.bold)),
@@ -3048,7 +3114,8 @@ class _SaturnHomeState extends State<SaturnHome>
         }),
       );
       if (chosen != null && mounted) {
-        _saveSeriesTurn(chosen, registerHerCurrent: registerHerCurrent);
+        _saveSeriesTurn(chosen,
+            registerHerCurrent: registerHerCurrent, editTurn: editing);
       }
     } finally {
       client.close();
@@ -3059,75 +3126,135 @@ class _SaturnHomeState extends State<SaturnHome>
   Widget _sharedSeriesRotationCard() {
     final current = SaturnOrbitRituals.currentSeries(_ritualOps);
     final turns = SaturnOrbitRituals.seriesTurns(_ritualOps);
+    final queue = SaturnOrbitRituals.queuedSeries(_ritualOps);
+    final completed = turns.where((turn) => turn.finished).toList().reversed;
     final next = SaturnOrbitRituals.nextSeriesPicker(_ritualOps);
+    final canPick = SaturnOrbitRituals.mayChooseSeries(_ritualOps, profile);
     final work = current == null ? null : _ritualWork(current.workId);
     return Container(
       key: const Key('saturn-shared-series'),
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 15),
-      padding: const EdgeInsets.all(17),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 17),
+      padding: const EdgeInsets.fromLTRB(17, 18, 17, 20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [Color(0xFF442439), Color(0xFF261F30), night]),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0x886B4E5B)),
+          colors: [
+            Color(0xFF51283E), Color(0xFF2D2030), Color(0xFF171821),
+          ]),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: const Color(0x997D5B69)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x33000000),
+            blurRadius: 24, offset: Offset(0, 11)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.live_tv_outlined, color: gold, size: 25),
-            const SizedBox(width: 10),
-            const Expanded(child: Text('Nossa série da vez',
-              style: TextStyle(color: ivory, fontFamily: 'serif',
-                fontSize: 22, fontWeight: FontWeight.bold))),
+            Container(
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                color: const Color(0x335D344E),
+                borderRadius: BorderRadius.circular(17),
+                border: Border.all(color: const Color(0x556E5262)),
+              ),
+              child: const Icon(Icons.live_tv_rounded, color: gold, size: 23),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('NOSSA MARATONA',
+                  style: TextStyle(color: gold, letterSpacing: 1.8,
+                    fontSize: 10, fontWeight: FontWeight.w800)),
+                SizedBox(height: 3),
+                Text('Nossa série da vez',
+                  style: TextStyle(color: ivory, fontFamily: 'serif',
+                    fontSize: 22, fontWeight: FontWeight.bold)),
+              ],
+            )),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0x334D3A48),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Text(queue.length.toString() + ' na fila',
+                style: const TextStyle(color: gold, fontSize: 11,
+                  fontWeight: FontWeight.w700)),
+            ),
           ]),
-          const SizedBox(height: 7),
-          Text(current == null
-              ? (turns.isEmpty
-                  ? 'Ela escolheu a série atual; depois será a sua vez.'
-                  : 'A última série foi concluída. Uma nova escolha pode começar.')
-              : profiles[current.chosenBy] + ' escolheu desta vez.',
-            style: const TextStyle(
-              color: Color(0xFFDCC7D2), fontSize: 12)),
-          const SizedBox(height: 11),
-          Row(children: [
-            const Icon(Icons.autorenew, color: gold, size: 17),
-            const SizedBox(width: 8),
-            Expanded(child: Text(
-              'Próxima escolha: ' + profiles[turns.isEmpty ? 0 : next],
-              style: const TextStyle(
-                color: gold, fontWeight: FontWeight.w700))),
-          ]),
+          const SizedBox(height: 12),
+          const Text(
+            'Uma história de cada vez. As próximas, vocês escolhem juntos.',
+            style: TextStyle(color: Color(0xFFE4CED7),
+              fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 14),
           if (current != null) ...[
-            const SizedBox(height: 16),
-            if (work != null)
-              InkWell(
-                onTap: () => _details(work),
-                child: Row(children: [
-                  PosterThumbnail(work: work, width: 68, height: 99),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(work.title, maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ivory, fontWeight: FontWeight.bold,
-                          fontSize: 16)),
-                      const SizedBox(height: 6),
-                      const Text('Assistindo juntos',
-                        style: TextStyle(color: gold, fontSize: 11)),
+            Text(profiles[current.chosenBy] + ' escolheu desta vez.',
+              style: const TextStyle(color: Color(0xFFDFC3CD),
+                fontSize: 12)),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF392B3C), Color(0xFF252331)]),
+                borderRadius: BorderRadius.circular(19),
+                border: Border.all(color: const Color(0x99775667)),
+              ),
+              child: Row(children: [
+                if (work != null)
+                  InkWell(
+                    onTap: () => _details(work),
+                    child: PosterThumbnail(
+                        work: work, width: 82, height: 119),
+                  )
+                else
+                  Container(width: 82, height: 119,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF322632),
+                      borderRadius: BorderRadius.circular(9)),
+                    child: const Icon(Icons.movie_outlined, color: gold)),
+                const SizedBox(width: 13),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('ASSISTINDO JUNTOS',
+                      style: TextStyle(color: gold, letterSpacing: 1.2,
+                        fontWeight: FontWeight.bold, fontSize: 10)),
+                    const SizedBox(height: 7),
+                    Text(work?.title ?? 'Série salva na nossa órbita',
+                      maxLines: 3, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: ivory,
+                        fontFamily: 'serif', fontSize: 19,
+                        fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 7),
+                    Text('Escolha de ' + profiles[current.chosenBy],
+                      style: const TextStyle(
+                        color: Color(0xFFE3CAD7), fontSize: 11)),
+                    if (work != null) ...[
+                      const SizedBox(height: 7),
+                      TextButton.icon(
+                        onPressed: () => _details(work),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 30)),
+                        icon: const Icon(Icons.arrow_outward_rounded,
+                          color: gold, size: 16),
+                        label: const Text('Abrir detalhes',
+                          style: TextStyle(color: gold, fontSize: 11)),
+                      ),
                     ],
-                  )),
-                ]),
-              )
-            else
-              const Text('A série escolhida está salva, mas seus detalhes '
-                'ainda não foram carregados neste aparelho.',
-                style: TextStyle(
-                  color: Color(0xFFD5C1CC), fontSize: 12)),
-            const SizedBox(height: 12),
+                  ],
+                )),
+              ]),
+            ),
+            const SizedBox(height: 10),
             OutlinedButton.icon(
               key: const Key('saturn-series-finish'),
               onPressed: () => _finishSharedSeries(current),
@@ -3135,35 +3262,188 @@ class _SaturnHomeState extends State<SaturnHome>
               label: const Text('Concluímos esta série'),
             ),
           ] else ...[
-            const SizedBox(height: 15),
-            if (turns.isEmpty)
-              FilledButton.icon(
-                key: const Key('saturn-series-register-current'),
-                onPressed: () =>
-                    _chooseSharedSeries(registerHerCurrent: true),
-                icon: const Icon(Icons.add_circle_outline, size: 18),
-                label: const Text('Registrar série que ela escolheu')),
-            if (turns.isNotEmpty && profile == next)
-              FilledButton.icon(
-                key: const Key('saturn-series-next-choice'),
-                onPressed: () =>
-                    _chooseSharedSeries(registerHerCurrent: false),
-                icon: const Icon(Icons.add_circle_outline, size: 18),
-                label: const Text('Escolher nossa próxima série')),
-            if (turns.isNotEmpty && profile != next)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  'A próxima escolha pertence a ' + profiles[next] + '.',
+            Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: const Color(0x553A2A3B),
+                borderRadius: BorderRadius.circular(17)),
+              child: Row(children: [
+                const Icon(Icons.auto_awesome_outlined, color: gold),
+                const SizedBox(width: 10),
+                Expanded(child: Text(turns.isEmpty
+                    ? 'Registrem a série que ela escolheu e comecem '
+                      'a planejar os próximos capítulos.'
+                    : 'Uma história terminou. A próxima escolha '
+                      'já pode começar.',
                   style: const TextStyle(
-                    color: Color(0xFFDCC7D2), fontSize: 12))),
+                    color: Color(0xFFE8D5DE), fontSize: 12))),
+              ]),
+            ),
           ],
-          if (turns.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(turns.where((item) => item.finished).length.toString() +
-                ' série(s) concluída(s) juntos',
+          const SizedBox(height: 20),
+          Row(children: [
+            const Icon(Icons.queue_play_next_rounded,
+                color: gold, size: 20),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('PRÓXIMOS CAPÍTULOS',
+              style: TextStyle(color: ivory, letterSpacing: 1.3,
+                fontSize: 11, fontWeight: FontWeight.w800))),
+            Text(queue.length.toString() + ' reservada(s)',
+              style: const TextStyle(color: Color(0xFFCDB7C3),
+                fontSize: 10)),
+          ]),
+          const SizedBox(height: 11),
+          for (var i = 0; i < queue.length; i++) ...[
+            Builder(builder: (context) {
+              final turn = queue[i];
+              final upcoming = _ritualWork(turn.workId);
+              final editable = SaturnOrbitRituals.mayEditQueuedSeries(
+                  _ritualOps, turn, profile);
+              return Container(
+                key: Key('saturn-series-queued-' + i.toString()),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 11, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0x88332636),
+                  border: Border.all(color: const Color(0x66684A5B)),
+                  borderRadius: BorderRadius.circular(17),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 25, height: 25,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF775068),
+                      shape: BoxShape.circle),
+                    child: Text((i + 1).toString(),
+                      style: const TextStyle(color: ivory,
+                        fontWeight: FontWeight.bold, fontSize: 11)),
+                  ),
+                  const SizedBox(width: 10),
+                  if (upcoming != null)
+                    InkWell(
+                      onTap: () => _details(upcoming),
+                      child: PosterThumbnail(
+                          work: upcoming, width: 48, height: 68))
+                  else
+                    Container(width: 48, height: 68,
+                      decoration: BoxDecoration(
+                        color: wine,
+                        borderRadius: BorderRadius.circular(7)),
+                      child: const Icon(Icons.movie_outlined, color: gold)),
+                  const SizedBox(width: 11),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(upcoming?.title ?? 'Série reservada',
+                        maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: ivory,
+                          fontSize: 13, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 5),
+                      Text('Escolha de ' + profiles[turn.chosenBy],
+                        style: const TextStyle(
+                          color: Color(0xFFDFC0CF), fontSize: 11)),
+                      if (i == 0)
+                        const Text('A próxima depois da atual',
+                          style: TextStyle(color: gold, fontSize: 10)),
+                    ],
+                  )),
+                  if (editable)
+                    IconButton(
+                      key: Key('saturn-series-edit-' +
+                          turn.number.toString()),
+                      tooltip: 'Trocar minha escolha',
+                      onPressed: () => _chooseSharedSeries(
+                          registerHerCurrent: false, editing: turn),
+                      icon: const Icon(Icons.edit_outlined,
+                          color: gold, size: 20)),
+                ]),
+              );
+            }),
+          ],
+          if (queue.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0x442F2A37),
+                border: Border.all(color: const Color(0x556B5663)),
+                borderRadius: BorderRadius.circular(16)),
+              child: Row(children: [
+                const Icon(Icons.add_circle_outline,
+                  color: gold, size: 28),
+                const SizedBox(width: 11),
+                Expanded(child: Text(turns.isEmpty
+                    ? 'A fila aparecerá aqui depois da primeira escolha.'
+                    : 'A próxima história ainda não foi escolhida.',
+                  style: const TextStyle(
+                    color: Color(0xFFE1CBD5), fontSize: 12)),
+              ]),
+            ),
+          const SizedBox(height: 15),
+          Row(children: [
+            const Icon(Icons.autorenew_rounded, color: gold, size: 17),
+            const SizedBox(width: 7),
+            Expanded(child: Text(
+              'Próxima escolha: ' + profiles[turns.isEmpty ? 0 : next],
               style: const TextStyle(
-                color: Color(0xFFBEA9B7), fontSize: 11)),
+                color: gold, fontWeight: FontWeight.w700, fontSize: 12)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          if (turns.isEmpty)
+            FilledButton.icon(
+              key: const Key('saturn-series-register-current'),
+              onPressed: () =>
+                  _chooseSharedSeries(registerHerCurrent: true),
+              icon: const Icon(Icons.add_circle_outline, size: 18),
+              label: const Text('Registrar série que ela escolheu')),
+          if (turns.isNotEmpty && canPick)
+            FilledButton.icon(
+              key: const Key('saturn-series-next-choice'),
+              onPressed: () =>
+                  _chooseSharedSeries(registerHerCurrent: false),
+              icon: const Icon(Icons.add_circle_outline, size: 18),
+              label: const Text('Escolher minha próxima série')),
+          if (turns.isNotEmpty && !canPick)
+            Text('A próxima escolha pertence a ' + profiles[next] +
+                '. Quando entrar no perfil, ela poderá escolher.',
+              style: const TextStyle(
+                color: Color(0xFFDCC7D2), fontSize: 12)),
+          if (completed.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Theme(
+              data: Theme.of(context).copyWith(
+                dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.history_rounded,
+                    color: gold, size: 20),
+                title: Text(
+                  'Nosso histórico · ' + completed.length.toString() +
+                      ' concluída(s)',
+                  style: const TextStyle(
+                    color: Color(0xFFE8D8DD), fontSize: 12)),
+                children: [
+                  for (final past in completed)
+                    ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.only(left: 8),
+                      title: Text(_ritualWork(past.workId)?.title ??
+                          'Série salva na órbita'),
+                      subtitle: Text('Escolha de ' +
+                          profiles[past.chosenBy]),
+                      trailing: const Icon(Icons.check_circle_outline,
+                          color: gold, size: 18),
+                      onTap: _ritualWork(past.workId) == null ? null
+                          : () => _details(_ritualWork(past.workId)!),
+                    ),
+                ],
+              ),
+            ),
           ],
         ],
       ),
