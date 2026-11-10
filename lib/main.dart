@@ -4276,41 +4276,31 @@ class _SaturnHomeState extends State<SaturnHome>
                     icon: const Icon(Icons.close_rounded, color: ivory)),
                 ]),
                 const SizedBox(height: 10),
-                _cinematicDetailBanner(w),
-                const SizedBox(height: 9),
                 if (w.kind != 'Livro' &&
-                    (SaturnNativeTrailer.canUseNative(
-                        w.nativeTrailerUrl,
-                        rightsConfirmed: w.provider == 'SATURN Licensed') ||
-                     w.trailerYoutubeId.isNotEmpty)) ...[
-                  Theme(
-                    data: Theme.of(ctx).copyWith(
-                        dividerColor: Colors.transparent),
-                    child: ExpansionTile(
-                      key: Key('saturn-trailer-' + w.id),
-                      initiallyExpanded: false,
-                      maintainState: false,
-                      tilePadding: const EdgeInsets.symmetric(horizontal: 7),
-                      title: const Text('Trailer oficial',
-                        style: TextStyle(
-                          color: ivory, fontSize: 13,
-                          fontWeight: FontWeight.w600)),
-                      leading: const Icon(Icons.play_circle_outline,
-                        color: gold, size: 20),
-                      children: [
-                        if (SaturnNativeTrailer.canUseNative(
-                            w.nativeTrailerUrl,
-                            rightsConfirmed: w.provider == 'SATURN Licensed'))
-                          SaturnNativeTrailer(
-                            mediaUrl: w.nativeTrailerUrl,
-                            rightsConfirmed: true)
-                        else if (w.trailerYoutubeId.isNotEmpty)
-                          SaturnTrailerPreview(youtubeId: w.trailerYoutubeId),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                    RegExp(r'^[A-Za-z0-9_-]{11}$')
+                        .hasMatch(w.trailerYoutubeId))
+                  SaturnTrailerPreview(
+                    key: Key('saturn-trailer-' + w.id),
+                    youtubeId: w.trailerYoutubeId,
+                    heroMode: true,
+                    workTitle: w.title,
+                    workMetadata: w.kind + ' · ' +
+                        (w.year > 0 ? w.year.toString() : 'SATURN')),
+                if (w.kind == 'Livro' ||
+                    !RegExp(r'^[A-Za-z0-9_-]{11}$')
+                        .hasMatch(w.trailerYoutubeId))
+                  _cinematicDetailBanner(w),
+                if (w.kind != 'Livro' &&
+                    SaturnNativeTrailer.canUseNative(
+                      w.nativeTrailerUrl,
+                      rightsConfirmed: w.provider == 'SATURN Licensed',
+                    )) ...[
+                  const SizedBox(height: 10),
+                  SaturnNativeTrailer(
+                    mediaUrl: w.nativeTrailerUrl,
+                    rightsConfirmed: true),
                 ],
+                const SizedBox(height: 12),
                 if (w.kind == 'Livro' &&
                     w.id.startsWith('openlibrary:/works/')) ...[
                   const Text(
