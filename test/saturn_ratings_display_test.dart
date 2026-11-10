@@ -85,7 +85,7 @@ void main() {
     final mc = SaturnExternalRatings.sourceSearch(
         'metacritic', 'The Batman');
     expect(mc.host, 'www.metacritic.com');
-    expect(mc.path, contains('The Batman'));
+    expect(Uri.decodeComponent(mc.path), contains('The Batman'));
   });
 
   testWidgets('Sem licença para nota, mantém pesquisa nas fontes oficiais',
