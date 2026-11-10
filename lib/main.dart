@@ -1031,6 +1031,15 @@ class _SaturnHomeState extends State<SaturnHome>
   String _ritualId(String key) => SaturnOrbitRituals.workId(_ritualOps, key);
 
   void _suggestToPartner(Work work) {
+    final existing = SaturnCoupleSuggestion.alreadySent(
+        _ritualOps, from: profile, workId: work.id);
+    if (existing != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(existing.status == 'accepted'
+          ? 'Essa sugestão já foi aceita.'
+          : 'Você já sugeriu este título para ' + profiles[1 - profile])));
+      return;
+    }
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
       savedWorks.putIfAbsent(work.id, () => work);
@@ -1058,9 +1067,8 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Widget _coupleSuggestionsCard() {
-    final suggestions = SaturnCoupleSuggestion.read(_ritualOps)
-        .where((item) => item.status == 'pending' ||
-            item.status == 'accepted').take(12).toList(growable: false);
+    final suggestions = SaturnCoupleSuggestion.visible(_ritualOps)
+        .take(12).toList(growable: false);
     return Container(
       key: const Key('saturn-couple-suggestions'),
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
@@ -4385,12 +4393,38 @@ class _SaturnHomeState extends State<SaturnHome>
                   ),
                   const SizedBox(height: 16),
                 ],
-                OutlinedButton.icon(
-                  key: const Key('saturn-suggest-to-partner'),
-                  onPressed: () => _suggestToPartner(w),
-                  icon: const Icon(Icons.favorite_border_rounded, size: 17),
-                  label: Text('Sugerir para ' + profiles[1 - profile]),
-                ),
+                Builder(builder: (context) {
+                  final sent = SaturnCoupleSuggestion.alreadySent(
+                    _ritualOps, from: profile, workId: w.id);
+                  return OutlinedButton.icon(
+                    key: const Key('saturn-suggest-to-partner'),
+                    onPressed: sent == null ? () {
+                      _suggestToPartner(w);
+                      refresh(() {});
+                    } : null,
+                    style: OutlinedButton.styleFrom(
+                      disabledForegroundColor: sent?.status == 'accepted'
+                          ? const Color(0xFFB8D9BD)
+                          : const Color(0xFFF0B4CC),
+                      side: BorderSide(
+                        color: sent == null
+                          ? gold : const Color(0xFFBC829E),
+                      ),
+                    ),
+                    icon: Icon(sent == null
+                      ? Icons.favorite_border_rounded
+                      : sent.status == 'accepted'
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_rounded,
+                      color: sent == null
+                        ? gold : const Color(0xFFF0B4CC), size: 17),
+                    label: Text(sent == null
+                      ? 'Sugerir para ' + profiles[1 - profile]
+                      : sent.status == 'accepted'
+                        ? 'Sugestão aceita por ' + profiles[1 - profile]
+                        : 'Enviado para ' + profiles[1 - profile] + ' ✓'),
+                  );
+                }),
                 const SizedBox(height: 14),
                 const Text('MINHAS LISTAS',
                   style: TextStyle(color: gold, fontSize: 11,
