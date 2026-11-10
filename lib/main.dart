@@ -289,6 +289,7 @@ class _SaturnHomeState extends State<SaturnHome>
   final CatalogClient _homeCatalog = CatalogClient();
   Timer? _featuredTimer;
   int _featuredIndex = 0;
+  DateTime _featuredPausedUntil = DateTime.fromMillisecondsSinceEpoch(0);
   bool _foreground = true;
   List<Work> recommendedMovies = [];
   List<Work> recommendedBooks = [];
@@ -313,8 +314,9 @@ class _SaturnHomeState extends State<SaturnHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _featuredTimer = Timer.periodic(const Duration(seconds: 9), (_) {
-      if (!mounted || !_foreground || tab != 0) return;
+    _featuredTimer = Timer.periodic(const Duration(seconds: 7), (_) {
+      if (!mounted || !_foreground || tab != 0 ||
+          DateTime.now().isBefore(_featuredPausedUntil)) return;
       final slides = _featuredTitles();
       if (slides.length > 1) {
         setState(() => _featuredIndex = (_featuredIndex + 1) % slides.length);
@@ -1785,14 +1787,18 @@ class _SaturnHomeState extends State<SaturnHome>
         likedGenres.addAll(work.genreIds);
       }
     }
-    final catalog = recommendedMovies.where((w) =>
-        w.kind == 'Filme' && w.posterUrl.startsWith('https://')).toList();
+    final catalog = <Work>[
+      ...recommendedMovies,
+      // Include genuine films already in the collection when discovery fails.
+      ...allWorks.where((work) => work.kind == 'Filme'),
+    ].where((w) => w.kind == 'Filme' &&
+        w.posterUrl.startsWith('https://')).toList();
     catalog.sort((a, b) =>
       b.genreIds.where(likedGenres.contains).length.compareTo(
         a.genreIds.where(likedGenres.contains).length));
     final seen = <String>{};
     final slides = <Work>[];
-    for (final work in <Work>[...personal.take(3), ...catalog]) {
+    for (final work in <Work>[...personal.take(4), ...catalog]) {
       if (seen.add(work.id)) slides.add(work);
       if (slides.length >= 8) break;
     }
@@ -1802,6 +1808,7 @@ class _SaturnHomeState extends State<SaturnHome>
   void _moveFeatured(int direction) {
     final slides = _featuredTitles();
     if (slides.length < 2) return;
+    _featuredPausedUntil = DateTime.now().add(const Duration(seconds: 20));
     setState(() => _featuredIndex =
         (_featuredIndex + direction + slides.length) % slides.length);
   }
@@ -4265,6 +4272,8 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Future<void> _details(Work w) async {
+    _featuredPausedUntil = DateTime.now().add(
+        const Duration(minutes: 2));
     // Flutter widget tests emulate Android's TargetPlatform on desktop.
     // Only the browser has the official iframe platform initialized here.
     final canEmbedTrailer = kIsWeb;
