@@ -66,4 +66,18 @@ void main() {
     expect(SaturnReviewTier.prata.label, 'PRATA');
     expect(SaturnReviewTier.bronze.label, 'BRONZE');
   });
+  test('Two real partner ratings determine a split halo and equal-tier sparkle', () {
+    final gold = {'rating': 9.5, 'notes': ''};
+    final silver = {'rating': 6.0, 'notes': ''};
+    final bronze = {'rating': 2.0, 'notes': ''};
+    expect(SaturnReviewClassification.fromRating(gold), SaturnReviewTier.ouro);
+    expect(SaturnReviewClassification.fromRating(silver), SaturnReviewTier.prata);
+    expect(SaturnReviewClassification.fromRating(bronze), SaturnReviewTier.bronze);
+    expect(SaturnReviewClassification.sameCoupleTier(gold, silver), isFalse);
+    expect(SaturnReviewClassification.sameCoupleTier(gold, {'rating': 9}), isTrue);
+    expect(SaturnReviewClassification.sameCoupleTier(gold, null), isFalse);
+    // Single-user halos still require a written review.
+    expect(SaturnReviewClassification.of(gold), isNull);
+  });
+
 }
