@@ -59,7 +59,7 @@ const ivory = Color(0xFFF2E8DF);
 class Work {
   final String id, title, kind, description;
   final int year;
-  final String posterUrl, creator, provider, detailUrl;
+  final String posterUrl, backdropUrl, creator, provider, detailUrl;
   final Map<String, String> streamingLinks;
   final Map<String, String> streamingProviders;
   final List<String> watchProviders;
@@ -74,7 +74,8 @@ class Work {
   final bool availabilityChecked;
 
   const Work(this.id, this.title, this.kind, this.description, this.year,
-      {this.posterUrl = '', this.creator = '', this.provider = '',
+      {this.posterUrl = '', this.backdropUrl = '',
+       this.creator = '', this.provider = '',
        this.detailUrl = '', this.streamingLinks = const {},
        this.streamingProviders = const {}, this.watchProviders = const [],
        this.watchUrl = '', this.trailerYoutubeId = '',
@@ -86,7 +87,8 @@ class Work {
 
   factory Work.fromCatalog(CatalogEntry entry) => Work(
         entry.id, entry.title, entry.kind, entry.description, entry.year,
-        posterUrl: entry.posterUrl, creator: entry.creator,
+        posterUrl: entry.posterUrl, backdropUrl: entry.backdropUrl,
+        creator: entry.creator,
         provider: entry.provider, detailUrl: entry.detailUrl,
         streamingLinks: entry.streamingLinks,
         streamingProviders: entry.streamingProviders,
@@ -109,6 +111,7 @@ class Work {
         (data['description'] ?? '').toString(),
         data['year'] is num ? (data['year'] as num).toInt() : 0,
         posterUrl: (data['posterUrl'] ?? '').toString(),
+        backdropUrl: (data['backdropUrl'] ?? '').toString(),
         creator: (data['creator'] ?? '').toString(),
         provider: (data['provider'] ?? '').toString(),
         detailUrl: (data['detailUrl'] ?? '').toString(),
@@ -147,7 +150,8 @@ class Work {
   Map<String, dynamic> toJson() => {
         'id': id, 'title': title, 'kind': kind,
         'description': description, 'year': year,
-        'posterUrl': posterUrl, 'creator': creator,
+        'posterUrl': posterUrl, 'backdropUrl': backdropUrl,
+        'creator': creator,
         'provider': provider, 'detailUrl': detailUrl,
         'streamingLinks': streamingLinks,
         'streamingProviders': streamingProviders,
@@ -1832,63 +1836,16 @@ class _SaturnHomeState extends State<SaturnHome>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  FutureBuilder<Color>(
-                    future: SaturnArtwork.toneFor(
-                      featured == null ? '' :
-                      SaturnArtwork.bestUrl(featured.posterUrl,
-                        devicePixels: 580)),
-                    builder: (context, snapshot) {
-                      final tone = snapshot.data ?? SaturnArtwork.fallback;
-                      return DecoratedBox(decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            tone,
-                            Color.lerp(tone, night, .48)!,
-                            night,
-                          ],
-                        ),
-                      ));
-                    },
-                  ),
                   if (featured != null)
-                    Positioned.fill(
-                      child: Opacity(
-                        opacity: 0.36,
-                        child: spacious
-                            ? ImageFiltered(
-                                imageFilter: ui.ImageFilter.blur(
-                                  sigmaX: 10, sigmaY: 10),
-                                child: Image.network(
-                                  SaturnArtwork.bestUrl(featured.posterUrl,
-                                    devicePixels: 900),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stack) =>
-                                      const SizedBox.shrink()))
-                            : Image.network(
-                                SaturnArtwork.bestUrl(featured.posterUrl,
-                                  devicePixels: 780),
-                                fit: BoxFit.cover,
-                                alignment: Alignment.centerRight,
-                                errorBuilder: (context, error, stack) =>
-                                    const SizedBox.shrink()),
-                      ),
-                    ),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
+                    _cinematicArtworkBackground(featured)
+                  else
+                    const DecoratedBox(decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          Color(0xF5201829),
-                          Color(0xE3291D30),
-                          Color(0x99201827),
-                        ],
-                        stops: [0, 0.5, 1],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [wine, night],
                       ),
-                    ),
-                  ),
+                    )),
                   if (featured != null)
                     Positioned(
                       top: spacious ? 21 : 24,
@@ -4204,7 +4161,92 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
 
-  /// Hero cinematográfico feito com a capa autêntica da obra.
+  /// Poster and landscape scene are separate TMDB images. The latter keeps
+  /// its native aspect and resolution; a restrained vignette connects both
+  /// without magnifying the vertical cover behind the entire banner.
+  Widget _cinematicArtworkBackground(Work work) {
+    final poster = SaturnArtwork.bestUrl(
+      SaturnBookCover.resolve(work.id, work.posterUrl),
+      devicePixels: 900,
+    );
+    return FutureBuilder<String?>(
+      future: _homeCatalog.verifiedBackdropFor(
+        workId: work.id, cachedBackdrop: work.backdropUrl),
+      initialData: work.backdropUrl.isNotEmpty ? work.backdropUrl : null,
+      builder: (context, snapshot) {
+        final backdrop = snapshot.data ?? '';
+        final hasBackdrop =
+            backdrop.startsWith('https://image.tmdb.org/t/p/') ||
+            backdrop.startsWith('https://img.amodb.dev/t/p/');
+        return Stack(fit: StackFit.expand, children: [
+          FutureBuilder<Color>(
+            future: SaturnArtwork.toneFor(poster),
+            builder: (context, toneSnapshot) {
+              final tone = toneSnapshot.data ?? SaturnArtwork.fallback;
+              return DecoratedBox(decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color.lerp(tone, night, .20)!,
+                    Color.lerp(tone, wine, .48)!,
+                    night,
+                  ],
+                ),
+              ));
+            },
+          ),
+          if (hasBackdrop)
+            Positioned.fill(child: Image.network(
+              SaturnArtwork.bestUrl(backdrop, devicePixels: 1400),
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              filterQuality: FilterQuality.medium,
+              gaplessPlayback: true,
+              errorBuilder: (context, error, trace) =>
+                  const SizedBox.shrink(),
+            ))
+          else if (poster.startsWith('https://'))
+            Positioned.fill(child: Opacity(
+              opacity: 0.12,
+              child: ImageFiltered(
+                imageFilter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Image.network(
+                  poster,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.centerRight,
+                  errorBuilder: (context, error, trace) =>
+                      const SizedBox.shrink(),
+                ),
+              ),
+            )),
+          // Scene stays legible on the right, copy stays readable on the left.
+          const DecoratedBox(decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Color(0xFA1A1522),
+                Color(0xD0231829),
+                Color(0x57201827),
+              ],
+              stops: [0, .51, 1],
+            ),
+          )),
+          const DecoratedBox(decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x461B1525), Color(0x001B1525),
+                       Color(0x621B1525)],
+            ),
+          )),
+        ]);
+      },
+    );
+  }
+
+  /// Hero cinematográfico com cena horizontal e pôster autênticos da obra.
   Widget _cinematicDetailBanner(Work work) {
     return LayoutBuilder(builder: (context, constraints) {
       final wide = constraints.maxWidth >= 630;
@@ -4215,32 +4257,7 @@ class _SaturnHomeState extends State<SaturnHome>
         child: SizedBox(
           height: wide ? 282 : 237,
           child: Stack(fit: StackFit.expand, children: [
-            const DecoratedBox(decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [Color(0xFF54283D), Color(0xFF251928), night]))),
-            if (work.posterUrl.startsWith('https://'))
-              Positioned.fill(child: Opacity(
-                opacity: 0.32,
-                child: wide
-                    ? ImageFiltered(
-                        imageFilter: ui.ImageFilter.blur(
-                          sigmaX: 12, sigmaY: 12),
-                        child: Image.network(
-                          SaturnBookCover.resolve(work.id, work.posterUrl),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stack) =>
-                              const SizedBox.shrink()))
-                    : Image.network(
-                        SaturnBookCover.resolve(work.id, work.posterUrl),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stack) =>
-                            const SizedBox.shrink()))),
-            const DecoratedBox(decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft, end: Alignment.centerRight,
-                colors: [
-                  Color(0xF21A1522), Color(0xD52B1C2F), Color(0x66321C2B)]))),
+            _cinematicArtworkBackground(work),
             Positioned(
               top: wide ? 16 : 31, bottom: wide ? 16 : 31,
               right: wide ? 25 : 11, width: wide ? 162 : 104,
