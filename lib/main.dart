@@ -3207,10 +3207,11 @@ class _SaturnHomeState extends State<SaturnHome>
     final next = SaturnOrbitRituals.nextSeriesPicker(_ritualOps);
     final canPick = SaturnOrbitRituals.mayChooseSeries(_ritualOps, profile);
     final work = current == null ? null : _ritualWork(current.workId);
+    final compact = MediaQuery.sizeOf(context).width < 550;
     return Container(
       key: const Key('saturn-shared-series'),
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 17),
-      padding: const EdgeInsets.fromLTRB(17, 18, 17, 20),
+      padding: const EdgeInsets.fromLTRB(15, 16, 15, 17),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
@@ -3262,13 +3263,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   fontWeight: FontWeight.w700)),
             ),
           ]),
-          const SizedBox(height: 12),
-          const Text(
-            'Uma história de cada vez. As próximas, vocês escolhem juntos.',
-            style: TextStyle(color: Color(0xFFE4CED7),
-              fontSize: 12, height: 1.4),
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           if (current != null) ...[
             Text(profiles[current.chosenBy] + ' escolheu desta vez.',
               style: const TextStyle(color: Color(0xFFDFC3CD),
@@ -3287,10 +3282,13 @@ class _SaturnHomeState extends State<SaturnHome>
                   InkWell(
                     onTap: () => _details(work),
                     child: PosterThumbnail(
-                        work: work, width: 106, height: 155),
+                        work: work,
+                        width: compact ? 95 : 123,
+                        height: compact ? 141 : 177),
                   )
                 else
-                  Container(width: 106, height: 155,
+                  Container(width: compact ? 95 : 123,
+                    height: compact ? 141 : 177,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: const Color(0xFF322632),
@@ -3309,22 +3307,11 @@ class _SaturnHomeState extends State<SaturnHome>
                       style: const TextStyle(color: ivory,
                         fontFamily: 'serif', fontSize: 19,
                         fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 7),
-                    Text('Escolha de ' + profiles[current.chosenBy],
-                      style: const TextStyle(
-                        color: Color(0xFFE3CAD7), fontSize: 11)),
                     if (work != null) ...[
-                      const SizedBox(height: 7),
-                      TextButton.icon(
-                        onPressed: () => _details(work),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 30)),
-                        icon: const Icon(Icons.arrow_outward_rounded,
-                          color: gold, size: 16),
-                        label: const Text('Abrir detalhes',
-                          style: TextStyle(color: gold, fontSize: 11)),
-                      ),
+                      const SizedBox(height: 8),
+                      const Text('Toque na capa para abrir',
+                        style: TextStyle(
+                          color: Color(0xFFCDB8C4), fontSize: 10)),
                     ],
                   ],
                 )),
@@ -3364,9 +3351,7 @@ class _SaturnHomeState extends State<SaturnHome>
             const Expanded(child: Text('PRÓXIMOS CAPÍTULOS',
               style: TextStyle(color: ivory, letterSpacing: 1.3,
                 fontSize: 11, fontWeight: FontWeight.w800))),
-            Text(queue.length.toString() + ' reservada(s)',
-              style: const TextStyle(color: Color(0xFFCDB7C3),
-                fontSize: 10)),
+
           ]),
           const SizedBox(height: 11),
           for (var i = 0; i < queue.length; i++) ...[
@@ -3401,9 +3386,12 @@ class _SaturnHomeState extends State<SaturnHome>
                     InkWell(
                       onTap: () => _details(upcoming),
                       child: PosterThumbnail(
-                          work: upcoming, width: 70, height: 102))
+                          work: upcoming,
+                          width: compact ? 60 : 74,
+                          height: compact ? 87 : 106))
                   else
-                    Container(width: 70, height: 102,
+                    Container(width: compact ? 60 : 74,
+                      height: compact ? 87 : 106,
                       decoration: BoxDecoration(
                         color: wine,
                         borderRadius: BorderRadius.circular(7)),
@@ -3420,9 +3408,7 @@ class _SaturnHomeState extends State<SaturnHome>
                       Text('Escolha de ' + profiles[turn.chosenBy],
                         style: const TextStyle(
                           color: Color(0xFFDFC0CF), fontSize: 11)),
-                      if (i == 0)
-                        const Text('A próxima depois da atual',
-                          style: TextStyle(color: gold, fontSize: 10)),
+
                     ],
                   )),
                   if (editable)
@@ -3483,11 +3469,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   _chooseSharedSeries(registerHerCurrent: false),
               icon: const Icon(Icons.add_circle_outline, size: 18),
               label: const Text('Escolher minha próxima série')),
-          if (turns.isNotEmpty && !canPick)
-            Text('A próxima escolha pertence a ' + profiles[next] +
-                '. Entre nesse perfil para continuar.',
-              style: const TextStyle(
-                color: Color(0xFFDCC7D2), fontSize: 12)),
+
           if (completed.isNotEmpty) ...[
             const SizedBox(height: 10),
             Theme(
