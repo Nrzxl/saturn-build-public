@@ -80,4 +80,22 @@ void main() {
     expect(SaturnReviewClassification.of(gold), isNull);
   });
 
+  test('Funny flies are reserved for explicitly zero-rated movies', () {
+    expect(SaturnReviewClassification.shouldShowFlies(
+        'Filme', {'rating': 0}), isTrue);
+    expect(SaturnReviewClassification.shouldShowFlies(
+        'Filme', {'rating': 0.0, 'notes': ''}), isTrue);
+    expect(SaturnReviewClassification.shouldShowFlies(
+        'Filme', {'notes': 'Não assisti ainda'}), isFalse);
+    expect(SaturnReviewClassification.shouldShowFlies('Filme', null), isFalse);
+    expect(SaturnReviewClassification.shouldShowFlies(
+        'Filme', {'rating': 0.5}), isFalse);
+    expect(SaturnReviewClassification.shouldShowFlies(
+        'Anime', {'rating': 0}), isFalse);
+    expect(SaturnReviewClassification.shouldShowFlies(
+        'Série', {'rating': 0}), isFalse);
+    expect(SaturnReviewClassification.shouldShowFlies(
+        'Livro', {'rating': 0}), isFalse);
+  });
+
 }
