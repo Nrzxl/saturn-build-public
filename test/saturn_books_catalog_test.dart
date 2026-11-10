@@ -65,6 +65,78 @@ void main() {
     expect(result.single.description, contains('210'));
   });
 
+
+  test('Agatha Christie prioritizes verified Portuguese edition and art',
+      () async {
+    final catalog = CatalogClient(client: MockClient((request) async {
+      expect(request.url.path, '/search.json');
+      expect(request.url.queryParameters['q'], 'Agatha Christie');
+      expect(request.url.queryParameters['lang'], 'pt');
+      expect(request.url.queryParameters['fields'], contains('editions.language'));
+      return http.Response(jsonEncode({
+        'docs': [{
+          'key': '/works/OL789W',
+          'title': 'Murder on the Orient Express',
+          'author_name': ['Agatha Christie'],
+          'cover_i': 200,
+          'edition_count': 80,
+          'editions': {'docs': [{
+            'key': '/books/OL123M',
+            'title': 'Assassinato no Expresso do Oriente',
+            'language': ['por'],
+            'cover_i': 9001,
+            'isbn_13': ['9788532529627'],
+          }]},
+        }, {
+          'key': '/works/OL790W',
+          'title': 'A Novel Without Verified Portuguese Translation',
+          'author_name': ['Agatha Christie'],
+          'cover_i': 444,
+          'editions': {'docs': [{
+            'title': 'Foreign edition', 'language': ['eng'],
+          }]},
+        }],
+      }), 200);
+    }));
+    addTearDown(catalog.close);
+    final results = await catalog.search(
+      'Agatha Christie', CatalogFilter.books);
+    expect(results, hasLength(2));
+    expect(results.first.id, 'openlibrary:/works/OL789W');
+    expect(results.first.title, 'Assassinato no Expresso do Oriente');
+    expect(results.first.posterUrl, contains('/9001-M.jpg'));
+    expect(results.first.description, contains('9788532529627'));
+    expect(results.first.creator, 'Agatha Christie');
+    expect(results.last.title,
+        'A Novel Without Verified Portuguese Translation');
+    expect(results.last.posterUrl, contains('/444-M.jpg'));
+  });
+
+  test('Portuguese book editions appear first without hiding other editions',
+      () async {
+    final catalog = CatalogClient(client: MockClient((request) async {
+      expect(request.url.path, '/works/OL222W/editions.json');
+      return http.Response(jsonEncode({
+        'entries': [
+          {'key': '/books/OL1M', 'title': 'Murder on the Orient Express',
+           'languages': [{'key': '/languages/eng'}]},
+          {'key': '/books/OL2M', 'title': 'Assassinato no Expresso do Oriente',
+           'languages': [{'key': '/languages/por'}], 'covers': [1000]},
+          {'key': '/books/OL3M', 'title': 'French edition',
+           'languages': [{'key': '/languages/fre'}]},
+        ],
+      }), 200);
+    }));
+    addTearDown(catalog.close);
+    final editions = await catalog.bookEditions('openlibrary:/works/OL222W');
+    expect(editions.map((e) => e.id).toList(), [
+      'openlibrary:/books/OL2M',
+      'openlibrary:/books/OL1M',
+      'openlibrary:/books/OL3M',
+    ]);
+    expect(editions.first.posterUrl, contains('/1000-M.jpg'));
+  });
+
   test('Manga volume 1 and special edition keep distinct IDs', () async {
     final catalog = CatalogClient(client: MockClient((request) async {
       expect(request.url.path, '/works/OL999W/editions.json');
