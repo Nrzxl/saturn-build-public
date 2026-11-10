@@ -15,6 +15,7 @@ class CatalogEntry {
   final String kind;
   final String description;
   final String posterUrl;
+  final String backdropUrl;
   final String creator;
   final String provider;
   final String detailUrl;
@@ -40,6 +41,7 @@ class CatalogEntry {
     required this.description,
     required this.year,
     required this.posterUrl,
+    this.backdropUrl = '',
     required this.creator,
     required this.provider,
     required this.detailUrl,
@@ -86,6 +88,7 @@ class CatalogClient {
       description: (row['description'] ?? '').toString(),
       year: row['year'] is num ? (row['year'] as num).toInt() : 0,
       posterUrl: (row['posterUrl'] ?? '').toString(),
+      backdropUrl: (row['backdropUrl'] ?? '').toString(),
       provider: 'TMDB',
       creator: (row['creator'] ?? '').toString(),
       detailUrl: (row['detailUrl'] ?? '').toString(),
@@ -103,6 +106,35 @@ class CatalogClient {
   }
 
   final Map<String, Future<String?>> _trailerLookupCache = {};
+  final Map<String, Future<String?>> _backdropLookupCache = {};
+
+  /// Exact-ID backdrop lookup for older saved works that predate this field.
+  /// Never guesses a movie by name or substitutes another title's artwork.
+  Future<String?> verifiedBackdropFor({
+    required String workId, String cachedBackdrop = '',
+  }) {
+    String? valid(String raw) {
+      final uri = Uri.tryParse(raw);
+      if (uri == null || uri.scheme != 'https' ||
+          !['image.tmdb.org', 'img.amodb.dev'].contains(uri.host) ||
+          !uri.path.startsWith('/t/p/')) return null;
+      return raw;
+    }
+    final cached = valid(cachedBackdrop);
+    if (cached != null) return Future.value(cached);
+    if (!_enableTmdb || !workId.startsWith('tmdb:')) {
+      return Future.value(null);
+    }
+    return _backdropLookupCache.putIfAbsent(workId, () async {
+      try {
+        final row = await _tmdb.findById(workId);
+        return valid((row?['backdropUrl'] ?? '').toString());
+      } catch (_) {
+        // An unavailable feed must not hide the poster or title details.
+        return null;
+      }
+    });
+  }
 
   /// Look up a confirmed YouTube trailer from SATURN's public, keyed TMDB
   /// snapshot. No TMDB API key, guessing video IDs or YouTube scraping.
@@ -187,6 +219,7 @@ class CatalogClient {
           description: (row['description'] ?? '').toString(),
           year: row['year'] is num ? (row['year'] as num).toInt() : 0,
           posterUrl: (row['posterUrl'] ?? '').toString(),
+          backdropUrl: (row['backdropUrl'] ?? '').toString(),
           creator: (row['creator'] ?? '').toString(),
           provider: 'TMDB',
           detailUrl: (row['detailUrl'] ?? '').toString(),

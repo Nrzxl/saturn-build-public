@@ -77,12 +77,15 @@ class CatalogGenerationTests(unittest.TestCase):
     def test_no_adult_titles_and_no_duplicate_ids(self):
         record = {
             "id": 100, "title": "Filme Real", "poster_path": "/poster.jpg",
+            "backdrop_path": "/cinema.jpg",
             "popularity": 42, "overview": "Uma história",
         }
         self.assertEqual(MODULE.save_result("movie", record), "tmdb:movie:100")
         self.assertIsNone(MODULE.save_result("movie", {**record, "adult": True}))
         self.assertEqual(MODULE.save_result("movie", record), "tmdb:movie:100")
         self.assertEqual(len(MODULE.TITLES), 1)
+        self.assertEqual(MODULE.TITLES["tmdb:movie:100"]["backdropUrl"],
+                         "https://image.tmdb.org/t/p/w1280/cinema.jpg")
 
     def test_uses_brazilian_subscription_only_not_rental(self):
         def fake_get(path, params=None):
