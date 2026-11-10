@@ -85,7 +85,7 @@ void main() {
       final movies = [
         for (var i = 1; i <= 46; i++)
           title(id: 'tmdb:movie:' + i.toString(),
-            name: 'Título ' + i.toString()),
+            name: 'Title ' + i.toString()),
       ];
       movies[45] = {
         ...movies[45],
@@ -109,7 +109,7 @@ void main() {
       client: MockClient((request) async => http.Response(jsonEncode({
         'schema': 1, 'country': 'BR',
         'results': [{
-          ...title(id: 'tmdb:movie:46', name: 'Um título traduzido'),
+          ...title(id: 'tmdb:movie:46', name: 'Localized title'),
           'tmdbVoteAverage': 8.7,
           'tmdbVoteCount': 5100,
           'externalRatings': {'imdb': '8.4/10'},
