@@ -303,7 +303,8 @@ class CatalogClient {
     if (works.isEmpty && errors.isNotEmpty) {
       throw StateError('Não foi possível consultar ${errors.join(', ')}. Tente novamente.');
     }
-    return works;
+    return filter == CatalogFilter.books
+        ? _prioritizePortuguese(works) : works;
   }
 
   /// Descoberta por categorias: carregamento real a partir de serviços
@@ -378,7 +379,31 @@ class CatalogClient {
     if (works.isEmpty && errors.isNotEmpty) {
       throw StateError('Sem acesso aos catálogos (${errors.join(', ')}). Verifique a rede.');
     }
-    return works;
+    return filter == CatalogFilter.books
+        ? _prioritizePortuguese(works) : works;
+  }
+
+  static List<CatalogEntry> _prioritizePortuguese(
+      List<CatalogEntry> entries) {
+    final sorted = [...entries];
+    int quality(CatalogEntry book) {
+      final provider = book.provider.toLowerCase();
+      var score = 0;
+      if (provider.contains('português') ||
+          provider.contains('brasil') ||
+          provider.contains('brasileira')) score += 8;
+      if (book.posterUrl.startsWith('https://')) score += 2;
+      if (book.creator.trim().isNotEmpty) score += 1;
+      if (book.description.contains('ISBN:')) score += 1;
+      return score;
+    }
+    sorted.sort((a, b) {
+      final byQuality = quality(b).compareTo(quality(a));
+      if (byQuality != 0) return byQuality;
+      // With equally strong editions, retain source relevance/order.
+      return entries.indexOf(a).compareTo(entries.indexOf(b));
+    });
+    return sorted;
   }
 
   static List<CatalogEntry> _unique(Iterable<CatalogEntry> entries) {
@@ -597,7 +622,7 @@ class CatalogClient {
       'Raduan Nassar', 'Vinicius de Moraes', 'Itamar Vieira Junior',
       'Socorro Acioli', 'Marina Colasanti', 'Ailton Krenak',
       'Daniel Munduruku', 'Djamila Ribeiro', 'José Mauro de Vasconcelos',
-      'Ana Maria Machado', 'Conceição Lima',
+      'Ana Maria Machado', 'Lúcio Cardoso',
     ];
     // Do not concatenate an author with a multi-word subject filter:
     // that exact combination frequently returns zero volumes.
@@ -913,10 +938,22 @@ class CatalogClient {
           'editions.isbn_13,editions.isbn_10',
       }));
     } catch (_) {
-      // A verified bibliographic entry remains discoverable during OL
-      // outages; never create fake OL IDs or erase locally saved books.
-      if (verified.isNotEmpty) return verified;
-      rethrow;
+      // Some OL work queries time out while expanding all editions.
+      // Retry the same real catalog with a leaner fields projection.
+      try {
+        data = await _get(Uri.https('openlibrary.org', '/search.json', {
+          'q': search,
+          'lang': 'pt',
+          'limit': '35',
+          'page': page.clamp(1, 150).toString(),
+          'fields': 'key,title,author_name,cover_i,first_publish_year,'
+              'edition_count,language,isbn',
+        })).timeout(const Duration(seconds: 7));
+      } catch (_) {
+        // Retain only bibliographically verified offline fallback entries.
+        if (verified.isNotEmpty) return verified;
+        rethrow;
+      }
     }
     if (data is! Map || data['docs'] is! List) return verified;
     final result = <CatalogEntry>[...verified];
