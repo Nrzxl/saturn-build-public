@@ -12,6 +12,7 @@ import 'streaming_preferences.dart';
 import 'streaming_links.dart';
 import 'saturn_star_rating.dart';
 import 'saturn_review_tiers.dart';
+import 'saturn_metallic_halo.dart';
 import 'saturn_share.dart';
 import 'saturn_trailer.dart';
 import 'saturn_native_trailer.dart';
@@ -1840,23 +1841,18 @@ class _SaturnHomeState extends State<SaturnHome>
         margin: const EdgeInsets.all(7),
         decoration: BoxDecoration(
           color: const Color(0xFF241B27),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(17),
           border: Border.all(
-            color: tier == null ? const Color(0x554C3547) : tier.color,
-            width: tier == null ? 1 : 1.8,
+            color: tier == null
+                ? const Color(0x554C3547)
+                : Colors.transparent,
+            width: tier == null ? 1 : 0,
           ),
-          boxShadow: tier == null ? const [] : [
-            BoxShadow(
-              color: tier.color.withValues(alpha: 0.36),
-              blurRadius: 17, spreadRadius: 1.5,
-            ),
-            BoxShadow(
-              color: tier.color.withValues(alpha: 0.15),
-              blurRadius: 27, spreadRadius: 1,
-            ),
-          ],
         ),
-        child: Material(
+        child: SaturnMetallicHalo(
+          key: tier == null ? null : Key('saturn-review-halo-' + work.id),
+          color: tier?.color,
+          child: Material(
           borderRadius: BorderRadius.circular(15),
           color: const Color(0xFF251C2A),
           clipBehavior: Clip.antiAlias,
@@ -1871,27 +1867,6 @@ class _SaturnHomeState extends State<SaturnHome>
                     width: double.infinity,
                     height: double.infinity,
                   ),
-                  if (tier != null && stars != null)
-                    Positioned(top: 6, right: 5, child: Container(
-                      key: Key('saturn-review-halo-' + work.id),
-                      decoration: BoxDecoration(
-                        color: const Color(0xF2221A26),
-                        border: Border.all(
-                          color: tier.color.withValues(alpha: 0.75)),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5, vertical: 4),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.auto_awesome,
-                          color: tier.color, size: 12),
-                        const SizedBox(width: 3),
-                        Text(tier.label,
-                          style: TextStyle(color: tier.color,
-                            fontSize: 9, letterSpacing: 0.4,
-                            fontWeight: FontWeight.bold)),
-                      ]),
-                    )),
                   if (_selectingWorks)
                     Positioned(
                       top: 3, left: 3,
@@ -1917,7 +1892,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         ? (work.year > 0
                             ? work.kind + ' · ' + work.year.toString()
                             : work.kind)
-                        : stars.toStringAsFixed(1) + ' ★ / 5 · ' + tier.label,
+                        : stars.toStringAsFixed(1) + ' ★ / 5',
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: tier?.color ?? const Color(0xFFCEB9C6),
@@ -1982,6 +1957,7 @@ class _SaturnHomeState extends State<SaturnHome>
               ],
             ),
           ),
+        ),
         ),
       ),
     );
@@ -2425,55 +2401,13 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   });
 
-  /// Bronze -> Prata -> Ouro, and unreviewed items kept separately.
-  /// Only the current person's written reviews determine this ordering.
+  /// Seamless cover wall, highest personal ratings first. A small metallic
+  /// rim conveys the category without labels or interstitial headings.
   Widget _collectionContents(List<Work> items) {
-    final byTier = <SaturnReviewTier, List<Work>>{
-      for (final tier in SaturnReviewTier.values)
-        tier: items.where((work) =>
-            SaturnReviewClassification.of(entry(work)) == tier)
-            .toList(growable: false),
-    };
-    final pending = items.where((work) =>
-        SaturnReviewClassification.of(entry(work)) == null)
-        .toList(growable: false);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      for (final tier in SaturnReviewTier.values)
-        if (byTier[tier]!.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(17, 16, 17, 7),
-            child: Row(children: [
-              Icon(Icons.auto_awesome, size: 18, color: tier.color),
-              const SizedBox(width: 9),
-              Text(tier.label,
-                style: TextStyle(color: tier.color,
-                  fontSize: 13, fontWeight: FontWeight.bold,
-                  letterSpacing: 1.4)),
-              const SizedBox(width: 9),
-              Text(byTier[tier]!.length.toString(),
-                style: const TextStyle(
-                  color: Color(0xFFBFAAB7), fontSize: 12)),
-            ]),
-          ),
-          _rankedGalleryGrid(byTier[tier]!),
-        ],
-      if (pending.isNotEmpty) ...[
-        const Padding(
-          padding: EdgeInsets.fromLTRB(17, 16, 17, 7),
-          child: Row(children: [
-            Icon(Icons.grid_view_rounded, size: 18,
-              color: Color(0xFFBEAABA)),
-            SizedBox(width: 9),
-            Expanded(child: Text('SEM CLASSIFICAÇÃO · SEM HALO',
-              style: TextStyle(
-                color: Color(0xFFCFBDC9),
-                fontSize: 12, fontWeight: FontWeight.w600,
-                letterSpacing: 0.9))),
-          ]),
-        ),
-        _rankedGalleryGrid(pending),
-      ],
-    ]);
+    if (items.isEmpty) return const SizedBox.shrink();
+    final ranked = SaturnReviewClassification.sorted<Work>(
+      items, (work) => entry(work));
+    return _rankedGalleryGrid(ranked);
   }
 
   Widget _collection() {
@@ -3634,8 +3568,8 @@ class _SaturnHomeState extends State<SaturnHome>
                 const Padding(
                   padding: EdgeInsets.only(bottom: 12, top: 2),
                   child: Text(
-                    'Meia estrela é permitida. O halo Bronze, Prata ou Ouro '
-                    'só aparece na capa depois que você salvar uma nota '
+                    'Meia estrela é permitida. O brilho da capa '
+                    'aparece quando você salva uma nota '
                     'e uma resenha escrita.',
                     style: TextStyle(
                       fontSize: 11, color: Color(0xFFBFAAB4)),
