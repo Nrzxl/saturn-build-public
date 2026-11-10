@@ -7,8 +7,14 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 /// Never auto-play with audio enabled; leaving the details disposes the player.
 class SaturnTrailerPreview extends StatefulWidget {
   final String youtubeId;
+  final bool heroMode;
+  final String workTitle;
+  final String workMetadata;
 
-  const SaturnTrailerPreview({super.key, required this.youtubeId});
+  const SaturnTrailerPreview({
+    super.key, required this.youtubeId,
+    this.heroMode = false, this.workTitle = '', this.workMetadata = '',
+  });
 
   @override
   State<SaturnTrailerPreview> createState() => _SaturnTrailerPreviewState();
@@ -17,6 +23,7 @@ class SaturnTrailerPreview extends StatefulWidget {
 class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   YoutubePlayerController? _controller;
   bool _muted = true;
+  bool _playing = true;
 
   static bool validVideoId(String value) =>
       RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(value);
@@ -35,8 +42,9 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
       params: const YoutubePlayerParams(
         mute: true,
         playsInline: true,
-        showControls: true,
-        showFullscreenButton: true,
+        showControls: false,
+        showFullscreenButton: false,
+        enableCaption: false,
         privacyEnhancedMode: true,
       ),
     );
@@ -49,6 +57,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
     _controller?.close();
     _controller = null;
     _muted = true;
+    _playing = true;
     _setup();
   }
 
@@ -56,6 +65,21 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   void dispose() {
     _controller?.close();
     super.dispose();
+  }
+
+  Future<void> _togglePlayback() async {
+    final player = _controller;
+    if (player == null) return;
+    try {
+      if (_playing) {
+        await player.pauseVideo();
+      } else {
+        await player.playVideo();
+      }
+      if (mounted) setState(() => _playing = !_playing);
+    } catch (_) {
+      // Safari may disallow autoplay; the control is still available.
+    }
   }
 
   Future<void> _toggleSound() async {
@@ -91,6 +115,63 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   Widget build(BuildContext context) {
     final controller = _controller;
     if (controller == null) return const SizedBox.shrink();
+    if (widget.heroMode) {
+      // The title and controls remain in the SAME hero surface as the
+      // official player. They sit outside the iframe hit-test region, which
+      // keeps them clickable in Safari Web and the installed iOS PWA.
+      return Container(
+        key: const Key('saturn-trailer-hero'),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(23),
+          gradient: const LinearGradient(colors: [
+            Color(0xFF402639), Color(0xFF191923),
+          ]),
+          border: Border.all(color: const Color(0x665F465A)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 780),
+              child: YoutubePlayer(
+                controller: controller, aspectRatio: 16 / 9))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 13),
+              child: Row(children: [
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.workTitle, maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'serif', color: Color(0xFFF2E8DF),
+                        fontSize: 21, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 3),
+                    Text(widget.workMetadata, maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFD0B8C7), fontSize: 11)),
+                  ],
+                )),
+                IconButton.filledTonal(
+                  key: const Key('saturn-trailer-play-pause'),
+                  tooltip: _playing ? 'Pausar trailer' : 'Reproduzir trailer',
+                  icon: Icon(_playing
+                      ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                  onPressed: _togglePlayback),
+                const SizedBox(width: 4),
+                IconButton.filledTonal(
+                  key: const Key('saturn-trailer-mute'),
+                  tooltip: _muted ? 'Ativar som' : 'Silenciar trailer',
+                  icon: Icon(_muted
+                      ? Icons.volume_off_rounded : Icons.volume_up_rounded),
+                  onPressed: _toggleSound),
+              ]),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
