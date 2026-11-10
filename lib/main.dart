@@ -5038,7 +5038,9 @@ class PosterThumbnail extends StatelessWidget {
   final Work work;
   final double width;
   final double height;
-  const PosterThumbnail({super.key, required this.work, this.width = 54, this.height = 74});
+  final BoxFit fit;
+  const PosterThumbnail({super.key, required this.work,
+    this.width = 54, this.height = 74, this.fit = BoxFit.cover});
 
   @override
   Widget build(BuildContext context) {
@@ -5063,9 +5065,11 @@ class PosterThumbnail extends StatelessWidget {
           ? width
           : constraints.maxWidth.isFinite && constraints.maxWidth > 0
               ? constraints.maxWidth : 168.0;
+      // The frame often expands on hover, desktop zoom or retina screens.
+      // Decode crisp artwork rather than magnifying a tiny thumbnail.
       final pixels = (logicalWidth *
-          MediaQuery.devicePixelRatioOf(context) * 1.16)
-          .round().clamp(100, 1280).toInt();
+          MediaQuery.devicePixelRatioOf(context) * 1.85)
+          .round().clamp(320, 1400).toInt();
       final coverUrl = SaturnArtwork.bestUrl(original,
           devicePixels: pixels.toDouble());
       return ClipRRect(
@@ -5074,9 +5078,9 @@ class PosterThumbnail extends StatelessWidget {
           coverUrl,
           key: ValueKey('cover-' + work.id + '-' + coverUrl),
           width: width, height: height,
-          fit: BoxFit.cover,
+          fit: fit,
           cacheWidth: pixels,
-          filterQuality: FilterQuality.medium,
+          filterQuality: FilterQuality.high,
           gaplessPlayback: true,
           // One image at a time: avoid stacked loading frames that can
           // paint two covers across the same card during rapid scrolling.
@@ -5087,8 +5091,8 @@ class PosterThumbnail extends StatelessWidget {
                 (coverUrl != original ? original : '');
             if (!alternate.startsWith('https://')) return fallback;
             return Image.network(alternate,
-              width: width, height: height, fit: BoxFit.cover,
-              cacheWidth: pixels,
+              width: width, height: height, fit: fit,
+              cacheWidth: pixels, filterQuality: FilterQuality.high,
               errorBuilder: (context, error, trace) => fallback,
             );
           },
@@ -5720,146 +5724,126 @@ class _CatalogExploreState extends State<CatalogExplore> {
 
   /// Cinematic card: edge-to-edge original cover, restrained metadata and
   /// subtle metallic detailing. No extra network requests per visible card.
+  /// One continuous illustration surface, with an integrated soft-bottom
+  /// gradient instead of two separate layers with a visible horizontal seam.
   Widget _coverCard(Work work) {
     final loved = widget.isShared(work);
     final artUrl = SaturnArtwork.bestUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl),
-      devicePixels: 460,
+      devicePixels: 540,
     );
     return FutureBuilder<Color>(
       future: SaturnArtwork.toneFor(artUrl),
       builder: (context, snapshot) {
         final tone = snapshot.data ?? SaturnArtwork.fallback;
         final accent = Color.lerp(tone, gold, .48)!;
-        return SaturnHoverLift(child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
-              colors: [tone, Color.lerp(tone, night, .82)!],
+        final base = Color.lerp(tone, night, .82)!;
+        return SaturnHoverLift(
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: base,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: accent.withValues(alpha: .65)),
+              boxShadow: [
+                BoxShadow(color: tone.withValues(alpha: .25),
+                    blurRadius: 15, offset: const Offset(0, 6)),
+              ],
             ),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: accent.withValues(alpha: .65)),
-            boxShadow: [
-              BoxShadow(color: tone.withValues(alpha: .25),
-                blurRadius: 15, offset: const Offset(0, 6)),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Material(color: Colors.transparent,
-            child: InkWell(
-              key: Key('saturn-cinematic-cover-' + work.id),
-              onTap: () => widget.onOpen(work),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: Stack(fit: StackFit.expand, children: [
-                    PosterThumbnail(work: work,
-                      width: double.infinity, height: double.infinity),
-                    Positioned.fill(child: DecoratedBox(
-                      decoration: BoxDecoration(gradient: LinearGradient(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: Key('saturn-cinematic-cover-' + work.id),
+                onTap: () => widget.onOpen(work),
+                child: Stack(fit: StackFit.expand, children: [
+                  PosterThumbnail(work: work, width: double.infinity,
+                      height: double.infinity),
+                  Positioned.fill(child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
+                        stops: const [0, .42, .64, .81, 1],
                         colors: [
-                          const Color(0x640C0B15),
+                          const Color(0x540C0B15),
                           Colors.transparent,
-                          tone.withValues(alpha: .30),
-                          tone,
+                          tone.withValues(alpha: .10),
+                          base.withValues(alpha: .90),
+                          base,
                         ],
-                        stops: const [0, .45, .73, 1],
-                      )),
-                    )),
-                    Positioned(top: 5, left: 5,
-                      child: IconButton.filledTonal(
-                        tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => widget.onToggleWatchlist(work),
-                        icon: Icon(widget.isWatchlisted(work)
-                          ? Icons.bookmark_added : Icons.bookmark_add_outlined,
-                          color: ivory, size: 18))),
-                    Positioned(top: 5, right: 5,
-                      child: IconButton.filledTonal(
-                        tooltip: 'Adicionar à Nossa Órbita',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => widget.onToggleShared(work),
-                        icon: Icon(loved
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_outline_rounded,
-                          size: 18,
-                          color: loved ? const Color(0xFFF0B6C2) : ivory))),
-                    Positioned(bottom: 7, right: 5,
-                      child: IconButton.filledTonal(
-                        tooltip: work.kind == 'Livro'
-                          ? 'Marcar como lido' : 'Marcar como assistido',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => widget.onToggleCompleted(work),
-                        icon: Icon(widget.isCompleted(work)
-                          ? Icons.check_circle : Icons.check_circle_outline,
-                          color: widget.isCompleted(work)
-                            ? const Color(0xFF97CDB4) : ivory,
-                          size: 18))),
-                    Positioned(bottom: 14, left: 10,
-                      child: Text(work.kind.toUpperCase(),
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ivory, letterSpacing: 1.5,
-                          fontSize: 9, fontWeight: FontWeight.w800))),
-                  ])),
-                  SizedBox(
-                    height: 80,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [tone, Color.lerp(tone, night, .62)!],
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              height: 40,
-                              child: Align(
-                                alignment: Alignment.topLeft,
-                                child: Text(
-                                  work.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  softWrap: true,
-                                  style: const TextStyle(
-                                    color: ivory, fontFamily: 'serif',
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14, height: 1.17,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const Spacer(),
-                            Text([
-                              if (work.year > 0) work.year.toString(),
-                              if (work.kind == 'Livro' &&
-                                  work.creator.isNotEmpty) work.creator
-                              else if (work.kind != 'Livro') work.provider,
-                            ].join(' · '),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xFFE4CAD6), fontSize: 10),
-                            ),
-                          ],
-                        ),
                       ),
                     ),
+                  )),
+                  Positioned(top: 5, left: 5,
+                    child: IconButton.filledTonal(
+                      tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => widget.onToggleWatchlist(work),
+                      icon: Icon(widget.isWatchlisted(work)
+                        ? Icons.bookmark_added : Icons.bookmark_add_outlined,
+                        color: ivory, size: 18))),
+                  Positioned(top: 5, right: 5,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Adicionar à Nossa Órbita',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => widget.onToggleShared(work),
+                      icon: Icon(loved
+                        ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
+                        size: 18,
+                        color: loved ? const Color(0xFFF0B6C2) : ivory))),
+                  Positioned(bottom: 102, right: 5,
+                    child: IconButton.filledTonal(
+                      tooltip: work.kind == 'Livro'
+                        ? 'Marcar como lido' : 'Marcar como assistido',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => widget.onToggleCompleted(work),
+                      icon: Icon(widget.isCompleted(work)
+                        ? Icons.check_circle : Icons.check_circle_outline,
+                        color: widget.isCompleted(work)
+                          ? const Color(0xFF97CDB4) : ivory,
+                        size: 18))),
+                  Positioned(bottom: 114, left: 11, right: 51,
+                    child: Text(work.kind.toUpperCase(),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: ivory, letterSpacing: 1.5,
+                        fontSize: 9, fontWeight: FontWeight.w800))),
+                  Positioned(bottom: 9, left: 11, right: 10,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(height: 41,
+                          child: Align(alignment: Alignment.topLeft,
+                            child: Text(work.title,
+                              maxLines: 2, overflow: TextOverflow.ellipsis,
+                              softWrap: true,
+                              style: const TextStyle(
+                                color: ivory, fontFamily: 'serif',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14, height: 1.17)),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text([
+                          if (work.year > 0) work.year.toString(),
+                          if (work.kind == 'Livro' &&
+                              work.creator.isNotEmpty) work.creator
+                          else if (work.kind != 'Livro') work.provider,
+                        ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFE4CAD6), fontSize: 10)),
+                      ],
+                    ),
                   ),
-                ],
+                ]),
               ),
             ),
           ),
-        ));
+        );
       },
     );
   }
-
 }
