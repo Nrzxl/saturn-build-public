@@ -127,6 +127,8 @@ void main() {
       const Key('saturn-ritual-film-person-0'));
     final nominate = find.descendant(
       of: person, matching: find.text('Fazer minha indicação'));
+    await tester.scrollUntilVisible(person, 180,
+        scrollable: find.byType(Scrollable).first, maxScrolls: 24);
     await tester.ensureVisible(nominate);
     await tester.tap(nominate);
     await tester.pumpAndSettle();
