@@ -1830,16 +1830,19 @@ class _SaturnHomeState extends State<SaturnHome>
                     Positioned.fill(
                       child: Opacity(
                         opacity: 0.36,
-                        child: ImageFiltered(
-                          imageFilter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                          child: Image.network(
-                            featured.posterUrl,
-                            fit: BoxFit.cover,
-                            alignment: Alignment.centerRight,
-                            errorBuilder: (context, error, stack) =>
-                                const SizedBox.shrink(),
-                          ),
-                        ),
+                        child: spacious
+                            ? ImageFiltered(
+                                imageFilter: ui.ImageFilter.blur(
+                                  sigmaX: 12, sigmaY: 12),
+                                child: Image.network(featured.posterUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stack) =>
+                                      const SizedBox.shrink()))
+                            : Image.network(featured.posterUrl,
+                                fit: BoxFit.cover,
+                                alignment: Alignment.centerRight,
+                                errorBuilder: (context, error, stack) =>
+                                    const SizedBox.shrink()),
                       ),
                     ),
                   const DecoratedBox(
@@ -4182,13 +4185,20 @@ class _SaturnHomeState extends State<SaturnHome>
             if (work.posterUrl.startsWith('https://'))
               Positioned.fill(child: Opacity(
                 opacity: 0.32,
-                child: ImageFiltered(
-                  imageFilter: ui.ImageFilter.blur(sigmaX: 13, sigmaY: 13),
-                  child: Image.network(
-                    SaturnBookCover.resolve(work.id, work.posterUrl),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stack) =>
-                        const SizedBox.shrink())))),
+                child: wide
+                    ? ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(
+                          sigmaX: 12, sigmaY: 12),
+                        child: Image.network(
+                          SaturnBookCover.resolve(work.id, work.posterUrl),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stack) =>
+                              const SizedBox.shrink()))
+                    : Image.network(
+                        SaturnBookCover.resolve(work.id, work.posterUrl),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stack) =>
+                            const SizedBox.shrink()))),
             const DecoratedBox(decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.centerLeft, end: Alignment.centerRight,
@@ -4785,7 +4795,12 @@ class PosterThumbnail extends StatelessWidget {
         key: ValueKey('cover-' + work.id + '-' + coverUrl),
         width: width, height: height,
         fit: BoxFit.cover,
-        filterQuality: FilterQuality.medium,
+        // Decode smaller thumbnails where supported and keep low-cost
+        // filtering while Safari scrolls hundreds of book/film covers.
+        cacheWidth: width.isFinite && width > 0
+            ? (width * MediaQuery.devicePixelRatioOf(context))
+                .round().clamp(60, 780) : null,
+        filterQuality: FilterQuality.low,
         gaplessPlayback: true,
         // Show the first decoded frame instead of hiding it until the
         // network loading callback finishes. Crossfade avoids white flashes.
