@@ -102,6 +102,67 @@ class CatalogClient {
     );
   }
 
+  final Map<String, Future<String?>> _trailerLookupCache = {};
+
+  /// Look up a confirmed YouTube trailer from SATURN's public, keyed TMDB
+  /// snapshot. No TMDB API key, guessing video IDs or YouTube scraping.
+  Future<String?> verifiedTrailerFor({
+    required String workId,
+    required String title,
+    required String kind,
+    required int year,
+  }) {
+    final key = '$workId:$title:$year';
+    return _trailerLookupCache.putIfAbsent(key, () async {
+      if (!_enableTmdb ||
+          (kind != 'Filme' && kind != 'Série' &&
+           kind != 'Dorama' && kind != 'Anime')) return null;
+      bool valid(Map row) {
+        final video = (row['trailerYoutubeId'] ?? '').toString();
+        return RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(video);
+      }
+      String normalized(String value) {
+        const from = 'áàâãäéèëíìîïóòôõöúùûüçñ';
+        const into = 'aaaaaeeeeiiiiooooouuuucn';
+        var text = value.toLowerCase();
+        for (var i = 0; i < from.length; i++) {
+          text = text.replaceAll(from[i], into[i]);
+        }
+        return text.replaceAll(RegExp(r'[^a-z0-9]'), '');
+      }
+      try {
+        final exact = await _tmdb.findById(workId);
+        if (exact != null && valid(exact)) {
+          return (exact['trailerYoutubeId'] ?? '').toString();
+        }
+        final group = kind == 'Filme' ? 'movies' : 'series';
+        final groups = <String>[group,
+          if (kind != 'Filme') 'dramas',
+          if (kind == 'Anime') 'anime'];
+        final target = normalized(title);
+        for (final category in groups) {
+          final rows = await _tmdb.query(
+            filter: category, search: title, page: 1, perPage: 40);
+          for (final row in rows) {
+            if (!valid(row)) continue;
+            final name = normalized((row['title'] ?? '').toString());
+            final original =
+                normalized((row['originalTitle'] ?? '').toString());
+            if (target != name && target != original) continue;
+            final catalogYear =
+                row['year'] is num ? (row['year'] as num).toInt() : 0;
+            if (year > 0 && catalogYear > 0 &&
+                (year - catalogYear).abs() > 2) continue;
+            return (row['trailerYoutubeId'] ?? '').toString();
+          }
+        }
+      } catch (_) {
+        // The title's existing details and personal reviews are still usable.
+      }
+      return null;
+    });
+  }
+
   Future<List<CatalogEntry>> _snapshot({
     required CatalogFilter filter,
     required String query,
