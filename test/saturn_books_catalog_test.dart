@@ -155,9 +155,12 @@ void main() {
     final isbnResults = await catalog.search(
         '9788520936511', CatalogFilter.books);
     expect(isbnResults.single.id, CatalogClient.nileBrazilianId);
-    final laterPage = await catalog.search(
-        'Morte no Nilo', CatalogFilter.books, page: 2);
-    expect(laterPage, isEmpty);
+    // Other pages are source-driven and should report an actual outage
+    // rather than silently pretending there are no further books.
+    await expectLater(
+      catalog.search('Morte no Nilo', CatalogFilter.books, page: 2),
+      throwsStateError,
+    );
   });
 
   test('Portuguese book editions appear first without hiding other editions',
