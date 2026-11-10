@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'catalog_client.dart';
 
 const satinGold = Color(0xFFC6A477);
@@ -50,10 +51,11 @@ class SaturnDetailSection extends StatelessWidget {
 class SaturnExternalRatings extends StatelessWidget {
   const SaturnExternalRatings({
     super.key, required this.ratings, required this.isBook,
-    this.tmdbScore, this.tmdbVoteCount,
+    this.tmdbScore, this.tmdbVoteCount, this.workTitle = '',
   });
 
   final Map<String, String> ratings;
+  final String workTitle;
   final bool isBook;
   final double? tmdbScore;
   final int? tmdbVoteCount;
@@ -76,6 +78,29 @@ class SaturnExternalRatings extends StatelessWidget {
           .hasMatch(input),
       _ => false,
     };
+  }
+
+  /// Official source search, never an unlicensed API/rating scraper.
+  static Uri sourceSearch(String key, String title) {
+    final query = title.trim();
+    return switch (key) {
+      'imdb' => Uri.https('www.imdb.com', '/find/', {'q': query}),
+      'rottenTomatoes' => Uri.https(
+          'www.rottentomatoes.com', '/search', {'search': query}),
+      'metacritic' => Uri.https(
+          'www.metacritic.com', '/search/' + query + '/'),
+      _ => throw ArgumentError.value(key, 'source', 'Unknown source'),
+    };
+  }
+
+  Future<void> _openSource(String key) async {
+    if (workTitle.trim().isEmpty) return;
+    try {
+      await launchUrl(sourceSearch(key, workTitle),
+          mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // A disabled external browser cannot affect personal reviews.
+    }
   }
 
   @override
@@ -140,6 +165,19 @@ class SaturnExternalRatings extends StatelessWidget {
                   icon: source.$3,
                 ),
             ]),
+          if (workTitle.trim().isNotEmpty) ...[
+            const SizedBox(height: 13),
+            Wrap(spacing: 7, runSpacing: 7, children: [
+              for (final source in _sources)
+                ActionChip(
+                  tooltip: 'Pesquisar críticas no site oficial',
+                  avatar: Icon(source.$3, size: 15, color: satinGold),
+                  label: Text('Ver no ' + source.$2.split(' · ').first,
+                    style: const TextStyle(fontSize: 11)),
+                  onPressed: () => _openSource(source.$1),
+                ),
+            ]),
+          ],
           const SizedBox(height: 11),
           Text(
             external.isEmpty
@@ -239,6 +277,7 @@ class _SaturnRatingsFromCatalogState extends State<SaturnRatingsFromCatalog> {
           children: [
             SaturnExternalRatings(
               ratings: scores, isBook: false,
+              workTitle: widget.workTitle,
               tmdbScore: refreshed?.tmdbScore ?? widget.tmdbScore,
               tmdbVoteCount: refreshed?.tmdbVoteCount ?? widget.tmdbVoteCount,
             ),
