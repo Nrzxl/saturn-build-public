@@ -30,6 +30,7 @@ class CatalogEntry {
   final String watchUrl;
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
+  final String nativeTrailerSubtitleUrl;
   final String originalTitle;
   final String availabilityUpdatedAt;
   final bool availabilityChecked;
@@ -55,6 +56,7 @@ class CatalogEntry {
     this.watchUrl = '',
     this.trailerYoutubeId = '',
     this.nativeTrailerUrl = '',
+    this.nativeTrailerSubtitleUrl = '',
     this.originalTitle = '',
     this.availabilityUpdatedAt = '',
     this.availabilityChecked = false,
@@ -329,6 +331,8 @@ class CatalogClient {
           watchUrl: (row['watchUrl'] ?? '').toString(),
           trailerYoutubeId: (row['trailerYoutubeId'] ?? '').toString(),
           nativeTrailerUrl: (row['nativeTrailerUrl'] ?? '').toString(),
+          nativeTrailerSubtitleUrl:
+              (row['nativeTrailerSubtitleUrl'] ?? '').toString(),
           availabilityChecked: row['availabilityChecked'] == true,
           availabilityUpdatedAt: (row['availabilityUpdatedAt'] ??
                   row['generatedAt'] ?? '').toString(),
