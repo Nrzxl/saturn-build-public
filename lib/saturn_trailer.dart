@@ -41,6 +41,10 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
       params: const YoutubePlayerParams(
         mute: true,
         playsInline: true,
+        // SATURN's existing play/pause and sound actions drive the iframe.
+        // The embedded video surface does not capture taps or mouse clicks.
+        pointerEvents: PointerEvents.none,
+        enableKeyboard: false,
         showControls: false,
         showFullscreenButton: false,
         enableCaption: false,
