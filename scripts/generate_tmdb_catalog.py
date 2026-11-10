@@ -28,6 +28,8 @@ OUT = pathlib.Path(os.environ.get("SATURN_CATALOG_OUTPUT", "catalog_out"))
 MAX_PAGES = max(1, min(65, int(os.environ.get("SATURN_CATALOG_PAGES", "25"))))
 MAX_DETAILS = max(0, min(1200, int(os.environ.get("SATURN_WATCH_LOOKUPS", "500"))))
 MAX_TRAILERS = max(0, min(800, int(os.environ.get("SATURN_TRAILER_LOOKUPS", "360"))))
+MAX_PANORAMA_LOOKUPS = max(0, min(900,
+    int(os.environ.get("SATURN_PANORAMA_LOOKUPS", "350"))))
 # Public snapshots must not redistribute licensed scores without approval.
 OMDB_PUBLICATION_ALLOWED = os.environ.get("SATURN_CRITIC_PUBLICATION_ALLOWED") == "true"
 OMDB_API_KEY = (os.environ.get("SATURN_OMDB_API_KEY", "").strip()
@@ -231,6 +233,36 @@ def enrich_single(ident: str, provider_map: dict[str, dict[str, int]]) -> None:
                 item["streamingProviders"][service] = pname
 
 
+def best_panorama(payload: dict) -> str:
+    """Use verified widescreen TMDB stills, never posters or fuzzy titles."""
+    choices = []
+    for image in payload.get("backdrops") or []:
+        if not isinstance(image, dict):
+            continue
+        path = image.get("file_path")
+        width = image.get("width")
+        height = image.get("height")
+        ratio = image.get("aspect_ratio")
+        if (not isinstance(path, str) or ".." in path or
+            not re.fullmatch(r"/[a-zA-Z0-9_./-]+[.](?:jpg|jpeg|png|webp)", path) or
+            not isinstance(width, int) or width < 1280 or
+            not isinstance(height, int) or height < 640 or
+            not isinstance(ratio, (float, int)) or
+            not 1.5 <= float(ratio) <= 2.5):
+            continue
+        votes = image.get("vote_average") or 0
+        count = image.get("vote_count") or 0
+        # Natural, text-free scenery is preferred to artwork with language.
+        language = image.get("iso_639_1")
+        score = ((1 if language is None else 0),
+                 float(votes), int(count), width)
+        choices.append((score, path))
+    if not choices:
+        return ""
+    choices.sort(reverse=True)
+    return "https://image.tmdb.org/t/p/w1280" + choices[0][1]
+
+
 def trailer_youtube_id(payload: dict) -> str:
     """Only TMDB-provided YouTube trailer keys, never user-generated guesses."""
     videos = payload.get("results") or []
@@ -360,6 +392,25 @@ def build() -> None:
         if (i + 1) % 100 == 0:
             print(f"Watch provider details: {i + 1}")
 
+    missing_artwork = [ident for ident in prioritized
+                       if not TITLES[ident]["backdropUrl"]]
+    rescued = 0
+    for ident in missing_artwork[:MAX_PANORAMA_LOOKUPS]:
+        try:
+            _, media, sid = ident.split(":")
+            images = get(f"/{media}/{sid}/images", {
+                "include_image_language": "pt,en,null",
+            })
+            panorama = best_panorama(images)
+            if panorama:
+                TITLES[ident]["backdropUrl"] = panorama
+                rescued += 1
+        except Exception as exc:
+            print(f"Backdrop lookup failed for {ident}: {type(exc).__name__}",
+                  file=sys.stderr)
+    print(f"Extra authentic panoramas: {rescued} of "
+          f"{min(len(missing_artwork), MAX_PANORAMA_LOOKUPS)} lookups")
+
     for ident in prioritized[:MAX_TRAILERS]:
         try:
             _, media, sid = ident.split(":")
@@ -415,6 +466,10 @@ def build() -> None:
             "country": "BR",
             "generatedAt": NOW,
             "counts": stats,
+            "panoramas": {
+                "available": sum(bool(x["backdropUrl"]) for x in TITLES.values()),
+                "enhanced": rescued,
+            },
         }, handle, ensure_ascii=False, separators=(",", ":"))
     print(json.dumps({
         "source": "TMDB / JustWatch", "counts": stats,
