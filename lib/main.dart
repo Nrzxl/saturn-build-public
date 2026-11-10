@@ -70,6 +70,7 @@ class Work {
   final String watchUrl;
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
+  final String nativeTrailerSubtitleUrl;
   final String availabilityUpdatedAt;
   final bool availabilityChecked;
 
@@ -80,6 +81,7 @@ class Work {
        this.streamingProviders = const {}, this.watchProviders = const [],
        this.watchUrl = '', this.trailerYoutubeId = '',
        this.nativeTrailerUrl = '',
+       this.nativeTrailerSubtitleUrl = '',
        this.genreIds = const [], this.externalRatings = const {},
        this.tmdbScore, this.tmdbVoteCount,
        this.availabilityUpdatedAt = '',
@@ -100,6 +102,7 @@ class Work {
         watchUrl: entry.watchUrl,
         trailerYoutubeId: entry.trailerYoutubeId,
         nativeTrailerUrl: entry.nativeTrailerUrl,
+        nativeTrailerSubtitleUrl: entry.nativeTrailerSubtitleUrl,
         availabilityChecked: entry.availabilityChecked,
         availabilityUpdatedAt: entry.availabilityUpdatedAt,
       );
@@ -142,6 +145,8 @@ class Work {
         watchUrl: (data['watchUrl'] ?? '').toString(),
         trailerYoutubeId: (data['trailerYoutubeId'] ?? '').toString(),
         nativeTrailerUrl: (data['nativeTrailerUrl'] ?? '').toString(),
+        nativeTrailerSubtitleUrl:
+            (data['nativeTrailerSubtitleUrl'] ?? '').toString(),
         availabilityChecked: data['availabilityChecked'] == true,
         availabilityUpdatedAt:
             (data['availabilityUpdatedAt'] ?? '').toString(),
@@ -163,6 +168,7 @@ class Work {
         'watchUrl': watchUrl,
         'trailerYoutubeId': trailerYoutubeId,
         'nativeTrailerUrl': nativeTrailerUrl,
+        'nativeTrailerSubtitleUrl': nativeTrailerSubtitleUrl,
         'availabilityChecked': availabilityChecked,
         'availabilityUpdatedAt': availabilityUpdatedAt,
       };
@@ -4517,6 +4523,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   const SizedBox(height: 10),
                   SaturnNativeTrailer(
                     mediaUrl: w.nativeTrailerUrl,
+                    subtitleUrl: w.nativeTrailerSubtitleUrl,
                     rightsConfirmed: true),
                 ],
                 const SizedBox(height: 12),
