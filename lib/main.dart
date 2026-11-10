@@ -3095,7 +3095,7 @@ class _SaturnHomeState extends State<SaturnHome>
             const Icon(Icons.autorenew, color: gold, size: 17),
             const SizedBox(width: 8),
             Expanded(child: Text(
-              'Próxima escolha: ' + profiles[next],
+              'Próxima escolha: ' + profiles[turns.isEmpty ? 0 : next],
               style: const TextStyle(
                 color: gold, fontWeight: FontWeight.w700))),
           ]),
