@@ -22,6 +22,39 @@ void main() {
       ops, first, by: 1, status: 'dismissed', at: 300), isFalse);
   });
 
+  test('Toque duplo gera uma única sugestão pendente e mantém estado',
+      () {
+    final data = <String, dynamic>{};
+    final one = SaturnCoupleSuggestion.send(
+      data, from: 0, workId: 'tmdb:movie:99', at: 1234);
+    final two = SaturnCoupleSuggestion.send(
+      data, from: 0, workId: 'tmdb:movie:99', at: 1235);
+    expect(two, one);
+    expect(data, hasLength(1));
+    expect(SaturnCoupleSuggestion.alreadySent(data,
+      from: 0, workId: 'tmdb:movie:99')?.status, 'pending');
+    expect(SaturnCoupleSuggestion.visible(data), hasLength(1));
+    expect(SaturnCoupleSuggestion.answer(data, one,
+        by: 1, status: 'accepted', at: 1236), isTrue);
+    expect(SaturnCoupleSuggestion.send(data,
+        from: 0, workId: 'tmdb:movie:99', at: 1237), one);
+    expect(data, hasLength(1));
+  });
+
+  test('Sugestão recusada permite novo envio sem apagar o histórico', () {
+    final data = <String, dynamic>{};
+    final old = SaturnCoupleSuggestion.send(
+      data, from: 1, workId: 'book', at: 200);
+    expect(SaturnCoupleSuggestion.answer(data, old,
+      by: 0, status: 'dismissed', at: 210), isTrue);
+    final newer = SaturnCoupleSuggestion.send(
+      data, from: 1, workId: 'book', at: 220);
+    expect(newer, isNot(old));
+    expect(data, hasLength(2));
+    expect(SaturnCoupleSuggestion.visible(data), hasLength(1));
+    expect(SaturnCoupleSuggestion.visible(data).single.key, newer);
+  });
+
   test('IDs únicos mesmo quando timestamp coincide; dados ruins ignorados', () {
     final ops = <String, dynamic>{};
     final a = SaturnCoupleSuggestion.send(
