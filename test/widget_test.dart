@@ -429,9 +429,62 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ONDE ASSISTIR · BRASIL'), findsOneWidget);
     expect(find.text('Crunchyroll'), findsWidgets);
-    expect(find.text('Link específico fornecido pela fonte'), findsOneWidget);
-    expect(find.text('Disponibilidade não confirmada'), findsWidgets);
+    expect(find.text('Link fornecido · disponibilidade não confirmada'),
+        findsOneWidget);
+    expect(find.text('Nenhuma assinatura confirmada para este título.'),
+        findsOneWidget);
+    expect(find.text('Pesquisar em meus serviços'), findsOneWidget);
     expect(find.text('Uma história especial'), findsOneWidget);
+  });
+
+
+  testWidgets('TVmaze antigo usa a mesma ficha clean e sem serviços inventados',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1100, 1200);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final office = Work(
+      'tvmaze:526', 'The Office', 'Série',
+      List.filled(16, 'A story about colleagues and office life. ').join(),
+      2005, provider: 'TVmaze', creator: 'NBC',
+      trailerYoutubeId: 'abc123xyz99',
+    );
+    SharedPreferences.setMockInitialValues({
+      'records': jsonEncode({
+        '0:' + office.id: {
+          'status': 'Concluído', 'rating': 10,
+          'notes': 'A MELHOR SÉRIE DE TODAS!',
+        },
+        '1:' + office.id: {
+          'status': 'Quero conhecer', 'rating': 9,
+          'notes': 'Amo demais!',
+        },
+      }),
+      'catalog_saved': jsonEncode({office.id: office.toJson()}),
+      'shared': jsonEncode([office.id]),
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Coleção'));
+    await tester.pumpAndSettle();
+    final card = find.byKey(Key('saturn-ranked-card-' + office.id));
+    await tester.ensureVisible(card);
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+    expect(find.text('The Office'), findsWidgets);
+    expect(find.byKey(const Key('saturn-story-synopsis-toggle')),
+        findsOneWidget);
+    expect(find.text('Metacritic · crítica'), findsNothing);
+    expect(find.text('Nenhuma assinatura confirmada para este título.'),
+        findsOneWidget);
+    expect(find.text('Netflix'), findsNothing);
+    expect(find.text('Pesquisar em meus serviços'), findsOneWidget);
+    expect(find.byKey(Key('saturn-trailer-' + office.id)), findsOneWidget);
+    expect(find.text('A MELHOR SÉRIE DE TODAS!'), findsWidgets);
+    final prefs = await SharedPreferences.getInstance();
+    final existing = jsonDecode(prefs.getString('records')!) as Map;
+    expect((existing['0:' + office.id] as Map)['rating'], 10);
   });
 
   testWidgets('Livro em Quero ler vira Lido sem apagar resenha', (tester) async {

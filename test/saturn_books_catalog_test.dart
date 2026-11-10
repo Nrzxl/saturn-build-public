@@ -101,15 +101,73 @@ void main() {
     addTearDown(catalog.close);
     final results = await catalog.search(
       'Agatha Christie', CatalogFilter.books);
-    expect(results, hasLength(2));
-    expect(results.first.id, 'openlibrary:/works/OL789W');
-    expect(results.first.title, 'Assassinato no Expresso do Oriente');
-    expect(results.first.posterUrl, contains('/9001-M.jpg'));
-    expect(results.first.description, contains('9788532529627'));
-    expect(results.first.creator, 'Agatha Christie');
+    expect(results, hasLength(4));
+    expect(results.first.id, 'isbn:9786555110029');
+    expect(results.first.posterUrl, contains('284941-1.jpg'));
+    expect(results[1].id, CatalogClient.nileBrazilianId);
+    expect(results[1].title, 'Morte no Nilo');
+    expect(results[1].description, contains('9788520936511'));
+    expect(results[2].id, 'openlibrary:/works/OL789W');
+    expect(results[2].title, 'Assassinato no Expresso do Oriente');
+    expect(results[2].posterUrl, contains('/9001-M.jpg'));
+    expect(results[2].description, contains('9788532529627'));
+    expect(results[2].creator, 'Agatha Christie');
     expect(results.last.title,
         'A Novel Without Verified Portuguese Translation');
     expect(results.last.posterUrl, contains('/444-M.jpg'));
+  });
+
+
+  test('Morte no Nilo resolves the original work title and Brazilian edition',
+      () async {
+    final catalog = CatalogClient(client: MockClient((request) async {
+      expect(request.url.path, '/search.json');
+      expect(request.url.queryParameters['q'], 'Death on the Nile');
+      return http.Response(jsonEncode({
+        'docs': [{
+          'key': '/works/OL471724W',
+          'title': 'Death on the Nile',
+          'author_name': ['Agatha Christie'],
+          'first_publish_year': 1937,
+        }],
+      }), 200);
+    }));
+    addTearDown(catalog.close);
+    final results = await catalog.search(
+        'Morte no Nilo', CatalogFilter.books);
+    expect(results, hasLength(3));
+    expect(results.first.id, 'isbn:9786555110029');
+    expect(results.first.title, 'Morte no Nilo');
+    expect(results.first.year, 2020);
+    expect(results.first.posterUrl, contains('284941-1.jpg'));
+    expect(results[1].id, CatalogClient.nileBrazilianId);
+    expect(results[1].year, 2014);
+    expect(results[1].detailUrl, contains('aabbportoalegre.com.br'));
+    expect(results[1].posterUrl, contains('9788520936511'));
+    expect(results.last.id, 'openlibrary:/works/OL471724W');
+  });
+
+  test('Brazilian edition persists as an honest fallback during catalog error',
+      () async {
+    final catalog = CatalogClient(client: MockClient((request) async {
+      return http.Response('Unavailable', 503);
+    }));
+    addTearDown(catalog.close);
+    final titleResults = await catalog.search(
+        'Morte no Nilo', CatalogFilter.books);
+    expect(titleResults, hasLength(2));
+    expect(titleResults.first.id, 'isbn:9786555110029');
+    expect(titleResults.last.id, CatalogClient.nileBrazilianId);
+    final isbnResults = await catalog.search(
+        '9788520936511', CatalogFilter.books);
+    expect(isbnResults, hasLength(2));
+    expect(isbnResults.last.id, CatalogClient.nileBrazilianId);
+    // Other pages are source-driven and should report an actual outage
+    // rather than silently pretending there are no further books.
+    await expectLater(
+      catalog.search('Morte no Nilo', CatalogFilter.books, page: 2),
+      throwsStateError,
+    );
   });
 
   test('Portuguese book editions appear first without hiding other editions',

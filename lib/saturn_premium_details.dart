@@ -99,47 +99,33 @@ class SaturnExternalRatings extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (isBook) return const SizedBox.shrink();
-    final valid = validRating('metacritic', ratings['metacritic']);
+    if (isBook ||
+        !validRating('metacritic', ratings['metacritic'])) {
+      // No empty 'Metacritic unavailable' block or duplicate disclaimers.
+      // In particular, legacy TVmaze records do not have verified scores.
+      return const SizedBox.shrink();
+    }
     return SaturnDetailSection(
       title: 'Metacritic · crítica',
       icon: Icons.insights_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (valid)
-            _RatingChip(
-              title: 'Metascore · crítica',
-              value: ratings['metacritic']!.trim(),
-              icon: Icons.insights_outlined,
-            )
-          else
-            const Text(
-              'Nota Metacritic não disponível para esta obra. '
-              'Não estimamos pontuações de crítica usando outros serviços.',
-              style: TextStyle(color: satinSubdued, fontSize: 12, height: 1.4),
-            ),
-          if (workTitle.trim().isNotEmpty) ...[
-            const SizedBox(height: 11),
-            ActionChip(
-              tooltip: 'Consultar a obra diretamente no site oficial',
-              avatar: const Icon(Icons.open_in_new, size: 15, color: satinGold),
-              label: const Text('Ver no Metacritic',
-                  style: TextStyle(fontSize: 11)),
-              onPressed: _openMetacritic,
-            ),
-          ],
-          const SizedBox(height: 11),
-          const Text(
-            'Exibimos apenas o Metascore quando há fonte atribuída. '
-            'Suas notas pessoais e as do casal não são alteradas.',
-            style: TextStyle(
-              color: satinSubdued, fontSize: 11, height: 1.35),
-          ),
+      child: Row(children: [
+        _RatingChip(
+          title: 'Metascore · crítica',
+          value: ratings['metacritic']!.trim(),
+          icon: Icons.insights_outlined,
+        ),
+        if (workTitle.trim().isNotEmpty) ...[
+          const SizedBox(width: 12),
+          Flexible(child: TextButton.icon(
+            onPressed: _openMetacritic,
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: const Text('Fonte oficial'),
+          )),
         ],
-      ),
+      ]),
     );
   }
+
 }
 
 /// When an older locally saved title does not yet contain public scores,
@@ -214,10 +200,6 @@ class _SaturnRatingsFromCatalogState extends State<SaturnRatingsFromCatalog> {
           ...widget.cachedRatings,
           if (refreshed != null) ...refreshed.externalRatings,
         };
-        final hasFreshScores = SaturnExternalRatings.validRating(
-            'metacritic', refreshed?.externalRatings['metacritic']);
-        final initialHasScores = SaturnExternalRatings.validRating(
-            'metacritic', widget.cachedRatings['metacritic']);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -227,21 +209,7 @@ class _SaturnRatingsFromCatalogState extends State<SaturnRatingsFromCatalog> {
               tmdbScore: refreshed?.tmdbScore ?? widget.tmdbScore,
               tmdbVoteCount: refreshed?.tmdbVoteCount ?? widget.tmdbVoteCount,
             ),
-            if (_lookup != null && !hasFreshScores && !initialHasScores &&
-                snapshot.connectionState == ConnectionState.waiting)
-              const Padding(
-                padding: EdgeInsets.only(left: 12, bottom: 6),
-                child: Text('Consultando notas públicas do catálogo online…',
-                    style: TextStyle(color: satinSubdued, fontSize: 11)),
-              ),
-            if (_lookup != null && snapshot.connectionState == ConnectionState.done &&
-                !hasFreshScores && !initialHasScores)
-              const Padding(
-                padding: EdgeInsets.only(left: 12, bottom: 6),
-                child: Text('O catálogo não informa uma nota Metacritic verificada '
-                  'para esta obra.',
-                  style: TextStyle(color: satinSubdued, fontSize: 11)),
-              ),
+
           ],
         );
       },
