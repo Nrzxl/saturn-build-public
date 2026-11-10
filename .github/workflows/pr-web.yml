@@ -1,0 +1,35 @@
+name: SATURN · Verificar PR Web
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: saturn-pr-web-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Analisar, testar e compilar PWA
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Código revisado
+        uses: actions/checkout@v4
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Preparar Flutter Web
+        run: flutter create --platforms=web --org com.nrzxl --project-name saturn_app .
+      - name: Validar projeto
+        run: |
+          flutter pub get
+          flutter analyze lib
+          flutter test --reporter expanded
+      - name: Compilar PWA
+        run: flutter build web --release --base-href /saturn-build-public/
