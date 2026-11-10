@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:saturn_app/main.dart';
+import 'package:saturn_app/saturn_metallic_halo.dart';
 
 void main() {
   testWidgets('A Watchlist e a estante viram prateleiras horizontais completas',
@@ -138,4 +139,34 @@ void main() {
     expect(delegate.crossAxisCount, 2);
     expect(find.byKey(Key('saturn-review-halo-' + film.id)), findsOneWidget);
   });
+  testWidgets('Nossa Órbita divide ouro e prata por perfil no mesmo poster',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 1150);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const film = Work('tmdb:movie:99901', 'Filme em comum',
+        'Filme', 'Uma história que vimos juntos.', 2026);
+    SharedPreferences.setMockInitialValues({
+      'catalog_saved': jsonEncode({film.id: film.toJson()}),
+      'records': jsonEncode({
+        '0:' + film.id: {
+          'status': 'Concluído', 'rating': 9.0, 'notes': '',
+        },
+        '1:' + film.id: {
+          'status': 'Concluído', 'rating': 6.0, 'notes': '',
+        },
+      }),
+      'shared': jsonEncode([film.id]),
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Coleção'));
+    await tester.pumpAndSettle();
+    final halo = tester.widget<SaturnMetallicHalo>(
+      find.byKey(Key('saturn-review-halo-' + film.id)));
+    expect(halo.color, const Color(0xFFE3BF70));
+    expect(halo.partnerColor, const Color(0xFFBDC8D4));
+  });
+
 }
