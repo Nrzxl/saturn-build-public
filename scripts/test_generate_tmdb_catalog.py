@@ -133,6 +133,19 @@ class CatalogGenerationTests(unittest.TestCase):
              "height": 1080, "aspect_ratio": 1.77},
         ]}), "")
 
+    def test_imdb_ids_come_only_from_verified_tmdb_metadata(self):
+        record = {
+            "id": 110, "title": "Original", "imdb_id": "tt12345678",
+            "release_date": "2025-01-01",
+        }
+        MODULE.save_result("movie", record)
+        self.assertEqual(MODULE.TITLES["tmdb:movie:110"]["imdbId"],
+                         "tt12345678")
+        MODULE.save_result("movie", {
+            **record, "id": 111, "imdb_id": "unverified"
+        })
+        self.assertEqual(MODULE.TITLES["tmdb:movie:111"]["imdbId"], "")
+
     def test_uses_brazilian_subscription_only_not_rental(self):
         def fake_get(path, params=None):
             if path.startswith("/watch/providers/"):
@@ -182,7 +195,8 @@ class CatalogGenerationTests(unittest.TestCase):
                  mock.patch.object(MODULE, "MAX_PAGES", 1), \
                  mock.patch.object(MODULE, "MAX_DETAILS", 1), \
                  mock.patch.object(MODULE, "MAX_TRAILERS", 0), \
-                 mock.patch.object(MODULE, "MAX_PANORAMA_LOOKUPS", 0):
+                 mock.patch.object(MODULE, "MAX_PANORAMA_LOOKUPS", 0), \
+                 mock.patch.object(MODULE, "MAX_IMDB_LOOKUPS", 0):
                 MODULE.build()
                 data = json.loads(
                     (pathlib.Path(folder) / "movies.json").read_text(
