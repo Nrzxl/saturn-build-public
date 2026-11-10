@@ -26,4 +26,29 @@ void main() {
     expect(find.text('Sem halo'), findsOneWidget);
     expect(find.byType(AnimatedContainer), findsNothing);
   });
+  testWidgets('Shared halo combines two real tiers and glows on a match',
+      (tester) async {
+    const gold = Color(0xFFE3BF70);
+    const silver = Color(0xFFBDC8D4);
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(
+      body: Center(child: SizedBox(width: 150, height: 230,
+        child: SaturnMetallicHalo(
+          color: gold, partnerColor: silver, child: Text('Nossa capa')))),
+    )));
+    expect(find.text('Nossa capa'), findsOneWidget);
+    final split = tester.widget<AnimatedContainer>(
+      find.byType(AnimatedContainer).first);
+    final border = split.decoration! as BoxDecoration;
+    expect((border.gradient! as LinearGradient).colors.length, 6);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(
+      body: SaturnMetallicHalo(
+        color: gold, partnerColor: gold, child: Text('Mesma nota')),
+    )));
+    expect(find.text('Mesma nota'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 4300));
+    await tester.pump(const Duration(milliseconds: 1700));
+    expect(tester.takeException(), isNull);
+  });
+
 }
