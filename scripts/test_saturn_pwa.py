@@ -47,6 +47,13 @@ class SaturnPwaTests(unittest.TestCase):
         self.assertIn("flutter-first-frame", html)
         self.assertIn("saturn-network", html)
         self.assertIn("saturn-retry", html)
+        # Browser and installed PWA must detect the very same published build.
+        self.assertIn('name="saturn-build-sha"', html)
+        self.assertIn("SATURN_WEB_BUILD_SHA_PLACEHOLDER", html)
+        self.assertIn('id="saturn-update"', html)
+        self.assertIn("saturn-build.txt", html)
+        self.assertIn("cache: 'no-store'", html)
+        self.assertIn("next.searchParams.set('saturn_build'", html)
         # iOS standalone black-translucent can put touch targets under
         # the home/status bar; black reserves the status-bar region.
         self.assertIn('apple-mobile-web-app-status-bar-style', html)
