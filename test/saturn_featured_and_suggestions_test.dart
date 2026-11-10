@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:saturn_app/main.dart';
@@ -39,12 +41,34 @@ void main() {
     await tester.pump();
     expect(tester.widget<Text>(label).data, second.title);
     expect(find.byKey(Key('saturn-hero-art-${second.id}')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('saturn-feature-previous')));
+    final swiper = find.byKey(const Key('saturn-feature-swipe'));
+    expect(swiper, findsOneWidget);
+    expect(find.byKey(const Key('saturn-feature-previous')), findsNothing);
+    expect(find.byKey(const Key('saturn-feature-next')), findsNothing);
+    // User-requested direction: drag LEFT to go back, RIGHT to advance.
+    await tester.drag(swiper, const Offset(-150, 0));
     await tester.pump();
     expect(tester.widget<Text>(label).data, first.title);
-    await tester.tap(find.byKey(const Key('saturn-feature-next')));
+    await tester.drag(swiper, const Offset(150, 0));
     await tester.pump();
     expect(tester.widget<Text>(label).data, second.title);
+    // Minor accidental movements must not trigger another slide.
+    await tester.drag(swiper, const Offset(13, 0));
+    await tester.pump();
+    expect(tester.widget<Text>(label).data, second.title);
+    // A horizontal mouse drag works on desktop, not only touch.
+    await tester.drag(swiper, const Offset(-140, 0),
+        kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    expect(tester.widget<Text>(label).data, first.title);
+    // Arrow keys remain an accessible alternative to the hidden buttons.
+    Focus.of(tester.element(swiper)).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(tester.widget<Text>(label).data, second.title);
+    expect(find.text('Descobrir histórias'), findsOneWidget);
+    expect(find.text('Ver detalhes'), findsOneWidget);
   });
 
   testWidgets('Sugestão de outra pessoa só altera Watchlist quando aceita',
@@ -108,12 +132,14 @@ void main() {
     });
     await tester.pumpWidget(const SaturnApp());
     await tester.pumpAndSettle();
-    // Controls remain, while numeric overlays no longer cover hero artwork.
+    // No visible chevrons or numeric overlays; catalog still has >8 titles.
+    final swipe = find.byKey(const Key('saturn-feature-swipe'));
+    expect(swipe, findsOneWidget);
     expect(find.text('1/11'), findsNothing);
-    expect(find.byKey(const Key('saturn-feature-previous')), findsOneWidget);
-    expect(find.byKey(const Key('saturn-feature-next')), findsOneWidget);
+    expect(find.byKey(const Key('saturn-feature-previous')), findsNothing);
+    expect(find.byKey(const Key('saturn-feature-next')), findsNothing);
     for (var i = 0; i < 9; i++) {
-      await tester.tap(find.byKey(const Key('saturn-feature-next')));
+      await tester.drag(swipe, const Offset(135, 0));
       await tester.pump();
     }
     expect(find.text('10/11'), findsNothing);
