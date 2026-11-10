@@ -34,7 +34,7 @@ void main() {
     await tester.tap(home);
     await tester.pumpAndSettle();
     expect(find.text('Nossa Órbita · Sincronização'), findsOneWidget);
-    await tester.pageBack();
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     await tester.tap(find.text('Nós dois'));
     await tester.pumpAndSettle();
