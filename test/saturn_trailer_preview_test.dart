@@ -5,6 +5,12 @@ import 'package:saturn_app/saturn_trailer.dart';
 import 'package:saturn_app/saturn_native_trailer.dart';
 
 void main() {
+  test('Web/PWA may autoplay silently; native and nonhero never do', () {
+    expect(SaturnTrailerPreview.shouldAutoplay(web: true, hero: true), isTrue);
+    expect(SaturnTrailerPreview.shouldAutoplay(web: true, hero: false), isFalse);
+    expect(SaturnTrailerPreview.shouldAutoplay(web: false, hero: true), isFalse);
+  });
+
   testWidgets('Story opens with SATURN artwork and existing controls only',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(
