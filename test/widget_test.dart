@@ -34,11 +34,9 @@ void main() {
     expect(find.text('Próxima escolha: Eu'), findsOneWidget);
     final done = find.byKey(const Key('saturn-series-finish'));
     await tester.scrollUntilVisible(done, 100,
-        scrollable: find.byType(Scrollable).first, maxScrolls: 18);
-    await tester.drag(find.byType(Scrollable).first,
-        const Offset(0, -180));
-    await tester.pumpAndSettle();
+        scrollable: find.byType(Scrollable).first, maxScrolls: 24);
     await tester.ensureVisible(done);
+    await tester.pumpAndSettle();
     await tester.tap(done);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('saturn-series-next-choice')),
