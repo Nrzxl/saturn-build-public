@@ -512,13 +512,19 @@ class CatalogClient {
       '/works/' + match.group(1)! + '/editions.json',
       {'limit': '50', 'offset': ((number - 1) * 50).toString()}));
     if (data is! Map || data['entries'] is! List) return [];
-    final entries = <CatalogEntry>[];
+    final portuguese = <CatalogEntry>[];
+    final other = <CatalogEntry>[];
     for (final row in data['entries'] as List) {
       if (row is! Map) continue;
       final edition = _editionEntry(row);
-      if (edition != null) entries.add(edition);
+      if (edition == null) continue;
+      if (_hasPortugueseLanguage(row['languages'] ?? row['language'])) {
+        portuguese.add(edition);
+      } else {
+        other.add(edition);
+      }
     }
-    return _unique(entries);
+    return _unique([...portuguese, ...other]);
   }
 
   /// ISBN is a unique edition identifier, not an entire series.
@@ -586,6 +592,47 @@ class CatalogClient {
     );
   }
 
+
+  /// Language metadata on an actual Open Library edition is required before
+  /// showing that edition's translated title or cover in SATURN.
+  static bool _hasPortugueseLanguage(Object? raw) {
+    if (raw is! List) return false;
+    for (final language in raw) {
+      final code = language is Map
+          ? (language['key'] ?? language['code'] ?? '').toString()
+          : language.toString();
+      final normalized = code.toLowerCase().split('/').last;
+      if (normalized == 'por' || normalized == 'pt' ||
+          normalized == 'pt-br' || normalized == 'pt-pt') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static Map? _portugueseEdition(Map<dynamic, dynamic> work) {
+    final editions = work['editions'];
+    if (editions is! Map || editions['docs'] is! List) return null;
+    for (final item in editions['docs'] as List) {
+      if (item is Map && _hasPortugueseLanguage(
+          item['language'] ?? item['languages'])) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  static String _bookCoverUrl(Object? cover, {String isbn = ''}) {
+    if (cover is num && cover > 0) {
+      return 'https://covers.openlibrary.org/b/id/' +
+          cover.toInt().toString() + '-M.jpg';
+    }
+    if (isbn.isNotEmpty) {
+      return 'https://covers.openlibrary.org/b/isbn/' + isbn + '-M.jpg';
+    }
+    return '';
+  }
+
   Future<List<CatalogEntry>> _books(
     String query, {
     int page = 1,
@@ -594,52 +641,73 @@ class CatalogClient {
     final clean = query.trim();
     final search = (subject == null || subject.isEmpty)
         ? clean
-        : '$clean subject:$subject';
+        : clean + ' subject:' + subject;
     final data = await _get(Uri.https('openlibrary.org', '/search.json', {
       'q': search,
+      'lang': 'pt',
       'limit': '60',
-      'page': '${page.clamp(1, 150)}',
+      'page': page.clamp(1, 150).toString(),
       'fields': 'key,title,author_name,cover_i,first_publish_year,'
-          'isbn,edition_count,language',
+          'isbn,edition_count,language,editions,editions.key,'
+          'editions.title,editions.language,editions.cover_i,'
+          'editions.isbn_13,editions.isbn_10',
     }));
     if (data is! Map || data['docs'] is! List) return [];
     final result = <CatalogEntry>[];
     for (final item in data['docs'] as List) {
       if (item is! Map) continue;
       final key = (item['key'] ?? '').toString();
-      final title = (item['title'] ?? '').toString();
-      if (key.isEmpty || title.isEmpty || !key.startsWith('/works/')) continue;
+      final workTitle = (item['title'] ?? '').toString().trim();
+      if (key.isEmpty || workTitle.isEmpty || !key.startsWith('/works/')) {
+        continue;
+      }
       final authors = item['author_name'];
       final author = authors is List && authors.isNotEmpty
           ? authors.first.toString() : '';
-      final rawIsbns = item['isbn'];
-      final isbn = rawIsbns is List
-          ? rawIsbns.map((id) => id.toString()).firstWhere(
-              (id) => RegExp(r'^[0-9Xx-]{10,17}$').hasMatch(id),
-              orElse: () => '',
-            )
-          : '';
+      final edition = _portugueseEdition(item);
+      final editionTitle = (edition?['title'] ?? '').toString().trim();
+      final title = editionTitle.isNotEmpty ? editionTitle : workTitle;
+      String firstIsbn(Object? raw) {
+        if (raw is! List) return '';
+        for (final candidate in raw) {
+          final id = candidate.toString().replaceAll('-', '');
+          if (RegExp(r'^(?:[0-9]{13}|[0-9]{9}[0-9Xx])$').hasMatch(id)) {
+            return id;
+          }
+        }
+        return '';
+      }
+      // The work-level ISBN may belong to an English edition: never pair it
+      // with a verified Portuguese edition.
+      final isbn = edition == null
+          ? firstIsbn(item['isbn'])
+          : firstIsbn(edition['isbn_13']).isNotEmpty
+              ? firstIsbn(edition['isbn_13'])
+              : firstIsbn(edition['isbn_10']);
+      final editionCover = edition?['cover_i'];
+      final cover = editionCover is num && editionCover > 0
+          ? editionCover : edition == null ? item['cover_i'] : null;
       final editions = item['edition_count'] is num
           ? (item['edition_count'] as num).toInt() : 0;
-      final cover = item['cover_i'];
       result.add(CatalogEntry(
-        id: 'openlibrary:$key',
+        id: 'openlibrary:' + key,
         title: title,
         kind: 'Livro',
         description: [
-          if (author.isNotEmpty) 'Autor(a): $author',
-          if (isbn.isNotEmpty) 'ISBN: $isbn',
-          if (editions > 0) 'Edições catalogadas: $editions',
+          if (author.isNotEmpty) 'Autor(a): ' + author,
+          if (edition != null) 'Edição em português catalogada',
+          if (isbn.isNotEmpty) 'ISBN: ' + isbn,
+          if (editions > 0)
+            'Edições catalogadas: ' + editions.toString(),
         ].join(' · '),
         year: item['first_publish_year'] is num
             ? (item['first_publish_year'] as num).toInt()
             : 0,
-        posterUrl: cover is num
-            ? 'https://covers.openlibrary.org/b/id/${cover.toInt()}-M.jpg'
-            : '',
+        posterUrl: _bookCoverUrl(cover, isbn: isbn),
         creator: author,
-        provider: 'Open Library',
-        detailUrl: 'https://openlibrary.org$key',
+        provider: edition == null
+            ? 'Open Library' : 'Open Library · português',
+        detailUrl: 'https://openlibrary.org' + key,
       ));
     }
     return result;
