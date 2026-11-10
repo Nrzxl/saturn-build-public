@@ -86,6 +86,8 @@ class CatalogClient {
       year: row['year'] is num ? (row['year'] as num).toInt() : 0,
       posterUrl: (row['posterUrl'] ?? '').toString(),
       provider: 'TMDB',
+      creator: (row['creator'] ?? '').toString(),
+      detailUrl: (row['detailUrl'] ?? '').toString(),
       externalRatings: external is Map
           ? external.map((key, value) =>
               MapEntry(key.toString(), value.toString()))
