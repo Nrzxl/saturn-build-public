@@ -4799,7 +4799,7 @@ class PosterThumbnail extends StatelessWidget {
         // filtering while Safari scrolls hundreds of book/film covers.
         cacheWidth: width.isFinite && width > 0
             ? (width * MediaQuery.devicePixelRatioOf(context))
-                .round().clamp(60, 780) : null,
+                .round().clamp(60, 780).toInt() : null,
         filterQuality: FilterQuality.low,
         gaplessPlayback: true,
         // Show the first decoded frame instead of hiding it until the
