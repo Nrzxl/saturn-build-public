@@ -4265,15 +4265,16 @@ class _SaturnHomeState extends State<SaturnHome>
                         if (!verified && direct == null) {
                           return const SizedBox.shrink();
                         }
-                        return Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          decoration: BoxDecoration(
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Material(
                             color: const Color(0xFF30232D),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(0x554F4050)),
-                          ),
-                          child: ListTile(
+                            clipBehavior: Clip.antiAlias,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              side: const BorderSide(
+                                color: Color(0x554F4050))),
+                            child: ListTile(
                             dense: true,
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 12),
@@ -4300,6 +4301,7 @@ class _SaturnHomeState extends State<SaturnHome>
                                 : verified
                                     ? () => _openTmdbWatch(w)
                                     : null,
+                            ),
                           ),
                         );
                       }),
