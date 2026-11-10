@@ -4419,12 +4419,10 @@ class _SaturnHomeState extends State<SaturnHome>
     // Only the browser has the official iframe platform initialized here.
     final canEmbedTrailer = kIsWeb;
     final trailerFuture = canEmbedTrailer && w.kind != 'Livro'
-        ? RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(w.trailerYoutubeId)
-          ? Future<String?>.value(w.trailerYoutubeId)
-          : _homeCatalog.verifiedTrailerFor(
-              workId: w.id, title: w.title,
-              kind: w.kind, year: w.year)
-        : Future<String?>.value(null);
+        ? _homeCatalog.verifiedTrailerCandidatesFor(
+            workId: w.id, title: w.title, kind: w.kind, year: w.year,
+            savedYoutubeId: w.trailerYoutubeId)
+        : Future<List<String>>.value(const <String>[]);
     final current = entry(w);
     String status = current['status'] ?? 'Quero conhecer';
     double rating = (current['rating'] as num?)?.toDouble() ?? 0;
@@ -4460,16 +4458,16 @@ class _SaturnHomeState extends State<SaturnHome>
                 ]),
                 const SizedBox(height: 10),
                 if (w.kind != 'Livro' && canEmbedTrailer)
-                  FutureBuilder<String?>(
+                  FutureBuilder<List<String>>(
                     future: trailerFuture,
                     builder: (context, snapshot) {
-                      final videoId = snapshot.data ?? '';
-                      final verified = RegExp(r'^[A-Za-z0-9_-]{11}$')
-                          .hasMatch(videoId);
-                      if (verified) {
+                      final candidates = snapshot.data ?? const <String>[];
+                      if (candidates.isNotEmpty) {
                         return SaturnTrailerPreview(
                           key: Key('saturn-trailer-' + w.id),
-                          youtubeId: videoId,
+                          youtubeId: candidates.first,
+                          alternativeIds: candidates.skip(1).toList(),
+                          storyPreview: _cinematicDetailBanner(w),
                           heroMode: true,
                           workTitle: w.title,
                           workMetadata: w.kind + ' · ' +
