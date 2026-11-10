@@ -32,10 +32,13 @@ void main() {
     expect(find.text('DA SUA WATCHLIST · PARA VOCÊ'), findsOneWidget);
     final label = find.byKey(const Key('saturn-featured-title'));
     expect(tester.widget<Text>(label).data, first.title);
-    // Timed rotation must happen without any user input.
+    expect(find.byKey(Key('saturn-hero-art-${first.id}')), findsOneWidget);
+    expect(find.text('1/2'), findsNothing);
+    // Timed rotation must crossfade the artwork without input.
     await tester.pump(const Duration(seconds: 8));
     await tester.pump();
     expect(tester.widget<Text>(label).data, second.title);
+    expect(find.byKey(Key('saturn-hero-art-${second.id}')), findsOneWidget);
     await tester.tap(find.byKey(const Key('saturn-feature-previous')));
     await tester.pump();
     expect(tester.widget<Text>(label).data, first.title);
