@@ -5500,97 +5500,129 @@ class _CatalogExploreState extends State<CatalogExplore> {
   /// subtle metallic detailing. No extra network requests per visible card.
   Widget _coverCard(Work work) {
     final loved = widget.isShared(work);
-    return SaturnHoverLift(child: Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [Color(0xFF3A2635), Color(0xFF1C1A24)]),
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: const Color(0x88725265)),
-        boxShadow: const [BoxShadow(
-          color: Color(0x33000000), blurRadius: 12, offset: Offset(0, 5))],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(color: Colors.transparent,
-        child: InkWell(
-          key: Key('saturn-cinematic-cover-' + work.id),
-          onTap: () => widget.onOpen(work),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: Stack(fit: StackFit.expand, children: [
-                PosterThumbnail(work: work,
-                  width: double.infinity, height: double.infinity),
-                const Positioned.fill(child: DecoratedBox(
-                  decoration: BoxDecoration(gradient: LinearGradient(
-                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                    colors: [Color(0x770D0D19), Colors.transparent,
-                      Color(0xC9171420)],
-                    stops: [0, 0.48, 1],
-                  )),
-                )),
-                Positioned(top: 5, left: 5,
-                  child: IconButton.filledTonal(
-                    tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => widget.onToggleWatchlist(work),
-                    icon: Icon(widget.isWatchlisted(work)
-                      ? Icons.bookmark_added : Icons.bookmark_add_outlined,
-                      color: ivory, size: 18))),
-                Positioned(top: 5, right: 5,
-                  child: IconButton.filledTonal(
-                    tooltip: 'Adicionar à Nossa Órbita',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => widget.onToggleShared(work),
-                    icon: Icon(loved
-                      ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
-                      size: 18,
-                      color: loved ? const Color(0xFFF0B6C2) : ivory))),
-                Positioned(bottom: 6, right: 5,
-                  child: IconButton.filledTonal(
-                    tooltip: work.kind == 'Livro'
-                      ? 'Marcar como lido' : 'Marcar como assistido',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => widget.onToggleCompleted(work),
-                    icon: Icon(widget.isCompleted(work)
-                      ? Icons.check_circle : Icons.check_circle_outline,
-                      color: widget.isCompleted(work)
-                        ? const Color(0xFF97CDB4) : ivory, size: 18))),
-                Positioned(bottom: 11, left: 10,
-                  child: Text(work.kind.toUpperCase(),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: gold, letterSpacing: 1.4,
-                      fontSize: 9, fontWeight: FontWeight.w800))),
-              ])),
-              Container(height: 2,
-                decoration: const BoxDecoration(gradient: LinearGradient(
-                  colors: [Color(0xFFB89269), Color(0xFF6C465E),
-                    Colors.transparent]))),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 10, 8, 5),
-                child: Text(work.title, maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: ivory, fontFamily: 'serif',
-                    fontWeight: FontWeight.bold, fontSize: 14,
-                    height: 1.2))),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 1, 8, 9),
-                child: Text([
-                  if (work.year > 0) work.year.toString(),
-                  if (work.kind == 'Livro' && work.creator.isNotEmpty)
-                    work.creator
-                  else if (work.kind != 'Livro') work.provider,
-                ].join(' · '), maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFFC5ADB9), fontSize: 10))),
+    final artUrl = SaturnArtwork.bestUrl(
+      SaturnBookCover.resolve(work.id, work.posterUrl),
+      devicePixels: 460,
+    );
+    return FutureBuilder<Color>(
+      future: SaturnArtwork.toneFor(artUrl),
+      builder: (context, snapshot) {
+        final tone = snapshot.data ?? SaturnArtwork.fallback;
+        final accent = Color.lerp(tone, gold, .48)!;
+        return SaturnHoverLift(child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              colors: [tone, Color.lerp(tone, night, .82)!],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: accent.withValues(alpha: .65)),
+            boxShadow: [
+              BoxShadow(color: tone.withValues(alpha: .25),
+                blurRadius: 15, offset: const Offset(0, 6)),
             ],
           ),
-        ),
-      ),
-    ));
+          clipBehavior: Clip.antiAlias,
+          child: Material(color: Colors.transparent,
+            child: InkWell(
+              key: Key('saturn-cinematic-cover-' + work.id),
+              onTap: () => widget.onOpen(work),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: Stack(fit: StackFit.expand, children: [
+                    PosterThumbnail(work: work,
+                      width: double.infinity, height: double.infinity),
+                    Positioned.fill(child: DecoratedBox(
+                      decoration: BoxDecoration(gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          const Color(0x640C0B15),
+                          Colors.transparent,
+                          tone.withValues(alpha: .30),
+                          tone,
+                        ],
+                        stops: const [0, .45, .73, 1],
+                      )),
+                    )),
+                    Positioned(top: 5, left: 5,
+                      child: IconButton.filledTonal(
+                        tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => widget.onToggleWatchlist(work),
+                        icon: Icon(widget.isWatchlisted(work)
+                          ? Icons.bookmark_added : Icons.bookmark_add_outlined,
+                          color: ivory, size: 18))),
+                    Positioned(top: 5, right: 5,
+                      child: IconButton.filledTonal(
+                        tooltip: 'Adicionar à Nossa Órbita',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => widget.onToggleShared(work),
+                        icon: Icon(loved
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_outline_rounded,
+                          size: 18,
+                          color: loved ? const Color(0xFFF0B6C2) : ivory))),
+                    Positioned(bottom: 7, right: 5,
+                      child: IconButton.filledTonal(
+                        tooltip: work.kind == 'Livro'
+                          ? 'Marcar como lido' : 'Marcar como assistido',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => widget.onToggleCompleted(work),
+                        icon: Icon(widget.isCompleted(work)
+                          ? Icons.check_circle : Icons.check_circle_outline,
+                          color: widget.isCompleted(work)
+                            ? const Color(0xFF97CDB4) : ivory,
+                          size: 18))),
+                    Positioned(bottom: 14, left: 10,
+                      child: Text(work.kind.toUpperCase(),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: ivory, letterSpacing: 1.5,
+                          fontSize: 9, fontWeight: FontWeight.w800))),
+                  ])),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [tone, Color.lerp(tone, night, .62)!],
+                      ),
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 5),
+                          child: Text(work.title, maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: ivory, fontFamily: 'serif',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14, height: 1.2)),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 1, 10, 10),
+                          child: Text([
+                            if (work.year > 0) work.year.toString(),
+                            if (work.kind == 'Livro' &&
+                                work.creator.isNotEmpty) work.creator
+                            else if (work.kind != 'Livro') work.provider,
+                          ].join(' · '), maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFE4CAD6), fontSize: 10)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ));
+      },
+    );
   }
 
 }
