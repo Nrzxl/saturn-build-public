@@ -83,7 +83,8 @@ void main() {
     addTearDown(client.close);
     final result = await client.search('Agatha Christie',
         CatalogFilter.books, bookSubject: 'brazilian_literature');
-    expect(result.any((book) => book.title == 'E Não Sobrou Nenhum'), isTrue);
+    expect(result.any((book) => book.title == 'E Não Sobrou Nenhum'), isTrue,
+      reason: 'Titles: ${result.map((e) => e.title).toList()}; calls: $calls');
     expect(calls, contains('Agatha Christie'));
     expect(calls.where((q) => q.contains('subject:brazilian_literature')),
       isEmpty);
