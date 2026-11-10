@@ -4230,156 +4230,120 @@ class _SaturnHomeState extends State<SaturnHome>
                   ],
                 ),
                 if (w.kind != 'Livro') ...[
-                  const SizedBox(height: 21),
+                  const SizedBox(height: 15),
                   Row(children: [
-                    const Expanded(
-                      child: Text('ONDE ASSISTIR · BRASIL',
-                        style: TextStyle(color: gold,
-                          letterSpacing: 1.5, fontSize: 11)),
-                    ),
+                    const Expanded(child: Text('ONDE ASSISTIR · BRASIL',
+                      style: TextStyle(color: gold,
+                        letterSpacing: 1.4, fontSize: 11))),
                     IconButton(
-                      tooltip: 'Editar streamings favoritos',
+                      tooltip: 'Editar meus serviços favoritos',
                       onPressed: _showStreamingPreferences,
-                      icon: const Icon(Icons.tune, color: gold),
+                      icon: const Icon(Icons.tune, color: gold, size: 19),
                     ),
                   ]),
-                  const SizedBox(height: 5),
-                  Text(
-                    w.provider == 'TMDB'
-                      ? 'Disponibilidade de assinatura no Brasil, via '
-                        'TMDB / JustWatch. Catálogo atualizado periodicamente; '
-                        'a oferta pode mudar.'
-                      : 'Esta fonte não confirma os serviços de assinatura '
-                        'no Brasil. Links específicos são mostrados quando '
-                        'a fonte os fornece.',
-                    style: const TextStyle(
-                      color: Color(0xFFCCB6BF), fontSize: 12, height: 1.4),
-                  ),
-                  if (w.availabilityUpdatedAt.length >= 10) ...[
-                    const SizedBox(height: 5),
-                    Text('Dados consultados: ${w.availabilityUpdatedAt.substring(0, 10)}',
-                      style: const TextStyle(
-                        color: Color(0xFFB8A8AC), fontSize: 11)),
-                  ],
-                  const SizedBox(height: 10),
-                  if (w.watchProviders.isNotEmpty) ...[
-                    const Text('Plataformas encontradas para assinatura:',
-                      style: TextStyle(color: ivory, fontSize: 12)),
-                    const SizedBox(height: 7),
-                    Wrap(spacing: 6, runSpacing: 3, children: [
-                      for (final provider in w.watchProviders)
-                        Chip(
-                          label: Text(provider, style: const TextStyle(fontSize: 11)),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                    ]),
-                    const SizedBox(height: 8),
-                  ],
-                  if (w.streamingProviders.isEmpty &&
-                      w.availabilityChecked)
+                  if (w.streamingProviders.isEmpty)
                     const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
+                      padding: EdgeInsets.only(bottom: 5),
                       child: Text(
-                        'Nenhuma oferta de assinatura identificada '
-                        'no Brasil nesta consulta. '
-                        'Isso não significa que a obra nunca estará disponível.',
-                        style: TextStyle(color: Color(0xFFC7B8BC), fontSize: 12),
+                        'Nenhuma assinatura confirmada para este título.',
+                        style: TextStyle(
+                          color: Color(0xFFD4C2CA), fontSize: 11),
                       ),
                     ),
+                  // Provider-independent eligibility. No unverified TVmaze
+                  // service suggestion disguised as regional availability.
                   for (final service in StreamingService.values)
                     if (_streaming.contains(service))
                       Builder(builder: (itemContext) {
-                        final stored = customTitleLinks[w.id]?[service.name];
+                        final stored =
+                            customTitleLinks[w.id]?[service.name];
                         final sourced = w.streamingLinks[service.name];
-                        final direct = checkedTitleUrl(
-                          service, stored ?? sourced);
+                        final direct =
+                            checkedTitleUrl(service, stored ?? sourced);
                         final verified =
                             w.streamingProviders.containsKey(service.name);
-                        if (w.provider == 'TMDB' &&
-                            !verified && direct == null) {
+                        if (!verified && direct == null) {
                           return const SizedBox.shrink();
                         }
-                        return Card(
-                          color: const Color(0xFF30232D),
-                          margin: const EdgeInsets.symmetric(vertical: 5),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                            child: Row(children: [
-                              Icon(direct != null
-                                ? Icons.play_circle_fill_rounded
-                                : verified ? Icons.verified_rounded
-                                    : Icons.help_outline_rounded,
-                                color: verified
-                                  ? const Color(0xFF97CDB4) : gold),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(service.label,
-                                      style: const TextStyle(
-                                        color: ivory,
-                                        fontWeight: FontWeight.bold)),
-                                    Text(
-                                      verified
-                                        ? 'Assinatura confirmada · Brasil'
-                                        : direct != null
-                                            ? 'Link específico fornecido pela fonte'
-                                            : 'Disponibilidade não confirmada',
-                                      style: const TextStyle(
-                                        color: Color(0xFFCCB6BF),
-                                        fontSize: 11)),
-                                  ],
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: direct != null
-                                  ? () => _openTitleLink(service, direct)
-                                  : verified
+                        return Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF30232D),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0x554F4050)),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            leading: Icon(
+                              verified
+                                  ? Icons.verified_rounded
+                                  : Icons.link_rounded,
+                              color: verified
+                                  ? const Color(0xFF97CDB4) : gold,
+                            ),
+                            title: Text(service.label,
+                              style: const TextStyle(color: ivory,
+                                fontWeight: FontWeight.w600)),
+                            subtitle: Text(verified
+                                ? 'Assinatura confirmada no Brasil'
+                                : 'Link fornecido · disponibilidade não confirmada',
+                              style: const TextStyle(
+                                color: Color(0xFFD0BBC5), fontSize: 10)),
+                            trailing: const Icon(
+                              Icons.arrow_outward_rounded,
+                              color: gold, size: 18),
+                            onTap: direct != null
+                                ? () => _openTitleLink(service, direct)
+                                : verified
                                     ? () => _openTmdbWatch(w)
-                                    : () => _openStreamingService(
-                                        service, title: w.title),
-                                icon: const Icon(
-                                  Icons.open_in_new_rounded, size: 16),
-                                label: Text(
-                                  direct != null
-                                    ? 'Abrir título'
-                                    : verified ? 'Ver opções' : 'Pesquisar'),
-                              ),
-                            ]),
+                                    : null,
                           ),
                         );
                       }),
-                  if (w.provider == 'TMDB' &&
-                      w.streamingProviders.isEmpty &&
-                      !w.availabilityChecked)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('Sem confirmação regional para esta obra. '
-                        'Mais títulos serão verificados na próxima sincronização.',
-                        style: TextStyle(
-                          color: Color(0xFFC5B2BA), fontSize: 12)),
+                  Theme(
+                    data: Theme.of(ctx).copyWith(
+                      dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      key: Key('saturn-streaming-search-' + w.id),
+                      initiallyExpanded: false,
+                      tilePadding:
+                          const EdgeInsets.symmetric(horizontal: 4),
+                      leading: const Icon(Icons.travel_explore_outlined,
+                        color: gold, size: 20),
+                      title: const Text('Pesquisar em meus serviços',
+                        style: TextStyle(color: ivory, fontSize: 12)),
+                      children: [
+                        if (_streaming.isEmpty)
+                          ListTile(
+                            title: const Text('Escolher serviços favoritos'),
+                            onTap: _showStreamingPreferences,
+                          ),
+                        for (final service in StreamingService.values)
+                          if (_streaming.contains(service))
+                            ListTile(
+                              dense: true,
+                              title: Text(service.label),
+                              trailing: const Icon(
+                                Icons.open_in_new_rounded, size: 17),
+                              onTap: () => _openStreamingService(
+                                  service, title: w.title),
+                            ),
+                      ],
                     ),
-                  if (w.provider == 'TMDB' &&
-                      w.streamingProviders.isEmpty &&
-                      w.watchUrl.startsWith('https://'))
-                    TextButton.icon(
-                      onPressed: () => _openTmdbWatch(w),
-                      icon: const Icon(Icons.travel_explore),
-                      label: const Text('Ver opções de streaming da obra'),
+                  ),
+                  if (w.availabilityUpdatedAt.length >= 10 &&
+                      w.streamingProviders.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6, bottom: 5),
+                      child: Text('Consulta: ' +
+                          w.availabilityUpdatedAt.substring(0, 10) +
+                          ' · JustWatch / TMDB',
+                        style: const TextStyle(color: Color(0xFFAA969F),
+                          fontSize: 10)),
                     ),
-                  if (_streaming.isEmpty)
-                    TextButton.icon(
-                      onPressed: _showStreamingPreferences,
-                      icon: const Icon(Icons.tune),
-                      label: const Text('Escolher streamings favoritos'),
-                    ),
-                  const SizedBox(height: 9),
-                  const Text('Fonte da disponibilidade: JustWatch, via TMDB. '
-                    'Um link de opções não garante reprodução automática.',
-                    style: TextStyle(
-                      fontSize: 10, color: Color(0xFFAA969F))),
                 ],
                 const SizedBox(height: 18),
                 if (w.detailUrl.startsWith('https://'))
