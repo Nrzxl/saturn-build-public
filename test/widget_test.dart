@@ -446,7 +446,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     final office = Work(
       'tvmaze:526', 'The Office', 'Série',
-      'A story about colleagues and office life. ' * 16,
+      List.filled(16, 'A story about colleagues and office life. ').join(),
       2005, provider: 'TVmaze', creator: 'NBC',
       trailerYoutubeId: 'abc123xyz99',
     );
