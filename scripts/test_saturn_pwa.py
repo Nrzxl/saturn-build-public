@@ -47,6 +47,11 @@ class SaturnPwaTests(unittest.TestCase):
         self.assertIn("flutter-first-frame", html)
         self.assertIn("saturn-network", html)
         self.assertIn("saturn-retry", html)
+        # iOS standalone black-translucent can put touch targets under
+        # the home/status bar; black reserves the status-bar region.
+        self.assertIn('apple-mobile-web-app-status-bar-style', html)
+        self.assertIn('content="black"', html)
+        self.assertNotIn('content="black-translucent"', html)
 
     def test_pwa_does_not_pretend_to_cache_the_whole_catalog(self):
         html = (WEB / "index.html").read_text(encoding="utf-8")
