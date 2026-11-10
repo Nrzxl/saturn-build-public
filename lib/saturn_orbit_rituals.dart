@@ -118,27 +118,54 @@ class SaturnOrbitRituals {
           (person != 0 && person != 1)) continue;
       items.add(SaturnSeriesTurn(
         number: number, workId: id, chosenBy: person as int,
-        finished: row['finished'] == true));
+        finished: row['finished'] == true,
+        queued: row['queued'] == true));
     }
     items.sort((a, b) => a.number.compareTo(b.number));
     return items;
   }
 
+  /// Active and queued shows are separate: planning must never replace
+  /// what the couple is currently watching.
   static SaturnSeriesTurn? currentSeries(Map<String, dynamic> ops) {
-    final turns = seriesTurns(ops);
-    if (turns.isEmpty || turns.last.finished) return null;
-    return turns.last;
+    for (final turn in seriesTurns(ops)) {
+      if (!turn.finished && !turn.queued) return turn;
+    }
+    return null;
   }
+
+  static List<SaturnSeriesTurn> queuedSeries(Map<String, dynamic> ops) =>
+      seriesTurns(ops)
+          .where((turn) => !turn.finished && turn.queued)
+          .toList(growable: false);
 
   static int nextSeriesPicker(Map<String, dynamic> ops) {
     final turns = seriesTurns(ops);
     return turns.isEmpty ? 1 : 1 - turns.last.chosenBy;
   }
 
+  /// The next partner can reserve a show while the current one plays.
+  /// The very first entry is registered as her already-current choice.
   static bool mayChooseSeries(Map<String, dynamic> ops, int person) =>
       (person == 0 || person == 1) &&
-      currentSeries(ops) == null &&
+      seriesTurns(ops).isNotEmpty &&
       nextSeriesPicker(ops) == person;
+
+  static bool mayEditQueuedSeries(
+      Map<String, dynamic> ops, SaturnSeriesTurn turn, int person) {
+    if (person != turn.chosenBy || turn.finished || !turn.queued) {
+      return false;
+    }
+    return seriesTurns(ops).any((item) =>
+        item.number == turn.number && item.workId == turn.workId &&
+        item.chosenBy == person && item.queued && !item.finished);
+  }
+
+  static bool canUseSeriesWork(Map<String, dynamic> ops, String workId,
+      {int? replacingNumber}) =>
+      workId.isNotEmpty && !seriesTurns(ops).any((turn) =>
+          !turn.finished && turn.workId == workId &&
+          turn.number != replacingNumber);
 
   /// An existing show chosen by partner 1 can be registered once without
   /// impersonating her profile or editing a personal review.
@@ -170,9 +197,11 @@ class SaturnSeriesTurn {
   const SaturnSeriesTurn({
     required this.number, required this.workId,
     required this.chosenBy, required this.finished,
+    this.queued = false,
   });
   final int number;
   final String workId;
   final int chosenBy;
   final bool finished;
+  final bool queued;
 }
