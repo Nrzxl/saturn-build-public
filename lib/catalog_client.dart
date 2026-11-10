@@ -591,6 +591,13 @@ class CatalogClient {
       'Carlos Drummond de Andrade', 'Milton Hatoum',
       'Graciliano Ramos', 'Carolina Maria de Jesus', 'Paulo Coelho',
       'Cecília Meireles', 'Guimarães Rosa',
+      'Lima Barreto', 'Rachel de Queiroz', 'Érico Veríssimo',
+      'José de Alencar', 'Monteiro Lobato', 'Ariano Suassuna',
+      'Rubem Fonseca', 'Hilda Hilst', 'João Ubaldo Ribeiro',
+      'Raduan Nassar', 'Vinicius de Moraes', 'Itamar Vieira Junior',
+      'Socorro Acioli', 'Marina Colasanti', 'Ailton Krenak',
+      'Daniel Munduruku', 'Djamila Ribeiro', 'José Mauro de Vasconcelos',
+      'Ana Maria Machado', 'Conceição Lima',
     ];
     // Do not concatenate an author with a multi-word subject filter:
     // that exact combination frequently returns zero volumes.
