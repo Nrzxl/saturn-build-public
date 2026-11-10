@@ -224,13 +224,15 @@ class CatalogClient {
       requests.add(safe('animes', () => _anime(query: query, page: p)));
     }
     if (filter == CatalogFilter.all || filter == CatalogFilter.books) {
+      // An explicit author/title search must not be constrained by a
+      // previously selected discovery subject (e.g. Agatha Christie while
+      // Literatura brasileira was active).
       requests.add(safe('livros',
-          () => _books(query, page: p, subject: bookSubject)));
+          () => _books(query, page: p)));
       // Broaden PT-BR edition coverage without harvesting a full catalog.
       if (filter == CatalogFilter.books) {
         requests.add(safe('livros nacionais e em português',
-          () => _googleBooks(query: query, page: p,
-            national: bookSubject == 'brazilian_literature')));
+          () => _googleBooks(query: query, page: p)));
       }
     }
 
@@ -529,12 +531,14 @@ class CatalogClient {
       'Graciliano Ramos', 'Carolina Maria de Jesus', 'Paulo Coelho',
       'Cecília Meireles', 'Guimarães Rosa',
     ];
+    // Do not concatenate an author with a multi-word subject filter:
+    // that exact combination frequently returns zero volumes.
     final search = input.isNotEmpty
-        ? (national ? input + ' subject:literatura brasileira' : input)
+        ? input
         : national
           ? 'inauthor:' + nationalAuthors[
               (page - 1) % nationalAuthors.length]
-          : 'subject:ficção';
+          : 'subject:fiction';
     // Rotate Brazilian writers on national discovery pages and paginate
     // without flooding Google or Open Library with background requests.
     final nationalPage = national && input.isEmpty
@@ -546,7 +550,7 @@ class CatalogClient {
         'printType': 'books',
         'maxResults': '40',
         'startIndex': (nationalPage * 40).toString(),
-        'projection': 'lite',
+        'projection': 'full',
       }));
     if (data is! Map || data['items'] is! List) return [];
     final result = <CatalogEntry>[];
@@ -557,7 +561,8 @@ class CatalogClient {
       if (id.isEmpty || volume is! Map) continue;
       final title = (volume['title'] ?? '').toString().trim();
       final language = (volume['language'] ?? '').toString().toLowerCase();
-      if (title.isEmpty || language != 'pt') continue;
+      if (title.isEmpty ||
+          !(language == 'pt' || language.startsWith('pt-'))) continue;
       final authors = volume['authors'];
       final creator = authors is List
           ? authors.map((a) => a.toString()).join(', ') : '';
@@ -573,8 +578,11 @@ class CatalogClient {
         }
       }
       final images = volume['imageLinks'];
+      // Prefer the actual volume's high-resolution art when available.
       var cover = images is Map
-          ? (images['thumbnail'] ?? images['smallThumbnail'] ?? '').toString()
+          ? (images['extraLarge'] ?? images['large'] ??
+             images['medium'] ?? images['small'] ??
+             images['thumbnail'] ?? images['smallThumbnail'] ?? '').toString()
           : '';
       if (cover.startsWith('http://books.google.com/') ||
           cover.startsWith('http://books.googleusercontent.com/')) {
