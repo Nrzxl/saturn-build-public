@@ -5232,6 +5232,14 @@ class _CatalogExploreState extends State<CatalogExplore> {
   }
 
   void _search() {
+    // Subject chips are discovery presets, not permanent constraints on
+    // explicit author/title searches. The filter must not silently exclude
+    // Agatha Christie after browsing Brazilian literature.
+    if (_filter == CatalogFilter.books &&
+        _query.text.trim().length >= 2 &&
+        _bookSubject == 'brazilian_literature') {
+      setState(() => _bookSubject = null);
+    }
     if (_query.text.trim().isNotEmpty &&
         _query.text.trim().length < 2) {
       setState(() => _error = 'Digite pelo menos duas letras para pesquisar.');
@@ -5345,7 +5353,10 @@ class _CatalogExploreState extends State<CatalogExplore> {
                           size: 16, color: gold),
                         label: const Text('Agatha Christie · português'),
                         onPressed: () {
-                          _query.text = 'Agatha Christie';
+                          setState(() {
+                            _bookSubject = null;
+                            _query.text = 'Agatha Christie';
+                          });
                           _search();
                         },
                       ),
@@ -5373,7 +5384,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                       child: Text(
                         '${labels[_filter.index]}'
                         '${_streamingFilter != null ? ' • ${_streamingFilter!.label}' : ''}'
-                        '${_bookSubject != null ? ' • Livros: $_bookSubject' : ''}'
+                        '${_bookSubject != null ? ' • Livros: ${CatalogClient.bookSubjects.entries.where((item) => item.value == _bookSubject).map((item) => item.key).firstOrNull ?? _bookSubject}' : ''}'
                         '${_genreId != null ? ' • ${_movieGenres[_genreId] ?? 'Gênero'}' : ''}',
                         style: const TextStyle(
                           fontSize: 11, color: Color(0xFFC6A477)),
