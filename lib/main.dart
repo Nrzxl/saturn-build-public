@@ -3379,7 +3379,7 @@ class _SaturnHomeState extends State<SaturnHome>
                     ? 'A fila aparecerá aqui depois da primeira escolha.'
                     : 'A próxima história ainda não foi escolhida.',
                   style: const TextStyle(
-                    color: Color(0xFFE1CBD5), fontSize: 12)),
+                    color: Color(0xFFE1CBD5), fontSize: 12))),
               ]),
             ),
           const SizedBox(height: 15),
