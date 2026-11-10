@@ -101,15 +101,17 @@ void main() {
     addTearDown(catalog.close);
     final results = await catalog.search(
       'Agatha Christie', CatalogFilter.books);
-    expect(results, hasLength(3));
-    expect(results.first.id, CatalogClient.nileBrazilianId);
-    expect(results.first.title, 'Morte no Nilo');
-    expect(results.first.description, contains('9788520936511'));
-    expect(results[1].id, 'openlibrary:/works/OL789W');
-    expect(results[1].title, 'Assassinato no Expresso do Oriente');
-    expect(results[1].posterUrl, contains('/9001-M.jpg'));
-    expect(results[1].description, contains('9788532529627'));
-    expect(results[1].creator, 'Agatha Christie');
+    expect(results, hasLength(4));
+    expect(results.first.id, 'isbn:9786555110029');
+    expect(results.first.posterUrl, contains('284941-1.jpg'));
+    expect(results[1].id, CatalogClient.nileBrazilianId);
+    expect(results[1].title, 'Morte no Nilo');
+    expect(results[1].description, contains('9788520936511'));
+    expect(results[2].id, 'openlibrary:/works/OL789W');
+    expect(results[2].title, 'Assassinato no Expresso do Oriente');
+    expect(results[2].posterUrl, contains('/9001-M.jpg'));
+    expect(results[2].description, contains('9788532529627'));
+    expect(results[2].creator, 'Agatha Christie');
     expect(results.last.title,
         'A Novel Without Verified Portuguese Translation');
     expect(results.last.posterUrl, contains('/444-M.jpg'));
@@ -133,12 +135,15 @@ void main() {
     addTearDown(catalog.close);
     final results = await catalog.search(
         'Morte no Nilo', CatalogFilter.books);
-    expect(results, hasLength(2));
-    expect(results.first.id, CatalogClient.nileBrazilianId);
+    expect(results, hasLength(3));
+    expect(results.first.id, 'isbn:9786555110029');
     expect(results.first.title, 'Morte no Nilo');
-    expect(results.first.year, 2014);
-    expect(results.first.detailUrl, contains('aabbportoalegre.com.br'));
-    expect(results.first.posterUrl, contains('9788520936511'));
+    expect(results.first.year, 2020);
+    expect(results.first.posterUrl, contains('284941-1.jpg'));
+    expect(results[1].id, CatalogClient.nileBrazilianId);
+    expect(results[1].year, 2014);
+    expect(results[1].detailUrl, contains('aabbportoalegre.com.br'));
+    expect(results[1].posterUrl, contains('9788520936511'));
     expect(results.last.id, 'openlibrary:/works/OL471724W');
   });
 
@@ -150,11 +155,13 @@ void main() {
     addTearDown(catalog.close);
     final titleResults = await catalog.search(
         'Morte no Nilo', CatalogFilter.books);
-    expect(titleResults, hasLength(1));
-    expect(titleResults.single.id, CatalogClient.nileBrazilianId);
+    expect(titleResults, hasLength(2));
+    expect(titleResults.first.id, 'isbn:9786555110029');
+    expect(titleResults.last.id, CatalogClient.nileBrazilianId);
     final isbnResults = await catalog.search(
         '9788520936511', CatalogFilter.books);
-    expect(isbnResults.single.id, CatalogClient.nileBrazilianId);
+    expect(isbnResults, hasLength(2));
+    expect(isbnResults.last.id, CatalogClient.nileBrazilianId);
     // Other pages are source-driven and should report an actual outage
     // rather than silently pretending there are no further books.
     await expectLater(
