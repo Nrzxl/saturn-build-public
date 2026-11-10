@@ -8,6 +8,7 @@ on:
       - 'pubspec.yaml'
       - 'test/**'
       - 'scripts/create_pwa_icons.py'
+      - 'scripts/test_*.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
