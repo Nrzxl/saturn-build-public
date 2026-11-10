@@ -3418,6 +3418,7 @@ class _SaturnHomeState extends State<SaturnHome>
               data: Theme.of(context).copyWith(
                 dividerColor: Colors.transparent),
               child: ExpansionTile(
+                key: const PageStorageKey('saturn-series-history'),
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.history_rounded,
