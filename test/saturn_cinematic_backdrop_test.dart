@@ -63,4 +63,45 @@ void main() {
     expect(restored.posterUrl, original.posterUrl);
     expect(restored.backdropUrl, original.backdropUrl);
   });
+
+  test('Curated exact-ID rescue art loads when the main snapshot is old', () async {
+    final paths = <String>[];
+    final catalog = CatalogClient(
+      enableTmdb: true,
+      client: MockClient((request) async {
+        paths.add(request.url.path);
+        if (request.url.path.endsWith('/movies.json')) {
+          return http.Response(jsonEncode({
+            'schema': 1,
+            'country': 'BR',
+            'results': [
+              {
+                'id': 'tmdb:movie:24',
+                'title': 'Kill Bill: Vol. 1',
+                'posterUrl': 'https://image.tmdb.org/t/p/w500/poster.jpg',
+              },
+              {'id': 'tmdb:movie:25', 'title': 'Different film'},
+            ],
+          }), 200);
+        }
+        if (request.url.path.endsWith('/backdrops-fallback.json')) {
+          return http.Response(jsonEncode({
+            'schema': 1, 'country': 'BR', 'overrides': {
+              'tmdb:movie:24':
+                'https://image.tmdb.org/t/p/w1280/iffzIhuLAO38Po6sh1s6ZEVwlNL.jpg',
+              'tmdb:movie:25': 'https://unsafe.example.com/fake.jpg',
+            },
+          }), 200);
+        }
+        throw StateError('Unexpected URL: ignore');
+      }),
+    );
+    expect(await catalog.verifiedBackdropFor(workId: 'tmdb:movie:24'),
+        'https://image.tmdb.org/t/p/w1280/iffzIhuLAO38Po6sh1s6ZEVwlNL.jpg');
+    expect(await catalog.verifiedBackdropFor(workId: 'tmdb:movie:25'),
+        isNull);
+    expect(paths.where((p) => p.endsWith('/movies.json')).length, 1);
+    expect(paths.where((p) => p.endsWith('/backdrops-fallback.json')).length, 1);
+    catalog.close();
+  });
 }
