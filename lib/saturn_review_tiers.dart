@@ -30,6 +30,30 @@ class SaturnReviewClassification {
     return score / 2;
   }
 
+  /// Personal categories are ordered for display: highest rating first.
+  /// Missing reviews are last, without a made-up ranking.
+  static int priority(SaturnReviewTier? tier) => switch (tier) {
+    SaturnReviewTier.ouro => 0,
+    SaturnReviewTier.prata => 1,
+    SaturnReviewTier.bronze => 2,
+    null => 3,
+  };
+
+  static List<T> sorted<T>(List<T> items, Object? Function(T) personal) {
+    final indexed = items.asMap().entries.toList(growable: false);
+    indexed.sort((a, b) {
+      final ra = personal(a.value);
+      final rb = personal(b.value);
+      final bucket = priority(of(ra)).compareTo(priority(of(rb)));
+      if (bucket != 0) return bucket;
+      final ratedA = stars(ra) ?? -1;
+      final ratedB = stars(rb) ?? -1;
+      final byScore = ratedB.compareTo(ratedA);
+      return byScore == 0 ? a.key.compareTo(b.key) : byScore;
+    });
+    return indexed.map((row) => row.value).toList(growable: false);
+  }
+
   static bool hasWrittenReview(Object? row) =>
       row is Map && (row['notes'] ?? '').toString().trim().isNotEmpty;
 
