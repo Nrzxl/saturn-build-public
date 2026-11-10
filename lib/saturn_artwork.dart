@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:collection';
 import 'package:flutter/material.dart';
 
 /// High-definition, edition-preserving art and compact color extraction.
@@ -7,6 +9,31 @@ class SaturnArtwork {
 
   static const fallback = Color(0xFF342333);
   static final Map<String, Future<Color>> _tones = {};
+  // Palette extraction resizes remote posters, but still costs CPU on older
+  // notebooks. Never decode unlimited covers in parallel.
+  static const int _maxPaletteJobs = 2;
+  static int _activePaletteJobs = 0;
+  static final Queue<Completer<void>> _paletteQueue =
+      Queue<Completer<void>>();
+
+  static Future<void> _acquirePaletteSlot() async {
+    if (_activePaletteJobs < _maxPaletteJobs) {
+      _activePaletteJobs++;
+      return;
+    }
+    final waiting = Completer<void>();
+    _paletteQueue.add(waiting);
+    await waiting.future;
+  }
+
+  static void _releasePaletteSlot() {
+    if (_paletteQueue.isNotEmpty) {
+      // A waiting job takes ownership of the released slot.
+      _paletteQueue.removeFirst().complete();
+    } else {
+      _activePaletteJobs--;
+    }
+  }
 
   /// Upgrade known, immutable asset URLs without guessing an image/edition.
   static String bestUrl(String original, {double devicePixels = 0}) {
@@ -48,21 +75,24 @@ class SaturnArtwork {
     if (!artworkUrl.startsWith('https://')) {
       return Future.value(fallback);
     }
-    if (_tones.length >= 72 && !_tones.containsKey(artworkUrl)) {
+    if (_tones.length >= 140 && !_tones.containsKey(artworkUrl)) {
       _tones.remove(_tones.keys.first);
     }
     return _tones.putIfAbsent(artworkUrl, () async {
+      await _acquirePaletteSlot();
       try {
         final colors = await ColorScheme.fromImageProvider(
           provider: ResizeImage(
             NetworkImage(artworkUrl),
-            width: 72,
+            width: 56,
           ),
           brightness: Brightness.dark,
         );
         return Color.lerp(fallback, colors.primary, .52) ?? fallback;
       } catch (_) {
         return fallback;
+      } finally {
+        _releasePaletteSlot();
       }
     });
   }

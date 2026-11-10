@@ -30,6 +30,11 @@ class SaturnReviewClassification {
     return score / 2;
   }
 
+  /// Only an explicitly saved zero-star score on a movie qualifies.
+  /// Missing ratings, series, anime, books and external ratings never do.
+  static bool shouldShowFlies(String kind, Object? row) =>
+      kind == 'Filme' && stars(row) == 0;
+
   /// Personal categories are ordered for display: highest rating first.
   /// Missing reviews are last, without a made-up ranking.
   static int priority(SaturnReviewTier? tier) => switch (tier) {
