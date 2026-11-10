@@ -2,6 +2,33 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:saturn_app/saturn_orbit_merge.dart';
 
 void main() {
+  test('Série atual e turnos históricos preservados no merge da Órbita', () {
+    final merged = SaturnOrbitMerge.merge({
+      'ritualOps': {
+        'series:turn:0': {
+          'workId': 'tmdb:tv:111', 'chosenBy': 1,
+          'finished': false, 'updatedAt': 100,
+        },
+      },
+    }, {
+      'ritualOps': {
+        'series:turn:0': {
+          'workId': 'tmdb:tv:111', 'chosenBy': 1,
+          'finished': true, 'updatedAt': 200,
+        },
+        'series:turn:1': {
+          'workId': 'tmdb:tv:222', 'chosenBy': 0,
+          'finished': false, 'updatedAt': 210,
+        },
+      },
+    });
+    final ops = merged['ritualOps'] as Map;
+    expect((ops['series:turn:0'] as Map)['finished'], isTrue);
+    expect((ops['series:turn:1'] as Map)['chosenBy'], 0);
+    expect((ops['series:turn:1'] as Map)['workId'], 'tmdb:tv:222');
+  });
+
+
   test('Names and avatars for both partners merge independently', () {
     final a = SaturnOrbitMerge.merge({
       'profileOps': {
