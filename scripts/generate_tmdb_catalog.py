@@ -110,10 +110,17 @@ def save_result(media: str, record: dict) -> str | None:
             raw.get("popularity", 0.0),
             float(record.get("popularity") or 0),
         )
+        # A later discovery list may contain artwork missing in the first hit.
+        backdrop = record.get("backdrop_path") or ""
+        if isinstance(backdrop, str) and re.fullmatch(r"/[a-zA-Z0-9_./-]+", backdrop) and not raw.get("backdropUrl"):
+            raw["backdropUrl"] = "https://image.tmdb.org/t/p/w1280" + backdrop
         return ident
     poster = record.get("poster_path") or ""
     if poster and not re.fullmatch(r"/[a-zA-Z0-9_./-]+", poster):
         poster = ""
+    backdrop = record.get("backdrop_path") or ""
+    if not isinstance(backdrop, str) or not re.fullmatch(r"/[a-zA-Z0-9_./-]+", backdrop):
+        backdrop = ""
     description = (record.get("overview") or "").strip()
     TITLES[ident] = {
         "id": ident,
@@ -125,6 +132,7 @@ def save_result(media: str, record: dict) -> str | None:
         "year": year(record.get("release_date") or
                      record.get("first_air_date")),
         "posterUrl": ("https://image.tmdb.org/t/p/w500" + poster) if poster else "",
+        "backdropUrl": ("https://image.tmdb.org/t/p/w1280" + backdrop) if backdrop else "",
         "creator": "",
         "provider": "TMDB",
         "detailUrl": f"https://www.themoviedb.org/{media}/{tid}",
