@@ -373,8 +373,14 @@ class _SaturnHomeState extends State<SaturnHome>
           CatalogFilter.movies, page: nextPage);
         if (!mounted) return;
         setState(() {
-          recommendedMovies = films.map(Work.fromCatalog).toList(growable: false);
-          _filmRecommendationPage = nextPage;
+          final additions = films.map(Work.fromCatalog).toList(growable: false);
+          recommendedMovies = refreshMovies
+              ? <String, Work>{
+                  for (final work in recommendedMovies) work.id: work,
+                  for (final work in additions) work.id: work,
+                }.values.toList(growable: false)
+              : additions;
+          if (additions.isNotEmpty) _filmRecommendationPage = nextPage;
         });
       }
     } catch (_) {
@@ -1882,6 +1888,11 @@ class _SaturnHomeState extends State<SaturnHome>
     _featuredPausedUntil = DateTime.now().add(const Duration(seconds: 20));
     setState(() => _featuredIndex =
         (_featuredIndex + direction + slides.length) % slides.length);
+    // New pages extend the carousel instead of resetting it to eight films.
+    if (direction > 0 && _featuredIndex >= slides.length - 4 &&
+        !loadingRecommendations) {
+      _loadHomeRecommendations(refreshMovies: true);
+    }
   }
 
   /// Usa capas realmente retornadas pelo catálogo; sem título fictício no destaque.
@@ -2160,8 +2171,15 @@ class _SaturnHomeState extends State<SaturnHome>
           ),
         ),
         child: SaturnMetallicHalo(
-          key: tier == null ? null : Key('saturn-review-halo-' + work.id),
-          color: tier?.color,
+          key: Key('saturn-review-halo-' + work.id),
+          color: shared.contains(work.id)
+              ? SaturnReviewClassification.fromRating(
+                  records['0:${work.id}'])?.color
+              : tier?.color,
+          partnerColor: shared.contains(work.id)
+              ? SaturnReviewClassification.fromRating(
+                  records['1:${work.id}'])?.color
+              : null,
           child: Material(
           borderRadius: BorderRadius.circular(15),
           color: const Color(0xFF251C2A),
@@ -2943,7 +2961,15 @@ class _SaturnHomeState extends State<SaturnHome>
                     letterSpacing: 1.6, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  PosterThumbnail(work: work, width: 103, height: 145),
+                  SaturnMetallicHalo(
+                    key: Key('saturn-shared-halo-featured-' + work.id),
+                    color: SaturnReviewClassification.fromRating(
+                        insights.profile(0, work.id))?.color,
+                    partnerColor: SaturnReviewClassification.fromRating(
+                        insights.profile(1, work.id))?.color,
+                    child: PosterThumbnail(
+                        work: work, width: 103, height: 145),
+                  ),
                   const SizedBox(width: 14),
                   Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2986,7 +3012,14 @@ class _SaturnHomeState extends State<SaturnHome>
         child: Padding(
           padding: const EdgeInsets.all(13),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            PosterThumbnail(work: work, width: 62, height: 88),
+            SaturnMetallicHalo(
+              key: Key('saturn-shared-halo-memory-' + work.id),
+              color: SaturnReviewClassification.fromRating(
+                  insights.profile(0, work.id))?.color,
+              partnerColor: SaturnReviewClassification.fromRating(
+                  insights.profile(1, work.id))?.color,
+              child: PosterThumbnail(work: work, width: 62, height: 88),
+            ),
             const SizedBox(width: 12),
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
