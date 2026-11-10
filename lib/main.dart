@@ -1859,12 +1859,16 @@ class _SaturnHomeState extends State<SaturnHome>
                         child: spacious
                             ? ImageFiltered(
                                 imageFilter: ui.ImageFilter.blur(
-                                  sigmaX: 12, sigmaY: 12),
-                                child: Image.network(featured.posterUrl,
+                                  sigmaX: 10, sigmaY: 10),
+                                child: Image.network(
+                                  SaturnArtwork.bestUrl(featured.posterUrl,
+                                    devicePixels: 900),
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stack) =>
                                       const SizedBox.shrink()))
-                            : Image.network(featured.posterUrl,
+                            : Image.network(
+                                SaturnArtwork.bestUrl(featured.posterUrl,
+                                  devicePixels: 780),
                                 fit: BoxFit.cover,
                                 alignment: Alignment.centerRight,
                                 errorBuilder: (context, error, stack) =>
@@ -1893,10 +1897,16 @@ class _SaturnHomeState extends State<SaturnHome>
                       width: spacious ? 183 : 124,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(15),
-                        child: PosterThumbnail(
-                          work: featured,
-                          width: spacious ? 183 : 124,
-                          height: spacious ? 265 : 220,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 450),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeIn,
+                          child: PosterThumbnail(
+                            key: ValueKey('featured-' + featured.id),
+                            work: featured,
+                            width: spacious ? 183 : 124,
+                            height: spacious ? 265 : 220,
+                          ),
                         ),
                       ),
                     ),
