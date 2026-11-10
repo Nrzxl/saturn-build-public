@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -304,6 +305,8 @@ class _SaturnHomeState extends State<SaturnHome>
   final CatalogClient _homeCatalog = CatalogClient();
   Timer? _featuredTimer;
   int _featuredIndex = 0;
+  double _featuredDragDistance = 0;
+  static const double _featuredSwipeThreshold = 58;
   DateTime _featuredPausedUntil = DateTime.fromMillisecondsSinceEpoch(0);
   bool _foreground = true;
   List<Work> recommendedMovies = [];
@@ -1906,7 +1909,34 @@ class _SaturnHomeState extends State<SaturnHome>
     }
   }
 
-  /// Usa capas realmente retornadas pelo catálogo; sem título fictício no destaque.
+  /// A rightward swipe advances, a leftward swipe returns. Ignore short
+  /// incidental pointer movement; vertical scrolling has its own recognizer.
+  void _finishFeaturedDrag(DragEndDetails details) {
+    final distance = _featuredDragDistance;
+    _featuredDragDistance = 0;
+    final speed = details.primaryVelocity?.abs() ?? 0;
+    final intentional = distance.abs() >= _featuredSwipeThreshold ||
+        (distance.abs() >= 24 && speed >= 650);
+    if (!intentional) return;
+    _moveFeatured(distance > 0 ? 1 : -1);
+  }
+
+  KeyEventResult _featuredKeyboardNavigation(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _moveFeatured(1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _moveFeatured(-1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Uses real catalog covers; accessible by touch, mouse and keyboard.
   Widget _cinematicHero(int ownCount) {
     final slides = _featuredTitles();
     final Work? featured = slides.isEmpty
@@ -1918,10 +1948,34 @@ class _SaturnHomeState extends State<SaturnHome>
       child: LayoutBuilder(
         builder: (context, constraints) {
           final spacious = constraints.maxWidth >= 680;
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: SizedBox(
-              height: spacious ? 346 : 405,
+          return Focus(
+            onKeyEvent: _featuredKeyboardNavigation,
+            child: Semantics(
+              label: featured == null
+                  ? 'Destaque SATURN'
+                  : 'Destaque SATURN: ${featured.title}',
+              hint: 'Arraste para a direita para avançar e para a esquerda '
+                  'para voltar. Use as setas do teclado para navegar.',
+              onIncrease: slides.length > 1 ? () => _moveFeatured(1) : null,
+              onDecrease: slides.length > 1 ? () => _moveFeatured(-1) : null,
+              child: GestureDetector(
+                key: const Key('saturn-feature-swipe'),
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragStart: slides.length > 1
+                    ? (_) => _featuredDragDistance = 0
+                    : null,
+                onHorizontalDragUpdate: slides.length > 1
+                    ? (details) => _featuredDragDistance +=
+                        details.primaryDelta ?? 0
+                    : null,
+                onHorizontalDragEnd: slides.length > 1
+                    ? _finishFeaturedDrag
+                    : null,
+                onHorizontalDragCancel: () => _featuredDragDistance = 0,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(26),
+                  child: SizedBox(
+                    height: spacious ? 346 : 405,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -2047,31 +2101,11 @@ class _SaturnHomeState extends State<SaturnHome>
                       ],
                     ),
                   ),
-                  if (slides.length > 1)
-                    Positioned(
-                      top: spacious ? 17 : null,
-                      bottom: spacious ? null : 15,
-                      right: spacious ? 232 : 14,
-                      child: Material(
-                        color: const Color(0xDB241A2A),
-                        borderRadius: BorderRadius.circular(32),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          IconButton(
-                            key: const Key('saturn-feature-previous'),
-                            visualDensity: VisualDensity.compact,
-                            tooltip: 'Destaque anterior',
-                            icon: const Icon(Icons.chevron_left, color: ivory),
-                            onPressed: () => _moveFeatured(-1)),
-                          IconButton(
-                            key: const Key('saturn-feature-next'),
-                            visualDensity: VisualDensity.compact,
-                            tooltip: 'Próximo destaque',
-                            icon: const Icon(Icons.chevron_right, color: ivory),
-                            onPressed: () => _moveFeatured(1)),
-                        ]),
+                ],
                       ),
                     ),
-                ],
+                  ),
+                ),
               ),
             ),
           );
