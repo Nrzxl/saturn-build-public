@@ -20,6 +20,7 @@ import 'saturn_orbit_cloud.dart';
 import 'saturn_orbit_merge.dart';
 import 'saturn_orbit_sync_sheet.dart';
 import 'saturn_premium_details.dart';
+import 'saturn_story_synopsis.dart';
 import 'saturn_book_details.dart';
 import 'saturn_book_cover.dart';
 import 'saturn_couple_insights.dart';
@@ -4090,23 +4091,41 @@ class _SaturnHomeState extends State<SaturnHome>
                     icon: const Icon(Icons.close_rounded, color: ivory)),
                 ]),
                 const SizedBox(height: 10),
-                if (w.kind != 'Livro' &&
-                    SaturnNativeTrailer.canUseNative(
-                      w.nativeTrailerUrl,
-                      rightsConfirmed: w.provider == 'SATURN Licensed',
-                    )) ...[
-                  SaturnNativeTrailer(
-                    mediaUrl: w.nativeTrailerUrl,
-                    rightsConfirmed: true,
-                  ),
-                  const SizedBox(height: 14),
-                ] else if (w.kind != 'Livro' &&
-                    w.trailerYoutubeId.isNotEmpty) ...[
-                  SaturnTrailerPreview(youtubeId: w.trailerYoutubeId),
-                  const SizedBox(height: 14),
-                ],
                 _cinematicDetailBanner(w),
-                const SizedBox(height: 12),
+                const SizedBox(height: 9),
+                if (w.kind != 'Livro' &&
+                    (SaturnNativeTrailer.canUseNative(
+                        w.nativeTrailerUrl,
+                        rightsConfirmed: w.provider == 'SATURN Licensed') ||
+                     w.trailerYoutubeId.isNotEmpty)) ...[
+                  Theme(
+                    data: Theme.of(ctx).copyWith(
+                        dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      key: Key('saturn-trailer-' + w.id),
+                      initiallyExpanded: false,
+                      maintainState: false,
+                      tilePadding: const EdgeInsets.symmetric(horizontal: 7),
+                      title: const Text('Trailer oficial',
+                        style: TextStyle(
+                          color: ivory, fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                      leading: const Icon(Icons.play_circle_outline,
+                        color: gold, size: 20),
+                      children: [
+                        if (SaturnNativeTrailer.canUseNative(
+                            w.nativeTrailerUrl,
+                            rightsConfirmed: w.provider == 'SATURN Licensed'))
+                          SaturnNativeTrailer(
+                            mediaUrl: w.nativeTrailerUrl,
+                            rightsConfirmed: true)
+                        else if (w.trailerYoutubeId.isNotEmpty)
+                          SaturnTrailerPreview(youtubeId: w.trailerYoutubeId),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 if (w.kind == 'Livro' &&
                     w.id.startsWith('openlibrary:/works/')) ...[
                   const Text(
@@ -4135,17 +4154,7 @@ class _SaturnHomeState extends State<SaturnHome>
                     fallbackCover: SaturnBookCover.resolve(w.id, w.posterUrl),
                   )
                 else
-                  SaturnDetailSection(
-                    title: 'A história',
-                    icon: Icons.auto_stories_outlined,
-                    child: Text(
-                      w.description.isEmpty
-                        ? 'Sinopse indisponível nesta fonte.'
-                        : w.description,
-                      style: const TextStyle(
-                        color: ivory, height: 1.6, fontSize: 13),
-                    ),
-                  ),
+                  SaturnStorySynopsis(description: w.description),
                 if (w.kind != 'Livro')
                   SaturnRatingsFromCatalog(
                     workId: w.id,
