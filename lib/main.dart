@@ -2517,6 +2517,33 @@ class _SaturnHomeState extends State<SaturnHome>
                             width: double.infinity,
                             height: double.infinity),
                           Positioned(
+                            left: 3, top: 3,
+                            child: IconButton.filledTonal(
+                              key: Key('saturn-recommend-favorite-' + work.id),
+                              tooltip: _isFavorite(work)
+                                  ? 'Retirar dos Favoritos' : 'Favoritar',
+                              onPressed: () => _catalogEditionAction(
+                                  work, _toggleFavorite),
+                              icon: Icon(_isFavorite(work)
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                                color: const Color(0xFFF2B0C4), size: 17),
+                            ),
+                          ),
+                          Positioned(
+                            right: 3, bottom: 3,
+                            child: IconButton.filledTonal(
+                              key: Key('saturn-recommend-collections-' + work.id),
+                              tooltip: 'Adicionar a coleção',
+                              onPressed: () => _catalogEditionAction(
+                                  work, (edition) =>
+                                      _showCollectionPicker(edition)),
+                              icon: const Icon(
+                                  Icons.create_new_folder_outlined,
+                                  size: 17),
+                            ),
+                          ),
+                          Positioned(
                             right: 3, top: 3,
                             child: IconButton.filledTonal(
                               tooltip: work.kind == 'Livro'
@@ -2645,6 +2672,25 @@ class _SaturnHomeState extends State<SaturnHome>
                   ),
                   if (zeroStarMovie)
                     const Positioned.fill(child: SaturnZeroStarFlies()),
+                  if (!_selectingWorks) ...[
+                    Positioned(top: 2, left: 2,
+                      child: IconButton.filledTonal(
+                        key: Key('saturn-ranked-favorite-' + work.id),
+                        tooltip: _isFavorite(work)
+                            ? 'Retirar dos Favoritos' : 'Favoritar',
+                        icon: Icon(_isFavorite(work)
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                          color: const Color(0xFFF2B0C4), size: 17),
+                        onPressed: () => _toggleFavorite(work))),
+                    Positioned(top: 2, right: 2,
+                      child: IconButton.filledTonal(
+                        key: Key('saturn-ranked-collections-' + work.id),
+                        tooltip: 'Organizar em coleções',
+                        icon: const Icon(
+                            Icons.create_new_folder_outlined, size: 17),
+                        onPressed: () => _showCollectionPicker(work))),
+                  ],
                   if (_selectingWorks)
                     Positioned(
                       top: 3, left: 3,
@@ -3005,6 +3051,12 @@ class _SaturnHomeState extends State<SaturnHome>
         onToggleCompleted: (work) =>
             _catalogEditionAction(work, _toggleCompleted),
         isCompleted: _isDone,
+        isFavorite: _isFavorite,
+        onToggleFavorite: (work) =>
+            _catalogEditionAction(work, _toggleFavorite),
+        onManageCollections: (work) =>
+            _catalogEditionAction(work,
+                (edition) => _showCollectionPicker(edition)),
         showZeroStarFlies: (work) =>
             SaturnReviewClassification.shouldShowFlies(
                 work.kind, records['${profile}:${work.id}']) ||
@@ -5333,6 +5385,25 @@ class _SaturnHomeState extends State<SaturnHome>
                           ? _isWatchlisted(w) ? 'Quero ler ✓' : '+ Quero ler'
                           : _isWatchlisted(w) ? 'Na Watchlist ✓' : '+ Watchlist'),
                     ),
+                    OutlinedButton.icon(
+                      key: const Key('saturn-details-favorite'),
+                      onPressed: () {
+                        _catalogEditionAction(w, _toggleFavorite);
+                        refresh(() {});
+                      },
+                      icon: Icon(_isFavorite(w)
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded),
+                      label: Text(_isFavorite(w)
+                          ? 'Favoritado ✓' : 'Favoritar'),
+                    ),
+                    OutlinedButton.icon(
+                      key: const Key('saturn-details-collections'),
+                      onPressed: () => _catalogEditionAction(
+                        w, (edition) => _showCollectionPicker(edition)),
+                      icon: const Icon(Icons.create_new_folder_outlined),
+                      label: const Text('Minhas coleções'),
+                    ),
                   ],
                 ),
                 if (w.kind != 'Livro') ...[
@@ -5808,6 +5879,9 @@ class CatalogExplore extends StatefulWidget {
   final bool Function(Work) isWatchlisted;
   final void Function(Work) onToggleCompleted;
   final bool Function(Work) isCompleted;
+  final bool Function(Work)? isFavorite;
+  final void Function(Work)? onToggleFavorite;
+  final void Function(Work)? onManageCollections;
   final bool Function(Work)? showZeroStarFlies;
 
   const CatalogExplore({
@@ -5821,6 +5895,9 @@ class CatalogExplore extends StatefulWidget {
     required this.isWatchlisted,
     required this.onToggleCompleted,
     required this.isCompleted,
+    this.isFavorite,
+    this.onToggleFavorite,
+    this.onManageCollections,
     this.showZeroStarFlies,
   });
 
@@ -6445,6 +6522,27 @@ class _CatalogExploreState extends State<CatalogExplore> {
                         ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
                         size: 18,
                         color: loved ? const Color(0xFFF0B6C2) : ivory))),
+                  Positioned(top: 51, right: 5,
+                    child: IconButton.filledTonal(
+                      key: Key('saturn-explore-favorite-' + work.id),
+                      tooltip: widget.isFavorite?.call(work) == true
+                          ? 'Retirar dos Favoritos' : 'Favoritar',
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(widget.isFavorite?.call(work) == true
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                          size: 18, color: const Color(0xFFF2B0C4)),
+                      onPressed: widget.onToggleFavorite == null ? null
+                          : () => widget.onToggleFavorite!(work))),
+                  Positioned(top: 98, right: 5,
+                    child: IconButton.filledTonal(
+                      key: Key('saturn-explore-collections-' + work.id),
+                      tooltip: 'Organizar em coleções',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(
+                          Icons.create_new_folder_outlined, size: 18),
+                      onPressed: widget.onManageCollections == null ? null
+                          : () => widget.onManageCollections!(work))),
                   Positioned(bottom: 102, right: 5,
                     child: IconButton.filledTonal(
                       tooltip: work.kind == 'Livro'
