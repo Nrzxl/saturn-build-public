@@ -36,7 +36,7 @@ class SaturnArtwork {
   }
 
   /// Upgrade known, immutable asset URLs without guessing an image/edition.
-  static String bestUrl(String original, {double devicePixels = 0}) {
+  static String bestUrl(String original, {double devicePixels = 0, bool panorama = false}) {
     final uri = Uri.tryParse(original);
     if (uri == null || uri.scheme != 'https') return original;
     if (uri.host == 'image.tmdb.org' ||
@@ -44,11 +44,15 @@ class SaturnArtwork {
       final parts = uri.pathSegments.toList();
       if (parts.length >= 4 && parts[0] == 't' && parts[1] == 'p') {
         const candidates = {
-          'w92', 'w154', 'w185', 'w342', 'w500', 'w780',
+          'w92', 'w154', 'w185', 'w300', 'w342', 'w500', 'w780', 'w1280',
         };
         if (candidates.contains(parts[2])) {
-          parts[2] = devicePixels >= 540 ? 'w780'
-              : devicePixels >= 300 ? 'w500' : 'w342';
+          // Panorama and poster use distinct TMDB size ladders. A w1280
+          // panorama is sharper than w780; posters remain on valid w780.
+          parts[2] = panorama
+              ? (devicePixels >= 960 ? 'w1280' : 'w780')
+              : (devicePixels >= 540 ? 'w780'
+                  : devicePixels >= 300 ? 'w500' : 'w342');
           return uri.replace(pathSegments: parts).toString();
         }
       }
