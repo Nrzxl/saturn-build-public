@@ -3481,7 +3481,9 @@ class _SaturnHomeState extends State<SaturnHome>
         : _smartCollectionIds(active).map((id) => savedWorks[id])
             .whereType<Work>().where((w) => !_isArchived(w)).toList();
     final items = _filteredCollection(view, false);
-    return ListView(children: [
+    return ListView(
+      key: const PageStorageKey('saturn_personal_collection'),
+      children: [
       _collectionHeader(false, all.length),
       _smartCollectionsOverview(),
       _collectionFilters(false),
