@@ -2673,8 +2673,8 @@ class _SaturnHomeState extends State<SaturnHome>
         gradient: bothMetallic
             ? LinearGradient(
                 colors: [
-                  firstTier!.color.withValues(alpha: .22),
-                  secondTier!.color.withValues(alpha: .22),
+                  firstTier.color.withValues(alpha: .22),
+                  secondTier.color.withValues(alpha: .22),
                 ],
                 stops: const [0, 1],
               )
