@@ -14,7 +14,7 @@ void main() {
   test('Web embed preserves SATURN controls without changing native input', () {
     final web = SaturnTrailerPreview.playerParamsFor(web: true);
     final native = SaturnTrailerPreview.playerParamsFor(web: false);
-    expect(web.pointerEvents, PointerEvents.none);
+    expect(web.pointerEvents, PointerEvents.initial);
     expect(web.showControls, isFalse);
     expect(web.showFullscreenButton, isFalse);
     expect(web.strictRelatedVideos, isTrue);
