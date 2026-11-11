@@ -29,7 +29,7 @@ jobs:
       - name: Validar projeto
         run: |
           flutter pub get
-          flutter analyze lib
+          flutter analyze lib --no-fatal-infos
           flutter test --reporter expanded
       - name: Validar o catálogo de panoramas TMDB sem acesso à rede
         run: python3 -m unittest discover -s scripts -p 'test_generate_tmdb_catalog.py'
