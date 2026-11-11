@@ -133,6 +133,13 @@ void main() {
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
     final grid = find.byKey(Key('saturn-ranked-gallery-' + film.id));
+    final scroller = find.descendant(
+      of: find.byKey(const PageStorageKey('saturn_personal_collection')),
+      matching: find.byType(Scrollable),
+    ).first;
+    await tester.scrollUntilVisible(grid, 240,
+      scrollable: scroller, maxScrolls: 20);
+    await tester.pumpAndSettle();
     expect(grid, findsOneWidget);
     final delegate = tester.widget<GridView>(grid).gridDelegate
       as SliverGridDelegateWithFixedCrossAxisCount;

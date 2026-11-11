@@ -17,6 +17,7 @@ import 'saturn_star_rating.dart';
 import 'saturn_review_tiers.dart';
 import 'saturn_metallic_halo.dart';
 import 'saturn_zero_star_flies.dart';
+import 'saturn_smart_collections.dart';
 import 'saturn_share.dart';
 import 'saturn_trailer.dart';
 import 'saturn_native_trailer.dart';
@@ -291,6 +292,10 @@ class _SaturnHomeState extends State<SaturnHome>
   Map<String, dynamic> _archivedOps = {};
   Map<String, dynamic> _ritualOps = {};
   Map<String, dynamic> _profileOps = {};
+  Map<String, dynamic> _favoriteOps = {};
+  Map<String, dynamic> _collectionOps = {};
+  Map<String, dynamic> _collectionItemOps = {};
+  String _selectedSmartCollection = 'all';
   SaturnOrbitCloud? _cloud;
   bool _cloudApplying = false;
   List<String> shared = [];
@@ -478,6 +483,12 @@ class _SaturnHomeState extends State<SaturnHome>
           jsonDecode(prefs.getString('saturn_ritual_ops_v1') ?? '{}');
       final storedProfileOps =
           jsonDecode(prefs.getString('saturn_profile_ops_v1') ?? '{}');
+      final storedFavoriteOps =
+          jsonDecode(prefs.getString('saturn_favorite_ops_v1') ?? '{}');
+      final storedCollectionOps =
+          jsonDecode(prefs.getString('saturn_collection_ops_v1') ?? '{}');
+      final storedCollectionItemOps =
+          jsonDecode(prefs.getString('saturn_collection_items_v1') ?? '{}');
       final savedProfile = prefs.getInt('saturn_profile_index') ?? 0;
       final archived = prefs.getStringList('saturn_archived_v1') ?? <String>[];
       final storedShared = jsonDecode(prefs.getString('shared') ?? '[]');
@@ -500,6 +511,15 @@ class _SaturnHomeState extends State<SaturnHome>
             : <String, dynamic>{};
         _profileOps = storedProfileOps is Map
             ? Map<String, dynamic>.from(storedProfileOps)
+            : <String, dynamic>{};
+        _favoriteOps = storedFavoriteOps is Map
+            ? Map<String, dynamic>.from(storedFavoriteOps)
+            : <String, dynamic>{};
+        _collectionOps = storedCollectionOps is Map
+            ? Map<String, dynamic>.from(storedCollectionOps)
+            : <String, dynamic>{};
+        _collectionItemOps = storedCollectionItemOps is Map
+            ? Map<String, dynamic>.from(storedCollectionItemOps)
             : <String, dynamic>{};
         _applyProfileIdentity();
         for (final id in archived) {
@@ -574,6 +594,11 @@ class _SaturnHomeState extends State<SaturnHome>
     await prefs.setString('saturn_archived_ops', jsonEncode(_archivedOps));
     await prefs.setString('saturn_ritual_ops_v1', jsonEncode(_ritualOps));
     await prefs.setString('saturn_profile_ops_v1', jsonEncode(_profileOps));
+    await prefs.setString('saturn_favorite_ops_v1', jsonEncode(_favoriteOps));
+    await prefs.setString('saturn_collection_ops_v1',
+        jsonEncode(_collectionOps));
+    await prefs.setString('saturn_collection_items_v1',
+        jsonEncode(_collectionItemOps));
     await prefs.setStringList('saturn_archived_v1',
       _archivedFromCollection.toList(growable: false));
     if (!_cloudApplying) _cloud?.scheduleSync();
@@ -588,6 +613,9 @@ class _SaturnHomeState extends State<SaturnHome>
     'archivedOps': _archivedOps,
     'ritualOps': _ritualOps,
     'profileOps': _profileOps,
+    'favoriteOps': _favoriteOps,
+    'collectionOps': _collectionOps,
+    'collectionItemOps': _collectionItemOps,
     'catalogSaved': savedWorks.map(
       (key, work) => MapEntry(key, work.toJson())),
     'customTitleLinks': customTitleLinks,
@@ -609,6 +637,12 @@ class _SaturnHomeState extends State<SaturnHome>
           doc['ritualOps'] as Map? ?? {});
         _profileOps = Map<String, dynamic>.from(
           doc['profileOps'] as Map? ?? {});
+        _favoriteOps = Map<String, dynamic>.from(
+          doc['favoriteOps'] as Map? ?? {});
+        _collectionOps = Map<String, dynamic>.from(
+          doc['collectionOps'] as Map? ?? {});
+        _collectionItemOps = Map<String, dynamic>.from(
+          doc['collectionItemOps'] as Map? ?? {});
         _applyProfileIdentity();
         _archivedFromCollection =
             SaturnOrbitMerge.activeFlags(_archivedOps).toSet();
@@ -1006,6 +1040,288 @@ class _SaturnHomeState extends State<SaturnHome>
   bool _isDone(Work w) {
     final state = entry(w)['status'];
     return state == 'Concluído' || state == 'Assistido' || state == 'Lido';
+  }
+
+  bool _isFavorite(Work work) =>
+      SaturnSmartCollections.isFavorite(_favoriteOps, profile, work.id);
+
+  void _toggleFavorite(Work work) {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    setState(() {
+      savedWorks.putIfAbsent(work.id, () => work);
+      SaturnSmartCollections.setFavorite(_favoriteOps, profile, work.id,
+        present: !_isFavorite(work), at: stamp);
+    });
+    _save();
+  }
+
+  List<Map<String, dynamic>> get _personalCollections =>
+      SaturnSmartCollections.owned(_collectionOps, profile);
+
+  List<String> _smartCollectionIds(String id) {
+    if (id.startsWith('collection:')) {
+      return SaturnSmartCollections.workIds(_collectionItemOps, id);
+    }
+    return SaturnSmartCollections.smartIds(id,
+      profile: profile,
+      knownIds: savedWorks.keys,
+      favorites: _favoriteOps,
+      watchlist: currentWatchlist,
+      records: records);
+  }
+
+  void _setCollectionItem(Work work, String collectionId, bool present) {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    setState(() {
+      savedWorks.putIfAbsent(work.id, () => work);
+      SaturnSmartCollections.setItem(_collectionItemOps,
+          collectionId, work.id, present: present, at: stamp);
+    });
+    _save();
+  }
+
+  Future<String?> _createPersonalCollection({Work? initial}) async {
+    var collectionName = '';
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Criar coleção'),
+        content: TextField(
+          key: const Key('saturn-new-collection-name'),
+          onChanged: (value) => collectionName = value,
+          maxLength: 64,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Nome da coleção',
+            hintText: 'Ex.: Nosso anime favorito'),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) {
+              Navigator.pop(dialogContext, value.trim());
+            }
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar')),
+          FilledButton(
+            key: const Key('saturn-create-collection-confirm'),
+            onPressed: () {
+              if (collectionName.trim().isNotEmpty) {
+                Navigator.pop(dialogContext, collectionName.trim());
+              }
+            },
+            child: const Text('Criar'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || name == null || name.isEmpty) return null;
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    late final String id;
+    setState(() {
+      id = SaturnSmartCollections.create(_collectionOps,
+        owner: profile, name: name, at: stamp);
+      if (initial != null) {
+        savedWorks.putIfAbsent(initial.id, () => initial);
+        SaturnSmartCollections.setItem(_collectionItemOps,
+          id, initial.id, present: true, at: stamp);
+      }
+    });
+    _save();
+    return id;
+  }
+
+  Future<void> _editPersonalCollection(Map<String, dynamic> collection) async {
+    final id = (collection['id'] ?? '').toString();
+    var newName = (collection['name'] ?? '').toString();
+    var newCover = (collection['coverUrl'] ?? '').toString();
+    final ids = SaturnSmartCollections.workIds(_collectionItemOps, id);
+    final covers = [
+      for (final workId in ids)
+        if (savedWorks[workId]?.posterUrl.startsWith('https://') == true)
+          savedWorks[workId]!,
+    ];
+    var coverWork = (collection['coverWorkId'] ?? '').toString();
+    if (!covers.any((work) => work.id == coverWork)) coverWork = '';
+    final answer = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, refresh) => AlertDialog(
+          title: const Text('Personalizar coleção'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(child: Column(
+              mainAxisSize: MainAxisSize.min, children: [
+                TextFormField(initialValue: newName, maxLength: 64,
+                  onChanged: (value) => newName = value,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome da coleção')),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  key: const Key('saturn-collection-cover-choice'),
+                  initialValue: coverWork,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Capa escolhida da coleção'),
+                  items: [
+                    const DropdownMenuItem(value: '',
+                      child: Text('Automática: primeiro título salvo')),
+                    for (final work in covers)
+                      DropdownMenuItem(value: work.id,
+                        child: Text(work.title,
+                          maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (v) => refresh(() => coverWork = v ?? ''),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  initialValue: newCover,
+                  onChanged: (value) => newCover = value,
+                  decoration: const InputDecoration(
+                    labelText: 'Ou URL HTTPS de uma capa personalizada',
+                    hintText: 'https://.../minha-capa.jpg',
+                    helperText: 'Deixe vazio para usar a capa dos títulos.',
+                  ),
+                ),
+              ],
+            )),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'delete'),
+              child: const Text('Excluir coleção')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar')),
+            FilledButton(
+              key: const Key('saturn-save-collection-cover'),
+              onPressed: () => Navigator.pop(dialogContext, 'save'),
+              child: const Text('Salvar')),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    newName = newName.trim();
+    newCover = newCover.trim();
+    if (answer == 'delete') {
+      final yes = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Excluir esta coleção?'),
+          content: const Text(
+            'Os títulos, notas e a Watchlist serão preservados.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Excluir coleção')),
+          ],
+        ),
+      );
+      if (yes == true && mounted) {
+        setState(() {
+          SaturnSmartCollections.delete(_collectionOps, id,
+            at: DateTime.now().millisecondsSinceEpoch);
+          _selectedSmartCollection = 'all';
+        });
+        _save();
+      }
+    } else if (answer == 'save') {
+      if (newName.isEmpty ||
+          !SaturnSmartCollections.validCoverUrl(newCover) &&
+              newCover.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Informe um nome e uma URL HTTPS válida.')));
+        return;
+      }
+      setState(() => SaturnSmartCollections.edit(_collectionOps, id,
+        name: newName, coverUrl: newCover, coverWorkId: coverWork,
+        at: DateTime.now().millisecondsSinceEpoch));
+      _save();
+    }
+  }
+
+  Future<void> _showCollectionPicker(Work work) async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF261B2A),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, refresh) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 7, 18, 23),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 510),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('Adicionar às coleções · ${work.title}',
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ivory, fontSize: 17,
+                    fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                Flexible(child: ListView(shrinkWrap: true, children: [
+                  SwitchListTile(
+                    key: const Key('saturn-picker-favorite'),
+                    title: const Text('Favoritos'),
+                    secondary: const Icon(Icons.favorite_rounded),
+                    value: _isFavorite(work),
+                    onChanged: (_) {
+                      _toggleFavorite(work);
+                      refresh(() {});
+                    },
+                  ),
+                  SwitchListTile(
+                    key: const Key('saturn-picker-watchlist'),
+                    title: const Text('Watchlist'),
+                    secondary: const Icon(Icons.bookmark_add_outlined),
+                    value: _isWatchlisted(work),
+                    onChanged: (_) {
+                      _toggleWatchlist(work);
+                      refresh(() {});
+                    },
+                  ),
+                  for (final collection in _personalCollections)
+                    CheckboxListTile(
+                      key: Key('saturn-picker-' + collection['id'].toString()),
+                      title: Text(collection['name'].toString()),
+                      value: SaturnSmartCollections.contains(
+                        _collectionItemOps, collection['id'].toString(),
+                        work.id),
+                      onChanged: (value) {
+                        _setCollectionItem(work,
+                          collection['id'].toString(), value == true);
+                        refresh(() {});
+                      },
+                    ),
+                ])),
+                const SizedBox(height: 9),
+                Row(children: [
+                  Expanded(child: OutlinedButton.icon(
+                    key: const Key('saturn-picker-create-collection'),
+                    icon: const Icon(Icons.create_new_folder_outlined),
+                    label: const Text('Criar coleção com este título'),
+                    onPressed: () async {
+                      await _createPersonalCollection(initial: work);
+                      if (sheetContext.mounted) refresh(() {});
+                    },
+                  )),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Concluir',
+                    onPressed: () => Navigator.pop(sheetContext),
+                    icon: const Icon(Icons.check_circle_rounded),
+                  ),
+                ]),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   bool _isWatchlisted(Work w) => currentWatchlist.contains(w.id);
@@ -2194,6 +2510,33 @@ class _SaturnHomeState extends State<SaturnHome>
                             width: double.infinity,
                             height: double.infinity),
                           Positioned(
+                            left: 3, top: 3,
+                            child: IconButton.filledTonal(
+                              key: Key('saturn-recommend-favorite-' + work.id),
+                              tooltip: _isFavorite(work)
+                                  ? 'Retirar dos Favoritos' : 'Favoritar',
+                              onPressed: () => _catalogEditionAction(
+                                  work, _toggleFavorite),
+                              icon: Icon(_isFavorite(work)
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                                color: const Color(0xFFF2B0C4), size: 17),
+                            ),
+                          ),
+                          Positioned(
+                            right: 3, bottom: 3,
+                            child: IconButton.filledTonal(
+                              key: Key('saturn-recommend-collections-' + work.id),
+                              tooltip: 'Adicionar a coleção',
+                              onPressed: () => _catalogEditionAction(
+                                  work, (edition) =>
+                                      _showCollectionPicker(edition)),
+                              icon: const Icon(
+                                  Icons.create_new_folder_outlined,
+                                  size: 17),
+                            ),
+                          ),
+                          Positioned(
                             right: 3, top: 3,
                             child: IconButton.filledTonal(
                               tooltip: work.kind == 'Livro'
@@ -2322,6 +2665,25 @@ class _SaturnHomeState extends State<SaturnHome>
                   ),
                   if (zeroStarMovie)
                     const Positioned.fill(child: SaturnZeroStarFlies()),
+                  if (!_selectingWorks) ...[
+                    Positioned(top: 2, left: 2,
+                      child: IconButton.filledTonal(
+                        key: Key('saturn-ranked-favorite-' + work.id),
+                        tooltip: _isFavorite(work)
+                            ? 'Retirar dos Favoritos' : 'Favoritar',
+                        icon: Icon(_isFavorite(work)
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                          color: const Color(0xFFF2B0C4), size: 17),
+                        onPressed: () => _toggleFavorite(work))),
+                    Positioned(top: 2, right: 2,
+                      child: IconButton.filledTonal(
+                        key: Key('saturn-ranked-collections-' + work.id),
+                        tooltip: 'Organizar em coleções',
+                        icon: const Icon(
+                            Icons.create_new_folder_outlined, size: 17),
+                        onPressed: () => _showCollectionPicker(work))),
+                  ],
                   if (_selectingWorks)
                     Positioned(
                       top: 3, left: 3,
@@ -2682,6 +3044,12 @@ class _SaturnHomeState extends State<SaturnHome>
         onToggleCompleted: (work) =>
             _catalogEditionAction(work, _toggleCompleted),
         isCompleted: _isDone,
+        isFavorite: _isFavorite,
+        onToggleFavorite: (work) =>
+            _catalogEditionAction(work, _toggleFavorite),
+        onManageCollections: (work) =>
+            _catalogEditionAction(work,
+                (edition) => _showCollectionPicker(edition)),
         showZeroStarFlies: (work) =>
             SaturnReviewClassification.shouldShowFlies(
                 work.kind, records['${profile}:${work.id}']) ||
@@ -2944,22 +3312,187 @@ class _SaturnHomeState extends State<SaturnHome>
     ]);
   }
 
+  static const _automaticCollections = <(String, String, IconData)>[
+    ('favorites', 'Favoritos', Icons.favorite_rounded),
+    ('watchlist', 'Watchlist', Icons.bookmark_added_rounded),
+    ('completed', 'Concluídos', Icons.check_circle_rounded),
+    ('in-progress', 'Em andamento', Icons.timelapse_rounded),
+  ];
+
+  Widget _smartCollectionCard(String id, String name, IconData icon,
+      {Map<String, dynamic>? custom, bool all = false}) {
+    final ids = all
+        ? allWorks.where((w) => !_isArchived(w) &&
+            (entry(w)['status'] != null ||
+             _isWatchlisted(w) || _isFavorite(w))).map((w) => w.id).toList()
+        : _smartCollectionIds(id);
+    final coverWorkId = (custom?['coverWorkId'] ?? '').toString();
+    final customCoverUrl = (custom?['coverUrl'] ?? '').toString();
+    Work? cover;
+    if (coverWorkId.isNotEmpty) cover = savedWorks[coverWorkId];
+    for (final workId in ids) {
+      if (cover?.posterUrl.startsWith('https://') == true) break;
+      final work = savedWorks[workId];
+      if (work?.posterUrl.startsWith('https://') == true) {
+        cover = work;
+        break;
+      }
+    }
+    final imageUrl = SaturnSmartCollections.validCoverUrl(customCoverUrl)
+        ? customCoverUrl : (cover?.posterUrl ?? '');
+    final active = _selectedSmartCollection == id;
+    return SizedBox(
+      width: 148, height: 196,
+      child: Material(
+        color: const Color(0xFF2A2031),
+        borderRadius: BorderRadius.circular(15),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: Key('saturn-smart-collection-' + id),
+          onTap: () => setState(() {
+            _selectedSmartCollection = id;
+            _visibleGalleryCards = 42;
+            _selectedWorkIds.clear();
+            _selectingWorks = false;
+          }),
+          child: Stack(fit: StackFit.expand, children: [
+            if (imageUrl.startsWith('https://'))
+              Image.network(
+                SaturnArtwork.bestUrl(imageUrl, devicePixels: 400),
+                fit: BoxFit.cover, cacheWidth: 440,
+                errorBuilder: (_, __, ___) => const Center(
+                  child: SaturnMark(size: 47)))
+            else
+              const Center(child: SaturnMark(size: 47)),
+            const DecoratedBox(decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x220F1018), Color(0xBD1C1423),
+                    Color(0xF91B1322)],
+                stops: [0, .66, 1],
+              ),
+            )),
+            Positioned(top: 6, left: 7,
+              child: Icon(icon, size: 17,
+                color: active ? gold : ivory)),
+            if (custom != null)
+              Positioned(top: 0, right: 0,
+                child: IconButton.filledTonal(
+                  key: Key('saturn-edit-collection-' + id),
+                  tooltip: 'Editar nome ou capa',
+                  icon: const Icon(Icons.edit_rounded, size: 17),
+                  onPressed: () => _editPersonalCollection(custom))),
+            Positioned(left: 10, bottom: 10, right: 8,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'serif', fontWeight: FontWeight.bold,
+                      color: ivory, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text('${ids.length} títulos',
+                    style: const TextStyle(
+                      color: Color(0xFFE9CDBA), fontSize: 10)),
+                ],
+              ),
+            ),
+            if (active)
+              Positioned.fill(child: IgnorePointer(
+                child: DecoratedBox(decoration: BoxDecoration(
+                  border: Border.all(color: gold, width: 2.5),
+                  borderRadius: BorderRadius.circular(15),
+                )),
+              )),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _smartCollectionsOverview() {
+    final custom = _personalCollections;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(17, 11, 13, 5),
+        child: Row(children: [
+          const Expanded(child: Text('Coleções inteligentes',
+            style: TextStyle(color: ivory,
+              fontFamily: 'serif', fontSize: 19,
+              fontWeight: FontWeight.bold))),
+          TextButton.icon(
+            key: const Key('saturn-new-collection'),
+            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+            label: const Text('Criar coleção'),
+            onPressed: () async {
+              final created = await _createPersonalCollection();
+              if (mounted && created != null) {
+                setState(() => _selectedSmartCollection = created);
+              }
+            }),
+        ]),
+      ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(17, 0, 17, 11),
+        child: Text('Favoritos e Watchlist se atualizam sozinhos. '
+            'Crie suas próprias listas e escolha uma capa.',
+          style: TextStyle(color: Color(0xFFC6ACBC), fontSize: 11)),
+      ),
+      SizedBox(height: 205,
+        child: ListView.separated(
+          key: const Key('saturn-smart-collection-shelf'),
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          itemCount: 1 + _automaticCollections.length + custom.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return _smartCollectionCard('all', 'Toda minha coleção',
+                  Icons.grid_view_rounded, all: true);
+            }
+            if (index <= _automaticCollections.length) {
+              final item = _automaticCollections[index - 1];
+              return _smartCollectionCard(item.$1, item.$2, item.$3);
+            }
+            final item = custom[index - 1 - _automaticCollections.length];
+            return _smartCollectionCard(item['id'].toString(),
+                item['name'].toString(), Icons.folder_special_rounded,
+                custom: item);
+          },
+        ),
+      ),
+    ]);
+  }
+
   Widget _collection() {
-    final all = allWorks.where((w) =>
-        !_isArchived(w) &&
-        (entry(w)['status'] != null || currentWatchlist.contains(w.id)))
-        .toList();
-    final items = _filteredCollection(all, false);
-    return ListView(children: [
+    final all = allWorks.where((w) => !_isArchived(w) &&
+        (entry(w)['status'] != null || currentWatchlist.contains(w.id) ||
+         _isFavorite(w) ||
+         _personalCollections.any((collection) =>
+           SaturnSmartCollections.contains(_collectionItemOps,
+             collection['id'].toString(), w.id)))).toList();
+    final available = {'all', for (final type in _automaticCollections) type.$1,
+        for (final row in _personalCollections) row['id'].toString()};
+    final active = available.contains(_selectedSmartCollection)
+        ? _selectedSmartCollection : 'all';
+    final view = active == 'all' ? all
+        : _smartCollectionIds(active).map((id) => savedWorks[id])
+            .whereType<Work>().where((w) => !_isArchived(w)).toList();
+    final items = _filteredCollection(view, false);
+    return ListView(
+      key: const PageStorageKey('saturn_personal_collection'),
+      children: [
       _collectionHeader(false, all.length),
+      _smartCollectionsOverview(),
       _collectionFilters(false),
       _collectionSelectionToolbar(items),
       _collectionContents(items),
       if (items.isEmpty)
-        Padding(padding: const EdgeInsets.all(16),
-          child: Text(all.isEmpty
-              ? 'Sua coleção está vazia. Explore e escolha um título.'
-              : 'Nenhum título desta categoria na sua coleção.')),
+        const Padding(padding: EdgeInsets.all(16),
+          child: Text('Esta coleção está vazia. '
+              'Adicione títulos por Explorar ou Recomendações.')),
     ]);
   }
 
@@ -4847,6 +5380,25 @@ class _SaturnHomeState extends State<SaturnHome>
                           ? _isWatchlisted(w) ? 'Quero ler ✓' : '+ Quero ler'
                           : _isWatchlisted(w) ? 'Na Watchlist ✓' : '+ Watchlist'),
                     ),
+                    OutlinedButton.icon(
+                      key: const Key('saturn-details-favorite'),
+                      onPressed: () {
+                        _catalogEditionAction(w, _toggleFavorite);
+                        refresh(() {});
+                      },
+                      icon: Icon(_isFavorite(w)
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded),
+                      label: Text(_isFavorite(w)
+                          ? 'Favoritado ✓' : 'Favoritar'),
+                    ),
+                    OutlinedButton.icon(
+                      key: const Key('saturn-details-collections'),
+                      onPressed: () => _catalogEditionAction(
+                        w, (edition) => _showCollectionPicker(edition)),
+                      icon: const Icon(Icons.create_new_folder_outlined),
+                      label: const Text('Minhas coleções'),
+                    ),
                   ],
                 ),
                 if (w.kind != 'Livro') ...[
@@ -5322,6 +5874,9 @@ class CatalogExplore extends StatefulWidget {
   final bool Function(Work) isWatchlisted;
   final void Function(Work) onToggleCompleted;
   final bool Function(Work) isCompleted;
+  final bool Function(Work)? isFavorite;
+  final void Function(Work)? onToggleFavorite;
+  final void Function(Work)? onManageCollections;
   final bool Function(Work)? showZeroStarFlies;
 
   const CatalogExplore({
@@ -5335,6 +5890,9 @@ class CatalogExplore extends StatefulWidget {
     required this.isWatchlisted,
     required this.onToggleCompleted,
     required this.isCompleted,
+    this.isFavorite,
+    this.onToggleFavorite,
+    this.onManageCollections,
     this.showZeroStarFlies,
   });
 
@@ -5959,6 +6517,27 @@ class _CatalogExploreState extends State<CatalogExplore> {
                         ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
                         size: 18,
                         color: loved ? const Color(0xFFF0B6C2) : ivory))),
+                  Positioned(top: 51, right: 5,
+                    child: IconButton.filledTonal(
+                      key: Key('saturn-explore-favorite-' + work.id),
+                      tooltip: widget.isFavorite?.call(work) == true
+                          ? 'Retirar dos Favoritos' : 'Favoritar',
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(widget.isFavorite?.call(work) == true
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                          size: 18, color: const Color(0xFFF2B0C4)),
+                      onPressed: widget.onToggleFavorite == null ? null
+                          : () => widget.onToggleFavorite!(work))),
+                  Positioned(top: 98, right: 5,
+                    child: IconButton.filledTonal(
+                      key: Key('saturn-explore-collections-' + work.id),
+                      tooltip: 'Organizar em coleções',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(
+                          Icons.create_new_folder_outlined, size: 18),
+                      onPressed: widget.onManageCollections == null ? null
+                          : () => widget.onManageCollections!(work))),
                   Positioned(bottom: 102, right: 5,
                     child: IconButton.filledTonal(
                       tooltip: work.kind == 'Livro'

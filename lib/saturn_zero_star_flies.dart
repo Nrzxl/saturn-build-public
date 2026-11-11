@@ -15,8 +15,18 @@ class _SaturnZeroStarFliesState extends State<SaturnZeroStarFlies>
     with SingleTickerProviderStateMixin {
   late final AnimationController _flight = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 6100),
-  )..repeat();
+    duration: const Duration(milliseconds: 11000),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _flight.stop();
+    } else if (!_flight.isAnimating) {
+      _flight.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -58,12 +68,12 @@ class _SaturnFliesPainter extends CustomPainter {
 
     void insect(double x, double y, double phase, double scale) {
       final origin = Offset(
-        size.width * x + math.sin(t + phase) * (19 * factor),
-        size.height * y + math.cos(t * .82 + phase) * (12 * factor),
+        size.width * x + math.sin(t * 2 + phase) * (19 * factor),
+        size.height * y + math.cos(t + phase) * (12 * factor),
       );
       canvas.save();
       canvas.translate(origin.dx, origin.dy);
-      canvas.rotate(math.sin(t * 1.4 + phase) * .34);
+      canvas.rotate(math.sin(t * 3 + phase) * .34);
       canvas.scale(factor * scale);
 
       // Tiny white wings flicker without flashing or creating a new widget.
@@ -71,10 +81,10 @@ class _SaturnFliesPainter extends CustomPainter {
         ..color = const Color(0xDAE6E5D4)
         ..style = PaintingStyle.fill;
       canvas.drawOval(Rect.fromCenter(
-        center: Offset(-3.5, -3.1 + math.sin(t * 9 + phase) * .7),
+        center: Offset(-3.5, -3.1 + math.sin(t * 12 + phase) * .7),
         width: 5.5, height: 3), wing);
       canvas.drawOval(Rect.fromCenter(
-        center: Offset(3.5, -3.1 - math.sin(t * 9 + phase) * .7),
+        center: Offset(3.5, -3.1 - math.sin(t * 12 + phase) * .7),
         width: 5.5, height: 3), wing);
 
       final body = Paint()..color = const Color(0xEC101016);
