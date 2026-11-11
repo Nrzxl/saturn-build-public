@@ -19,6 +19,20 @@ class SaturnTrailerPreview extends StatefulWidget {
   final String workTitle;
   final String workMetadata;
 
+  /// Keep the official YouTube embed, but on Web route hover/tap
+  /// interactions through SATURN's own play and sound controls below it.
+  /// YouTube's mandatory branding and informational overlays remain intact.
+  static YoutubePlayerParams playerParamsFor({required bool web}) =>
+      YoutubePlayerParams(
+        mute: true, playsInline: true,
+        showControls: false, showFullscreenButton: false,
+        showVideoAnnotations: false,
+        enableCaption: true, captionLanguage: 'pt',
+        interfaceLanguage: 'pt', privacyEnhancedMode: true,
+        strictRelatedVideos: web,
+        pointerEvents: web ? PointerEvents.none : PointerEvents.initial,
+      );
+
   /// Browser Web/PWA: silent autoplay can start without a click when allowed.
   /// Never force an audible play; native builds retain their current behavior.
   static bool shouldAutoplay({required bool web, required bool hero}) =>
@@ -93,14 +107,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
       // Silent autoplay is attempted on Web; blocked browsers retain the
       // SATURN Play button so the viewer can start with a gesture.
       autoPlay: true,
-      params: const YoutubePlayerParams(
-        mute: true, playsInline: true,
-        showControls: false, showFullscreenButton: false,
-        showVideoAnnotations: false,
-        enableCaption: true, captionLanguage: 'pt',
-        interfaceLanguage: 'pt', privacyEnhancedMode: true,
-        pointerEvents: PointerEvents.initial,
-      ),
+      params: SaturnTrailerPreview.playerParamsFor(web: kIsWeb),
     );
     final previous = _controller;
     setState(() {
@@ -205,7 +212,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
     if (widget.heroMode) {
       // One cinematic stage: SATURN poster before Play, official trailer
       // afterward. No second work title, metadata panel or second card.
-      // Controls stay *outside* the iframe so YouTube labels stay accessible.
+      // Controls stay below the official iframe; its branding is untouched.
       return Container(
         key: const Key('saturn-trailer-hero'),
         clipBehavior: Clip.antiAlias,
