@@ -1042,6 +1042,295 @@ class _SaturnHomeState extends State<SaturnHome>
     return state == 'Concluído' || state == 'Assistido' || state == 'Lido';
   }
 
+  bool _isFavorite(Work work) =>
+      SaturnSmartCollections.isFavorite(_favoriteOps, profile, work.id);
+
+  void _toggleFavorite(Work work) {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    setState(() {
+      savedWorks.putIfAbsent(work.id, () => work);
+      SaturnSmartCollections.setFavorite(_favoriteOps, profile, work.id,
+        present: !_isFavorite(work), at: stamp);
+    });
+    _save();
+  }
+
+  List<Map<String, dynamic>> get _personalCollections =>
+      SaturnSmartCollections.owned(_collectionOps, profile);
+
+  List<String> _smartCollectionIds(String id) {
+    if (id.startsWith('collection:')) {
+      return SaturnSmartCollections.workIds(_collectionItemOps, id);
+    }
+    return SaturnSmartCollections.smartIds(id,
+      profile: profile,
+      knownIds: savedWorks.keys,
+      favorites: _favoriteOps,
+      watchlist: currentWatchlist,
+      records: records);
+  }
+
+  void _setCollectionItem(Work work, String collectionId, bool present) {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    setState(() {
+      savedWorks.putIfAbsent(work.id, () => work);
+      SaturnSmartCollections.setItem(_collectionItemOps,
+          collectionId, work.id, present: present, at: stamp);
+    });
+    _save();
+  }
+
+  Future<String?> _createPersonalCollection({Work? initial}) async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Criar coleção'),
+        content: TextField(
+          key: const Key('saturn-new-collection-name'),
+          controller: controller,
+          maxLength: 64,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Nome da coleção',
+            hintText: 'Ex.: Nosso anime favorito'),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) {
+              Navigator.pop(dialogContext, value.trim());
+            }
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar')),
+          FilledButton(
+            key: const Key('saturn-create-collection-confirm'),
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                Navigator.pop(dialogContext, controller.text.trim());
+              }
+            },
+            child: const Text('Criar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || name == null || name.isEmpty) return null;
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    late final String id;
+    setState(() {
+      id = SaturnSmartCollections.create(_collectionOps,
+        owner: profile, name: name, at: stamp);
+      if (initial != null) {
+        savedWorks.putIfAbsent(initial.id, () => initial);
+        SaturnSmartCollections.setItem(_collectionItemOps,
+          id, initial.id, present: true, at: stamp);
+      }
+    });
+    _save();
+    return id;
+  }
+
+  Future<void> _editPersonalCollection(Map<String, dynamic> collection) async {
+    final id = (collection['id'] ?? '').toString();
+    final text = TextEditingController(
+      text: (collection['name'] ?? '').toString());
+    final cover = TextEditingController(
+      text: (collection['coverUrl'] ?? '').toString());
+    final ids = SaturnSmartCollections.workIds(_collectionItemOps, id);
+    final covers = [
+      for (final workId in ids)
+        if (savedWorks[workId]?.posterUrl.startsWith('https://') == true)
+          savedWorks[workId]!,
+    ];
+    var coverWork = (collection['coverWorkId'] ?? '').toString();
+    if (!covers.any((work) => work.id == coverWork)) coverWork = '';
+    final answer = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, refresh) => AlertDialog(
+          title: const Text('Personalizar coleção'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(child: Column(
+              mainAxisSize: MainAxisSize.min, children: [
+                TextField(controller: text, maxLength: 64,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome da coleção')),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  key: const Key('saturn-collection-cover-choice'),
+                  value: coverWork,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Capa escolhida da coleção'),
+                  items: [
+                    const DropdownMenuItem(value: '',
+                      child: Text('Automática: primeiro título salvo')),
+                    for (final work in covers)
+                      DropdownMenuItem(value: work.id,
+                        child: Text(work.title,
+                          maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (v) => refresh(() => coverWork = v ?? ''),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: cover,
+                  decoration: const InputDecoration(
+                    labelText: 'Ou URL HTTPS de uma capa personalizada',
+                    hintText: 'https://.../minha-capa.jpg',
+                    helperText: 'Deixe vazio para usar a capa dos títulos.',
+                  ),
+                ),
+              ],
+            )),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'delete'),
+              child: const Text('Excluir coleção')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar')),
+            FilledButton(
+              key: const Key('saturn-save-collection-cover'),
+              onPressed: () => Navigator.pop(dialogContext, 'save'),
+              child: const Text('Salvar')),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) {
+      text.dispose();
+      cover.dispose();
+      return;
+    }
+    final newName = text.text.trim();
+    final newCover = cover.text.trim();
+    text.dispose();
+    cover.dispose();
+    if (answer == 'delete') {
+      final yes = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Excluir esta coleção?'),
+          content: const Text(
+            'Os títulos, notas e a Watchlist serão preservados.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Excluir coleção')),
+          ],
+        ),
+      );
+      if (yes == true && mounted) {
+        setState(() {
+          SaturnSmartCollections.delete(_collectionOps, id,
+            at: DateTime.now().millisecondsSinceEpoch);
+          _selectedSmartCollection = 'all';
+        });
+        _save();
+      }
+    } else if (answer == 'save') {
+      if (newName.isEmpty ||
+          !SaturnSmartCollections.validCoverUrl(newCover) &&
+              newCover.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Informe um nome e uma URL HTTPS válida.')));
+        return;
+      }
+      setState(() => SaturnSmartCollections.edit(_collectionOps, id,
+        name: newName, coverUrl: newCover, coverWorkId: coverWork,
+        at: DateTime.now().millisecondsSinceEpoch));
+      _save();
+    }
+  }
+
+  Future<void> _showCollectionPicker(Work work) async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF261B2A),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, refresh) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 7, 18, 23),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 510),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('Adicionar às coleções · ${work.title}',
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ivory, fontSize: 17,
+                    fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                Flexible(child: ListView(shrinkWrap: true, children: [
+                  SwitchListTile(
+                    key: const Key('saturn-picker-favorite'),
+                    title: const Text('Favoritos'),
+                    secondary: const Icon(Icons.favorite_rounded),
+                    value: _isFavorite(work),
+                    onChanged: (_) {
+                      _toggleFavorite(work);
+                      refresh(() {});
+                    },
+                  ),
+                  SwitchListTile(
+                    key: const Key('saturn-picker-watchlist'),
+                    title: const Text('Watchlist'),
+                    secondary: const Icon(Icons.bookmark_add_outlined),
+                    value: _isWatchlisted(work),
+                    onChanged: (_) {
+                      _toggleWatchlist(work);
+                      refresh(() {});
+                    },
+                  ),
+                  for (final collection in _personalCollections)
+                    CheckboxListTile(
+                      key: Key('saturn-picker-' + collection['id'].toString()),
+                      title: Text(collection['name'].toString()),
+                      value: SaturnSmartCollections.contains(
+                        _collectionItemOps, collection['id'].toString(),
+                        work.id),
+                      onChanged: (value) {
+                        _setCollectionItem(work,
+                          collection['id'].toString(), value == true);
+                        refresh(() {});
+                      },
+                    ),
+                ])),
+                const SizedBox(height: 9),
+                Row(children: [
+                  Expanded(child: OutlinedButton.icon(
+                    key: const Key('saturn-picker-create-collection'),
+                    icon: const Icon(Icons.create_new_folder_outlined),
+                    label: const Text('Criar coleção com este título'),
+                    onPressed: () async {
+                      await _createPersonalCollection(initial: work);
+                      if (sheetContext.mounted) refresh(() {});
+                    },
+                  )),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Concluir',
+                    onPressed: () => Navigator.pop(sheetContext),
+                    icon: const Icon(Icons.check_circle_rounded),
+                  ),
+                ]),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   bool _isWatchlisted(Work w) => currentWatchlist.contains(w.id);
 
   void _toggleWatchlist(Work w) {
