@@ -17,6 +17,7 @@ import 'saturn_star_rating.dart';
 import 'saturn_review_tiers.dart';
 import 'saturn_metallic_halo.dart';
 import 'saturn_zero_star_flies.dart';
+import 'saturn_smart_collections.dart';
 import 'saturn_share.dart';
 import 'saturn_trailer.dart';
 import 'saturn_native_trailer.dart';
@@ -291,6 +292,10 @@ class _SaturnHomeState extends State<SaturnHome>
   Map<String, dynamic> _archivedOps = {};
   Map<String, dynamic> _ritualOps = {};
   Map<String, dynamic> _profileOps = {};
+  Map<String, dynamic> _favoriteOps = {};
+  Map<String, dynamic> _collectionOps = {};
+  Map<String, dynamic> _collectionItemOps = {};
+  String _selectedSmartCollection = 'all';
   SaturnOrbitCloud? _cloud;
   bool _cloudApplying = false;
   List<String> shared = [];
@@ -478,6 +483,12 @@ class _SaturnHomeState extends State<SaturnHome>
           jsonDecode(prefs.getString('saturn_ritual_ops_v1') ?? '{}');
       final storedProfileOps =
           jsonDecode(prefs.getString('saturn_profile_ops_v1') ?? '{}');
+      final storedFavoriteOps =
+          jsonDecode(prefs.getString('saturn_favorite_ops_v1') ?? '{}');
+      final storedCollectionOps =
+          jsonDecode(prefs.getString('saturn_collection_ops_v1') ?? '{}');
+      final storedCollectionItemOps =
+          jsonDecode(prefs.getString('saturn_collection_items_v1') ?? '{}');
       final savedProfile = prefs.getInt('saturn_profile_index') ?? 0;
       final archived = prefs.getStringList('saturn_archived_v1') ?? <String>[];
       final storedShared = jsonDecode(prefs.getString('shared') ?? '[]');
@@ -500,6 +511,15 @@ class _SaturnHomeState extends State<SaturnHome>
             : <String, dynamic>{};
         _profileOps = storedProfileOps is Map
             ? Map<String, dynamic>.from(storedProfileOps)
+            : <String, dynamic>{};
+        _favoriteOps = storedFavoriteOps is Map
+            ? Map<String, dynamic>.from(storedFavoriteOps)
+            : <String, dynamic>{};
+        _collectionOps = storedCollectionOps is Map
+            ? Map<String, dynamic>.from(storedCollectionOps)
+            : <String, dynamic>{};
+        _collectionItemOps = storedCollectionItemOps is Map
+            ? Map<String, dynamic>.from(storedCollectionItemOps)
             : <String, dynamic>{};
         _applyProfileIdentity();
         for (final id in archived) {
@@ -574,6 +594,11 @@ class _SaturnHomeState extends State<SaturnHome>
     await prefs.setString('saturn_archived_ops', jsonEncode(_archivedOps));
     await prefs.setString('saturn_ritual_ops_v1', jsonEncode(_ritualOps));
     await prefs.setString('saturn_profile_ops_v1', jsonEncode(_profileOps));
+    await prefs.setString('saturn_favorite_ops_v1', jsonEncode(_favoriteOps));
+    await prefs.setString('saturn_collection_ops_v1',
+        jsonEncode(_collectionOps));
+    await prefs.setString('saturn_collection_items_v1',
+        jsonEncode(_collectionItemOps));
     await prefs.setStringList('saturn_archived_v1',
       _archivedFromCollection.toList(growable: false));
     if (!_cloudApplying) _cloud?.scheduleSync();
@@ -588,6 +613,9 @@ class _SaturnHomeState extends State<SaturnHome>
     'archivedOps': _archivedOps,
     'ritualOps': _ritualOps,
     'profileOps': _profileOps,
+    'favoriteOps': _favoriteOps,
+    'collectionOps': _collectionOps,
+    'collectionItemOps': _collectionItemOps,
     'catalogSaved': savedWorks.map(
       (key, work) => MapEntry(key, work.toJson())),
     'customTitleLinks': customTitleLinks,
@@ -609,6 +637,12 @@ class _SaturnHomeState extends State<SaturnHome>
           doc['ritualOps'] as Map? ?? {});
         _profileOps = Map<String, dynamic>.from(
           doc['profileOps'] as Map? ?? {});
+        _favoriteOps = Map<String, dynamic>.from(
+          doc['favoriteOps'] as Map? ?? {});
+        _collectionOps = Map<String, dynamic>.from(
+          doc['collectionOps'] as Map? ?? {});
+        _collectionItemOps = Map<String, dynamic>.from(
+          doc['collectionItemOps'] as Map? ?? {});
         _applyProfileIdentity();
         _archivedFromCollection =
             SaturnOrbitMerge.activeFlags(_archivedOps).toSet();
