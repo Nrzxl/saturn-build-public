@@ -2180,19 +2180,19 @@ class _SaturnHomeState extends State<SaturnHome>
               child: IndexedStack(
                 index: tab,
                 children: [
-                  if (desktop || _recentTabs.contains(0))
+                  if (_recentTabs.contains(0))
                     TickerMode(enabled: tab == 0, child: _start())
                   else const SizedBox.shrink(),
-                  if (desktop || _recentTabs.contains(1))
+                  if (_recentTabs.contains(1))
                     TickerMode(enabled: tab == 1, child: _explore())
                   else const SizedBox.shrink(),
-                  if (desktop || _recentTabs.contains(2))
+                  if (_recentTabs.contains(2))
                     TickerMode(enabled: tab == 2, child: _collection())
                   else const SizedBox.shrink(),
-                  if (desktop || _recentTabs.contains(3))
+                  if (_recentTabs.contains(3))
                     TickerMode(enabled: tab == 3, child: _shared())
                   else const SizedBox.shrink(),
-                  if (desktop || _recentTabs.contains(4))
+                  if (_recentTabs.contains(4))
                     TickerMode(enabled: tab == 4, child: _stats())
                   else const SizedBox.shrink(),
                 ],
@@ -2202,6 +2202,7 @@ class _SaturnHomeState extends State<SaturnHome>
         ),
       ),
       bottomNavigationBar: desktop ? null : NavigationBar(
+        animationDuration: const Duration(milliseconds: 180),
         selectedIndex: tab,
         onDestinationSelected: _navigateTab,
         destinations: const [
@@ -5826,8 +5827,8 @@ class PosterThumbnail extends StatelessWidget {
       // The frame often expands on hover, desktop zoom or retina screens.
       // Decode crisp artwork rather than magnifying a tiny thumbnail.
       final pixels = (logicalWidth *
-          MediaQuery.devicePixelRatioOf(context) * 1.85)
-          .round().clamp(320, 1400).toInt();
+          MediaQuery.devicePixelRatioOf(context) * 1.25)
+          .round().clamp(180, 960).toInt();
       final coverUrl = SaturnArtwork.bestUrl(original,
           devicePixels: pixels.toDouble());
       return ClipRRect(
@@ -5838,7 +5839,7 @@ class PosterThumbnail extends StatelessWidget {
           width: width, height: height,
           fit: fit, alignment: alignment,
           cacheWidth: pixels,
-          filterQuality: FilterQuality.high,
+          filterQuality: FilterQuality.medium,
           gaplessPlayback: true,
           // One image at a time: avoid stacked loading frames that can
           // paint two covers across the same card during rapid scrolling.
@@ -5851,7 +5852,7 @@ class PosterThumbnail extends StatelessWidget {
             return Image.network(alternate,
               width: width, height: height,
               fit: fit, alignment: alignment,
-              cacheWidth: pixels, filterQuality: FilterQuality.high,
+              cacheWidth: pixels, filterQuality: FilterQuality.medium,
               errorBuilder: (context, error, trace) => fallback,
             );
           },
