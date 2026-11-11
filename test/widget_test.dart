@@ -6,6 +6,17 @@ import 'package:saturn_app/main.dart';
 import 'package:saturn_app/saturn_orbit_rituals.dart';
 
 void main() {
+  Future<void> scrollPersonal(WidgetTester tester, Finder target,
+      {double step = 245}) async {
+    final scroller = find.descendant(
+      of: find.byKey(const PageStorageKey('saturn_personal_collection')),
+      matching: find.byType(Scrollable),
+    ).first;
+    await tester.scrollUntilVisible(target, step,
+      scrollable: scroller, maxScrolls: 20);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('Série escolhida por ela passa próxima vez para ele', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1440, 1300);
@@ -334,11 +345,18 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
+    await scrollPersonal(tester,
+      find.byKey(Key('saturn-ranked-card-' + film.id)));
     expect(find.text('Filme em Conjunto'), findsOneWidget);
     expect(find.text('Livro em Conjunto'), findsOneWidget);
+    await scrollPersonal(tester,
+      find.byKey(const Key('saturn-collection-filter-Livros')),
+      step: -220);
     await tester.tap(
       find.byKey(const Key('saturn-collection-filter-Livros')));
     await tester.pumpAndSettle();
+    await scrollPersonal(tester,
+      find.byKey(Key('saturn-ranked-card-' + book.id)));
     expect(find.text('Livro em Conjunto'), findsOneWidget);
     expect(find.text('Filme em Conjunto'), findsNothing);
 
@@ -423,6 +441,8 @@ void main() {
 
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
+    await scrollPersonal(tester,
+      find.byKey(Key('saturn-ranked-card-' + saved.id)));
     expect(find.text('Anime da Nossa Órbita'), findsOneWidget);
 
     final animeCard = find.byKey(Key('saturn-ranked-card-' + saved.id));
@@ -524,6 +544,7 @@ void main() {
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
     final bookCard = find.byKey(Key('saturn-ranked-card-' + book.id));
+    await scrollPersonal(tester, bookCard);
     await tester.ensureVisible(bookCard);
     await tester.pumpAndSettle();
     await tester.tap(bookCard);
@@ -566,12 +587,19 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
+    await scrollPersonal(tester,
+      find.byKey(Key('saturn-ranked-card-' + film.id)));
     expect(find.text('Filme da Minha Coleção'), findsOneWidget);
-
+    await scrollPersonal(tester,
+      find.text('Selecionar vários'), step: -230);
     await tester.tap(find.text('Selecionar vários'));
     await tester.pumpAndSettle();
+    await scrollPersonal(tester,
+      find.byKey(Key('saturn-ranked-card-' + film.id)));
     await tester.tap(find.byType(Checkbox).first);
     await tester.pumpAndSettle();
+    await scrollPersonal(tester,
+      find.text('Ações em massa'), step: -230);
     await tester.tap(find.text('Ações em massa'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Remover da minha coleção').last);
@@ -615,6 +643,7 @@ void main() {
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
     final seriesCard = find.byKey(Key('saturn-ranked-card-' + film.id));
+    await scrollPersonal(tester, seriesCard);
     await tester.ensureVisible(seriesCard);
     await tester.pumpAndSettle();
     await tester.tap(seriesCard);
