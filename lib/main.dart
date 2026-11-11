@@ -3557,14 +3557,15 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Widget _collection() {
+    final personalCollections = _personalCollections;
     final all = allWorks.where((w) => !_isArchived(w) &&
         (entry(w)['status'] != null || currentWatchlist.contains(w.id) ||
          _isFavorite(w) ||
-         _personalCollections.any((collection) =>
+         personalCollections.any((collection) =>
            SaturnSmartCollections.contains(_collectionItemOps,
              collection['id'].toString(), w.id)))).toList();
     final available = {'all', for (final type in _automaticCollections) type.$1,
-        for (final row in _personalCollections) row['id'].toString()};
+        for (final row in personalCollections) row['id'].toString()};
     final active = available.contains(_selectedSmartCollection)
         ? _selectedSmartCollection : 'all';
     final view = active == 'all' ? all
@@ -4889,7 +4890,8 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Widget _shared() {
-    final all = allWorks.where((work) => shared.contains(work.id)).toList();
+    final sharedIds = shared.toSet();
+    final all = allWorks.where((work) => sharedIds.contains(work.id)).toList();
     final insights = SaturnCoupleInsights(
         all.map((work) => work.id), records);
     final byType = _filteredCollection(all, true);
