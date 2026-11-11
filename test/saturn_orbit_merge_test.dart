@@ -182,5 +182,59 @@ void main() {
         'records': {'a': 1, 'b': 2},
       }),
     );
+  });  test('Coleções, favoritos e capas sincronizam sem ressuscitar exclusões', () {
+    final merged = SaturnOrbitMerge.merge({
+      'favoriteOps': {
+        '0:tmdb:movie:1': {'present': false, 'updatedAt': 300},
+      },
+      'collectionOps': {
+        'collection:0:100:1': {
+          'id': 'collection:0:100:1', 'owner': 0,
+          'name': 'Minha coleção', 'coverUrl': '',
+          'updatedAt': 220, 'present': true,
+        },
+      },
+      'collectionItemOps': {
+        'collection:0:100:1|tmdb:movie:1': {
+          'present': false, 'updatedAt': 410,
+        },
+      },
+    }, {
+      'favoriteOps': {
+        '0:tmdb:movie:1': {'present': true, 'updatedAt': 200},
+        '1:tmdb:movie:2': {'present': true, 'updatedAt': 150},
+      },
+      'collectionOps': {
+        'collection:0:100:1': {
+          'id': 'collection:0:100:1', 'owner': 0,
+          'name': 'Nome anterior', 'updatedAt': 100,
+          'present': true,
+        },
+        'collection:1:200:2': {
+          'id': 'collection:1:200:2', 'owner': 1,
+          'name': 'Coleção dela', 'updatedAt': 200,
+          'present': true,
+        },
+      },
+      'collectionItemOps': {
+        'collection:0:100:1|tmdb:movie:1': {
+          'present': true, 'updatedAt': 100,
+        },
+        'collection:1:200:2|tmdb:movie:2': {
+          'present': true, 'updatedAt': 210,
+        },
+      },
+    });
+    final favorites = merged['favoriteOps'] as Map;
+    expect(favorites['0:tmdb:movie:1']['present'], isFalse);
+    expect(favorites['1:tmdb:movie:2']['present'], isTrue);
+    final defs = merged['collectionOps'] as Map;
+    expect(defs['collection:0:100:1']['name'], 'Minha coleção');
+    expect(defs, hasLength(2));
+    final members = merged['collectionItemOps'] as Map;
+    expect(members['collection:0:100:1|tmdb:movie:1']['present'], isFalse);
+    expect(members['collection:1:200:2|tmdb:movie:2']['present'], isTrue);
   });
+
+
 }
