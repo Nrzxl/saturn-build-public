@@ -19,9 +19,9 @@ class SaturnTrailerPreview extends StatefulWidget {
   final String workTitle;
   final String workMetadata;
 
-  /// Keep the official YouTube embed, but on Web route hover/tap
-  /// interactions through SATURN's own play and sound controls below it.
-  /// YouTube's mandatory branding and informational overlays remain intact.
+  /// SATURN's own play and sound controls remain below the official embed.
+  /// Keep YouTube links and required interactions accessible. On Web, reduce
+  /// unrelated end-screen suggestions using the supported player parameter.
   static YoutubePlayerParams playerParamsFor({required bool web}) =>
       YoutubePlayerParams(
         mute: true, playsInline: true,
@@ -30,7 +30,7 @@ class SaturnTrailerPreview extends StatefulWidget {
         enableCaption: true, captionLanguage: 'pt',
         interfaceLanguage: 'pt', privacyEnhancedMode: true,
         strictRelatedVideos: web,
-        pointerEvents: web ? PointerEvents.none : PointerEvents.initial,
+        pointerEvents: PointerEvents.initial,
       );
 
   /// Browser Web/PWA: silent autoplay can start without a click when allowed.
