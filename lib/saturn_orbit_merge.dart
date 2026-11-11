@@ -112,6 +112,15 @@ class SaturnOrbitMerge {
       'profileOps': _mergeStamped(
         local['profileOps'], remote['profileOps'],
       ),
+      'favoriteOps': _mergeStamped(
+        local['favoriteOps'], remote['favoriteOps'],
+      ),
+      'collectionOps': _mergeStamped(
+        local['collectionOps'], remote['collectionOps'],
+      ),
+      'collectionItemOps': _mergeStamped(
+        local['collectionItemOps'], remote['collectionItemOps'],
+      ),
       'catalogSaved': _unionObjects(
         local['catalogSaved'], remote['catalogSaved'],
       ),
