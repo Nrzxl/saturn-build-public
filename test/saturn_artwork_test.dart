@@ -14,6 +14,17 @@ void main() {
       'https://image.tmdb.org/t/p/w500/someposter.jpg');
   });
 
+  test('Verified TMDB panorama uses widescreen HD size', () {
+    expect(SaturnArtwork.bestUrl(
+      'https://image.tmdb.org/t/p/w780/backdrop.jpg',
+      devicePixels: 1400, panorama: true),
+      'https://image.tmdb.org/t/p/w1280/backdrop.jpg');
+    expect(SaturnArtwork.bestUrl(
+      'https://image.tmdb.org/t/p/w780/backdrop.jpg',
+      devicePixels: 1400),
+      'https://image.tmdb.org/t/p/w780/backdrop.jpg');
+  });
+
   test('TVmaze original and Open Library large are provider-safe', () {
     expect(SaturnArtwork.bestUrl(
       'https://static.tvmaze.com/uploads/images/medium_portrait/1/22.jpg',
