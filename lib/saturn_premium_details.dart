@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'catalog_client.dart';
+import 'saturn_review_tiers.dart';
 
 const satinGold = Color(0xFFC6A477);
 const satinIvory = Color(0xFFF2E8DF);
@@ -256,6 +257,8 @@ class _RatingChip extends StatelessWidget {
   );
 }
 
+/// Each partner's saved score and memory are visually independent.
+/// The active profile is explicit, even when both reviews have different tiers.
 class SaturnCoupleReview extends StatelessWidget {
   const SaturnCoupleReview({
     super.key, required this.selfName, required this.otherName,
@@ -268,68 +271,139 @@ class SaturnCoupleReview extends StatelessWidget {
   final Map<String, dynamic> other;
   final bool cloudConnected;
 
-  @override
-  Widget build(BuildContext context) {
-    Widget review(String label, Map<String, dynamic> record) {
-      final note = (record['notes'] ?? '').toString().trim();
-      final rating = record['rating'];
-      final value = rating is num
-          ? '${(rating.toDouble() / 2).toStringAsFixed(1)} ★'
-          : 'Sem nota';
-      final completed = (record['status'] ?? '').toString();
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(13),
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          color: const Color(0xFF1D1923),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              const CircleAvatar(radius: 13,
-                backgroundColor: Color(0xFF51354A),
-                child: Icon(Icons.person_outline_rounded,
-                  color: satinGold, size: 16)),
-              const SizedBox(width: 8),
-              Expanded(child: Text(label, style: const TextStyle(
-                fontWeight: FontWeight.bold, color: satinIvory))),
-              Text(value, style: const TextStyle(
-                color: satinGold, fontWeight: FontWeight.w700)),
-            ]),
-            if (completed.isNotEmpty) ...[
-              const SizedBox(height: 7),
-              Text(completed, style: const TextStyle(
-                fontSize: 11, color: satinSubdued)),
-            ],
-            const SizedBox(height: 7),
-            Text(
-              note.isEmpty ? 'Ainda não escreveu uma resenha.' : '“$note”',
-              style: TextStyle(
-                fontStyle: note.isEmpty ? FontStyle.italic : FontStyle.normal,
-                color: note.isEmpty ? satinSubdued : satinIvory,
-                fontSize: 12, height: 1.4),
-            ),
+  Widget _review({
+    required Key key,
+    required String heading,
+    required String name,
+    required Map<String, dynamic> record,
+    required IconData icon,
+    required bool mine,
+  }) {
+    final score = SaturnReviewClassification.stars(record);
+    final tier = SaturnReviewClassification.fromRating(record);
+    final accent = tier?.color ?? (mine
+        ? satinGold : const Color(0xFFCEBBD8));
+    final note = (record['notes'] ?? '').toString().trim();
+    final completed = (record['status'] ?? '').toString();
+
+    return Container(
+      key: key,
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withValues(alpha: .18),
+            const Color(0xFF211A27),
           ],
         ),
-      );
-    }
-
-    return SaturnDetailSection(
-      title: 'O que nós achamos',
-      icon: Icons.favorite_border_rounded,
+        border: Border.all(color: accent.withValues(alpha: .78), width: 1.4),
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          review(selfName, self),
-          review(otherName, other),
+          Row(children: [
+            Icon(icon, color: accent, size: 19),
+            const SizedBox(width: 7),
+            Expanded(child: Text(
+              heading,
+              style: TextStyle(
+                color: accent, letterSpacing: 1.2,
+                fontSize: 10, fontWeight: FontWeight.w800,
+              ),
+            )),
+          ]),
+          const SizedBox(height: 5),
+          Text(name,
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: satinIvory, fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            score == null ? 'Sem nota'
+                : '${score.toStringAsFixed(1)} ★',
+            key: Key(mine ? 'saturn-review-self-score'
+                : 'saturn-review-partner-score'),
+            style: TextStyle(
+              color: score == null ? satinSubdued : accent,
+              fontSize: score == null ? 19 : 29,
+              fontWeight: FontWeight.w900, height: 1,
+            ),
+          ),
+          if (completed.isNotEmpty) ...[
+            const SizedBox(height: 9),
+            Text(completed, style: const TextStyle(
+              fontSize: 11, color: satinSubdued)),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            note.isEmpty
+                ? 'Ainda não escreveu uma resenha.' : '“$note”',
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontStyle: note.isEmpty
+                  ? FontStyle.italic : FontStyle.normal,
+              color: note.isEmpty ? satinSubdued : satinIvory,
+              fontSize: 12, height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SaturnDetailSection(
+      title: 'Nossas avaliações · notas individuais',
+      icon: Icons.people_outline_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 530;
+            final mine = _review(
+              key: const Key('saturn-couple-review-self'),
+              heading: 'SUA NOTA',
+              name: selfName,
+              record: self,
+              icon: Icons.person_rounded,
+              mine: true,
+            );
+            final partner = _review(
+              key: const Key('saturn-couple-review-other'),
+              heading: 'NOTA DA OUTRA PESSOA',
+              name: otherName,
+              record: other,
+              icon: Icons.nightlight_round,
+              mine: false,
+            );
+            return wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: mine),
+                    const SizedBox(width: 12),
+                    Expanded(child: partner),
+                  ],
+                )
+              : Column(children: [
+                  mine,
+                  const SizedBox(height: 10),
+                  partner,
+                ]);
+          }),
+          const SizedBox(height: 10),
           Text(
             cloudConnected
-              ? 'Resenhas dos dois perfis na Nossa Órbita conectada.'
-              : 'A outra avaliação aparece aqui se estiver salva '
-                'neste aparelho. Conecte Nossa Órbita para '
-                'sincronizar entre Android e iPhone.',
+              ? 'As notas são independentes e sincronizadas por perfil.'
+              : 'As notas continuam separadas por perfil. Conecte '
+                'Nossa Órbita para sincronizar entre aparelhos.',
             style: const TextStyle(
               color: satinSubdued, fontSize: 10, height: 1.3),
           ),
