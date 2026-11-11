@@ -109,7 +109,7 @@ void main() {
     expect(find.text('OURO'), findsNothing);
     // Review text accompanies glowing cards; imported synopsis alone does not.
     expect(find.textContaining('Maravilhoso, vou rever!'), findsWidgets);
-    expect(find.byType(GridView), findsWidgets);
+    expect(find.byType(SliverGrid), findsWidgets);
   });
 
   testWidgets('Coleção usa grade de duas capas mesmo em celular',
@@ -141,7 +141,7 @@ void main() {
       scrollable: scroller, maxScrolls: 20);
     await tester.pumpAndSettle();
     expect(grid, findsOneWidget);
-    final delegate = tester.widget<GridView>(grid).gridDelegate
+    final delegate = tester.widget<SliverGrid>(grid).gridDelegate
       as SliverGridDelegateWithFixedCrossAxisCount;
     expect(delegate.crossAxisCount, 2);
     expect(find.byKey(Key('saturn-review-halo-' + film.id)), findsOneWidget);
