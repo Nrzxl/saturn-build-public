@@ -1161,7 +1161,7 @@ class _SaturnHomeState extends State<SaturnHome>
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   key: const Key('saturn-collection-cover-choice'),
-                  value: coverWork,
+                  initialValue: coverWork,
                   isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Capa escolhida da coleção'),
