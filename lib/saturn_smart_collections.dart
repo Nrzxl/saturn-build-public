@@ -15,7 +15,7 @@ class SaturnSmartCollections {
     if (clean.isEmpty || clean.length > 64) {
       throw ArgumentError('Nome deve ter entre 1 e 64 caracteres.');
     }
-    final id = 'collection:$owner:$at:\${_next++}';
+    final id = 'collection:$owner:$at:${_next++}';
     definitions[id] = {
       'id': id, 'owner': owner, 'name': clean,
       'coverUrl': '', 'coverWorkId': '',
