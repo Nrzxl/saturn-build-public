@@ -4902,9 +4902,10 @@ class _SaturnHomeState extends State<SaturnHome>
     final memories = items.where(
       (work) => insights.hasMemory(work.id),
     ).take(3).toList(growable: false);
-    return ListView(
+    return CustomScrollView(
       key: const PageStorageKey('saturn_shared_orbit'),
-      children: [
+      slivers: [
+        SliverList(delegate: SliverChildListDelegate([
         if (MediaQuery.sizeOf(context).width < 1000)
           _mobileSyncShortcut('couple'),
         _sharedUniverseHero(insights),
@@ -4937,18 +4938,21 @@ class _SaturnHomeState extends State<SaturnHome>
         _heading('Nossa biblioteca'),
         _collectionSelectionToolbar(items,
             sharedList: true, showFilters: true),
-        _collectionContents(items),
+        ])),
+        ..._collectionGallerySlivers(items),
         if (items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
-            child: Text(
-              all.isEmpty
-                  ? 'Ainda não há histórias na lista de vocês. '
-                    'Descubram algo e adicionem à Nossa Órbita.'
-                  : 'Não há histórias neste recorte. '
-                    'Experimente outro tipo ou momento.',
-              style: const TextStyle(
-                color: Color(0xFFD8C3CE), fontSize: 13),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
+              child: Text(
+                all.isEmpty
+                    ? 'Ainda não há histórias na lista de vocês. '
+                      'Descubram algo e adicionem à Nossa Órbita.'
+                    : 'Não há histórias neste recorte. '
+                      'Experimente outro tipo ou momento.',
+                style: const TextStyle(
+                  color: Color(0xFFD8C3CE), fontSize: 13),
+              ),
             ),
           ),
       ],
