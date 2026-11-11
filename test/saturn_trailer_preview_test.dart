@@ -11,6 +11,17 @@ void main() {
     expect(SaturnTrailerPreview.shouldAutoplay(web: false, hero: true), isFalse);
   });
 
+  test('Web embed preserves SATURN controls without changing native input', () {
+    final web = SaturnTrailerPreview.playerParamsFor(web: true);
+    final native = SaturnTrailerPreview.playerParamsFor(web: false);
+    expect(web.pointerEvents, PointerEvents.none);
+    expect(web.showControls, isFalse);
+    expect(web.showFullscreenButton, isFalse);
+    expect(web.strictRelatedVideos, isTrue);
+    expect(native.pointerEvents, PointerEvents.initial);
+    expect(native.strictRelatedVideos, isFalse);
+  });
+
   testWidgets('Story opens with SATURN artwork and existing controls only',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(
