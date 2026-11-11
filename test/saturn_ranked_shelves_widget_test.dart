@@ -7,6 +7,28 @@ import 'package:saturn_app/main.dart';
 import 'package:saturn_app/saturn_metallic_halo.dart';
 
 void main() {
+  testWidgets('Desktop Web só monta abas recentes ao navegar',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1440, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+
+    // The former desktop IndexedStack built all five expensive pages at once.
+    const collection = PageStorageKey('saturn_personal_collection');
+    expect(find.byKey(collection, skipOffstage: false), findsNothing);
+    await tester.tap(find.text('Coleção'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(collection), findsOneWidget);
+    await tester.tap(find.text('Início'));
+    await tester.pumpAndSettle();
+    // The recently visited collection is retained for immediate back-nav.
+    expect(find.byKey(collection, skipOffstage: false), findsOneWidget);
+  });
+
   testWidgets('A Watchlist e a estante viram prateleiras horizontais completas',
       (tester) async {
     tester.view.devicePixelRatio = 1;
@@ -109,7 +131,7 @@ void main() {
     expect(find.text('OURO'), findsNothing);
     // Review text accompanies glowing cards; imported synopsis alone does not.
     expect(find.textContaining('Maravilhoso, vou rever!'), findsWidgets);
-    expect(find.byType(GridView), findsWidgets);
+    expect(find.byType(SliverGrid), findsWidgets);
   });
 
   testWidgets('Coleção usa grade de duas capas mesmo em celular',
@@ -141,7 +163,7 @@ void main() {
       scrollable: scroller, maxScrolls: 20);
     await tester.pumpAndSettle();
     expect(grid, findsOneWidget);
-    final delegate = tester.widget<GridView>(grid).gridDelegate
+    final delegate = tester.widget<SliverGrid>(grid).gridDelegate
       as SliverGridDelegateWithFixedCrossAxisCount;
     expect(delegate.crossAxisCount, 2);
     expect(find.byKey(Key('saturn-review-halo-' + film.id)), findsOneWidget);

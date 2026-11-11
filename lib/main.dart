@@ -2180,19 +2180,19 @@ class _SaturnHomeState extends State<SaturnHome>
               child: IndexedStack(
                 index: tab,
                 children: [
-                  if (desktop || _recentTabs.contains(0))
+                  if (_recentTabs.contains(0))
                     TickerMode(enabled: tab == 0, child: _start())
                   else const SizedBox.shrink(),
-                  if (desktop || _recentTabs.contains(1))
+                  if (_recentTabs.contains(1))
                     TickerMode(enabled: tab == 1, child: _explore())
                   else const SizedBox.shrink(),
-                  if (desktop || _recentTabs.contains(2))
+                  if (_recentTabs.contains(2))
                     TickerMode(enabled: tab == 2, child: _collection())
                   else const SizedBox.shrink(),
-                  if (desktop || _recentTabs.contains(3))
+                  if (_recentTabs.contains(3))
                     TickerMode(enabled: tab == 3, child: _shared())
                   else const SizedBox.shrink(),
-                  if (desktop || _recentTabs.contains(4))
+                  if (_recentTabs.contains(4))
                     TickerMode(enabled: tab == 4, child: _stats())
                   else const SizedBox.shrink(),
                 ],
@@ -2202,6 +2202,7 @@ class _SaturnHomeState extends State<SaturnHome>
         ),
       ),
       bottomNavigationBar: desktop ? null : NavigationBar(
+        animationDuration: const Duration(milliseconds: 180),
         selectedIndex: tab,
         onDestinationSelected: _navigateTab,
         destinations: const [
@@ -3317,46 +3318,46 @@ class _SaturnHomeState extends State<SaturnHome>
 
   /// Responsive at phone, tablet and desktop widths. Keep cover cards and
   /// multi-select in the same layout, rather than returning to giant rows.
-  Widget _rankedGalleryGrid(List<Work> items) =>
-      LayoutBuilder(builder: (context, constraints) {
-    final columns = (constraints.maxWidth / 182).floor().clamp(2, 6).toInt();
-    return GridView.builder(
-      key: Key('saturn-ranked-gallery-' + items.first.id),
-      padding: const EdgeInsets.fromLTRB(9, 3, 9, 13),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        mainAxisExtent: 316,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-      ),
-      itemBuilder: (context, index) =>
-          _rankedPosterCard(items[index]),
-    );
-  });
-
-  /// Seamless cover wall, highest personal ratings first. A small metallic
-  /// rim conveys the category without labels or interstitial headings.
-  Widget _collectionContents(List<Work> items) {
-    if (items.isEmpty) return const SizedBox.shrink();
+  /// Web/PWA: single viewport means only the visible posters are laid out.
+  /// Unlike a shrink-wrapped GridView, this sliver does not build 42 covers
+  /// before the visitor can scroll.
+  List<Widget> _collectionGallerySlivers(List<Work> items) {
+    if (items.isEmpty) return const <Widget>[];
     final ranked = SaturnReviewClassification.sorted<Work>(
       items, (work) => entry(work));
-    final visible = ranked.take(_visibleGalleryCards)
-        .toList(growable: false);
-    return Column(children: [
-      _rankedGalleryGrid(visible),
+    final visible = ranked.take(_visibleGalleryCards).toList(growable: false);
+    return [
+      SliverLayoutBuilder(builder: (context, constraints) {
+        final columns = (constraints.crossAxisExtent / 182)
+            .floor().clamp(2, 6).toInt();
+        return SliverGrid(
+          key: Key('saturn-ranked-gallery-' + visible.first.id),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => _rankedPosterCard(visible[index]),
+            childCount: visible.length,
+          ),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisExtent: 316,
+            mainAxisSpacing: 2,
+            crossAxisSpacing: 2,
+          ),
+        );
+      }),
       if (ranked.length > visible.length)
-        Padding(padding: const EdgeInsets.fromLTRB(16, 2, 16, 18),
-          child: OutlinedButton.icon(
-            key: const Key('saturn-gallery-load-more'),
-            onPressed: () => setState(() => _visibleGalleryCards += 42),
-            icon: const Icon(Icons.expand_more_rounded),
-            label: Text('Mostrar mais capas '
-                '(${visible.length} de ${ranked.length})'),
-          )),
-    ]);
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 18),
+            child: OutlinedButton.icon(
+              key: const Key('saturn-gallery-load-more'),
+              onPressed: () => setState(() => _visibleGalleryCards += 42),
+              icon: const Icon(Icons.expand_more_rounded),
+              label: Text('Mostrar mais capas '
+                  '(${visible.length} de ${ranked.length})'),
+            ),
+          ),
+        ),
+    ];
   }
 
   static const _automaticCollections = <(String, String, IconData)>[
@@ -3514,32 +3515,37 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Widget _collection() {
+    final personalCollections = _personalCollections;
     final all = allWorks.where((w) => !_isArchived(w) &&
         (entry(w)['status'] != null || currentWatchlist.contains(w.id) ||
          _isFavorite(w) ||
-         _personalCollections.any((collection) =>
+         personalCollections.any((collection) =>
            SaturnSmartCollections.contains(_collectionItemOps,
              collection['id'].toString(), w.id)))).toList();
     final available = {'all', for (final type in _automaticCollections) type.$1,
-        for (final row in _personalCollections) row['id'].toString()};
+        for (final row in personalCollections) row['id'].toString()};
     final active = available.contains(_selectedSmartCollection)
         ? _selectedSmartCollection : 'all';
     final view = active == 'all' ? all
         : _smartCollectionIds(active).map((id) => savedWorks[id])
             .whereType<Work>().where((w) => !_isArchived(w)).toList();
     final items = _filteredCollection(view, false);
-    return ListView(
+    return CustomScrollView(
       key: const PageStorageKey('saturn_personal_collection'),
-      children: [
-      _collectionHeader(false, all.length),
-      _smartCollectionsOverview(),
-      _collectionSelectionToolbar(items, showFilters: true),
-      _collectionContents(items),
-      if (items.isEmpty)
-        const Padding(padding: EdgeInsets.all(16),
-          child: Text('Esta coleção está vazia. '
-              'Adicione títulos por Explorar ou Recomendações.')),
-    ]);
+      slivers: [
+        SliverToBoxAdapter(child: _collectionHeader(false, all.length)),
+        SliverToBoxAdapter(child: _smartCollectionsOverview()),
+        SliverToBoxAdapter(child:
+            _collectionSelectionToolbar(items, showFilters: true)),
+        ..._collectionGallerySlivers(items),
+        if (items.isEmpty)
+          const SliverToBoxAdapter(
+            child: Padding(padding: EdgeInsets.all(16),
+              child: Text('Esta coleção está vazia. '
+                  'Adicione títulos por Explorar ou Recomendações.')),
+          ),
+      ],
+    );
   }
 
 
@@ -4842,7 +4848,8 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Widget _shared() {
-    final all = allWorks.where((work) => shared.contains(work.id)).toList();
+    final sharedIds = shared.toSet();
+    final all = allWorks.where((work) => sharedIds.contains(work.id)).toList();
     final insights = SaturnCoupleInsights(
         all.map((work) => work.id), records);
     final byType = _filteredCollection(all, true);
@@ -4855,9 +4862,10 @@ class _SaturnHomeState extends State<SaturnHome>
     final memories = items.where(
       (work) => insights.hasMemory(work.id),
     ).take(3).toList(growable: false);
-    return ListView(
+    return CustomScrollView(
       key: const PageStorageKey('saturn_shared_orbit'),
-      children: [
+      slivers: [
+        SliverList(delegate: SliverChildListDelegate([
         if (MediaQuery.sizeOf(context).width < 1000)
           _mobileSyncShortcut('couple'),
         _sharedUniverseHero(insights),
@@ -4890,18 +4898,21 @@ class _SaturnHomeState extends State<SaturnHome>
         _heading('Nossa biblioteca'),
         _collectionSelectionToolbar(items,
             sharedList: true, showFilters: true),
-        _collectionContents(items),
+        ])),
+        ..._collectionGallerySlivers(items),
         if (items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
-            child: Text(
-              all.isEmpty
-                  ? 'Ainda não há histórias na lista de vocês. '
-                    'Descubram algo e adicionem à Nossa Órbita.'
-                  : 'Não há histórias neste recorte. '
-                    'Experimente outro tipo ou momento.',
-              style: const TextStyle(
-                color: Color(0xFFD8C3CE), fontSize: 13),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
+              child: Text(
+                all.isEmpty
+                    ? 'Ainda não há histórias na lista de vocês. '
+                      'Descubram algo e adicionem à Nossa Órbita.'
+                    : 'Não há histórias neste recorte. '
+                      'Experimente outro tipo ou momento.',
+                style: const TextStyle(
+                  color: Color(0xFFD8C3CE), fontSize: 13),
+              ),
             ),
           ),
       ],
@@ -5826,8 +5837,8 @@ class PosterThumbnail extends StatelessWidget {
       // The frame often expands on hover, desktop zoom or retina screens.
       // Decode crisp artwork rather than magnifying a tiny thumbnail.
       final pixels = (logicalWidth *
-          MediaQuery.devicePixelRatioOf(context) * 1.85)
-          .round().clamp(320, 1400).toInt();
+          MediaQuery.devicePixelRatioOf(context) * 1.25)
+          .round().clamp(180, 960).toInt();
       final coverUrl = SaturnArtwork.bestUrl(original,
           devicePixels: pixels.toDouble());
       return ClipRRect(
@@ -5838,7 +5849,7 @@ class PosterThumbnail extends StatelessWidget {
           width: width, height: height,
           fit: fit, alignment: alignment,
           cacheWidth: pixels,
-          filterQuality: FilterQuality.high,
+          filterQuality: FilterQuality.medium,
           gaplessPlayback: true,
           // One image at a time: avoid stacked loading frames that can
           // paint two covers across the same card during rapid scrolling.
@@ -5851,7 +5862,7 @@ class PosterThumbnail extends StatelessWidget {
             return Image.network(alternate,
               width: width, height: height,
               fit: fit, alignment: alignment,
-              cacheWidth: pixels, filterQuality: FilterQuality.high,
+              cacheWidth: pixels, filterQuality: FilterQuality.medium,
               errorBuilder: (context, error, trace) => fallback,
             );
           },
