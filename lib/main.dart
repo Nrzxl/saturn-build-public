@@ -1081,14 +1081,14 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Future<String?> _createPersonalCollection({Work? initial}) async {
-    final controller = TextEditingController();
+    var collectionName = '';
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Criar coleção'),
         content: TextField(
           key: const Key('saturn-new-collection-name'),
-          controller: controller,
+          onChanged: (value) => collectionName = value,
           maxLength: 64,
           autofocus: true,
           decoration: const InputDecoration(
@@ -1106,8 +1106,8 @@ class _SaturnHomeState extends State<SaturnHome>
           FilledButton(
             key: const Key('saturn-create-collection-confirm'),
             onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                Navigator.pop(dialogContext, controller.text.trim());
+              if (collectionName.trim().isNotEmpty) {
+                Navigator.pop(dialogContext, collectionName.trim());
               }
             },
             child: const Text('Criar'),
@@ -1115,7 +1115,6 @@ class _SaturnHomeState extends State<SaturnHome>
         ],
       ),
     );
-    controller.dispose();
     if (!mounted || name == null || name.isEmpty) return null;
     final stamp = DateTime.now().millisecondsSinceEpoch;
     late final String id;
@@ -1134,10 +1133,8 @@ class _SaturnHomeState extends State<SaturnHome>
 
   Future<void> _editPersonalCollection(Map<String, dynamic> collection) async {
     final id = (collection['id'] ?? '').toString();
-    final text = TextEditingController(
-      text: (collection['name'] ?? '').toString());
-    final cover = TextEditingController(
-      text: (collection['coverUrl'] ?? '').toString());
+    var newName = (collection['name'] ?? '').toString();
+    var newCover = (collection['coverUrl'] ?? '').toString();
     final ids = SaturnSmartCollections.workIds(_collectionItemOps, id);
     final covers = [
       for (final workId in ids)
@@ -1155,7 +1152,8 @@ class _SaturnHomeState extends State<SaturnHome>
             width: 420,
             child: SingleChildScrollView(child: Column(
               mainAxisSize: MainAxisSize.min, children: [
-                TextField(controller: text, maxLength: 64,
+                TextFormField(initialValue: newName, maxLength: 64,
+                  onChanged: (value) => newName = value,
                   decoration: const InputDecoration(
                     labelText: 'Nome da coleção')),
                 const SizedBox(height: 8),
@@ -1176,8 +1174,9 @@ class _SaturnHomeState extends State<SaturnHome>
                   onChanged: (v) => refresh(() => coverWork = v ?? ''),
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: cover,
+                TextFormField(
+                  initialValue: newCover,
+                  onChanged: (value) => newCover = value,
                   decoration: const InputDecoration(
                     labelText: 'Ou URL HTTPS de uma capa personalizada',
                     hintText: 'https://.../minha-capa.jpg',
@@ -1202,15 +1201,9 @@ class _SaturnHomeState extends State<SaturnHome>
         ),
       ),
     );
-    if (!mounted) {
-      text.dispose();
-      cover.dispose();
-      return;
-    }
-    final newName = text.text.trim();
-    final newCover = cover.text.trim();
-    text.dispose();
-    cover.dispose();
+    if (!mounted) return;
+    newName = newName.trim();
+    newCover = newCover.trim();
     if (answer == 'delete') {
       final yes = await showDialog<bool>(
         context: context,
