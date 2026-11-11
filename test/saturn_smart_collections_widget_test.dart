@@ -6,6 +6,48 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:saturn_app/main.dart';
 
 void main() {
+  testWidgets('Coleção mantém o filtro ativo em um único menu compacto',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1000, 1080);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    const film = Work('tmdb:movie:731', 'Um filme de teste',
+        'Filme', 'Sinopse.', 2026);
+    const book = Work('openlibrary:/books/OL731M', 'Um livro de teste',
+        'Livro', 'Sinopse.', 2026);
+    SharedPreferences.setMockInitialValues({
+      'catalog_saved': jsonEncode({
+        film.id: film.toJson(),
+        book.id: book.toJson(),
+      }),
+      'records': jsonEncode({
+        '0:' + film.id: {'status': 'Concluído'},
+        '0:' + book.id: {'status': 'Em andamento'},
+      }),
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Coleção'));
+    await tester.pumpAndSettle();
+
+    final filter = find.byKey(const Key('saturn-collection-filter-menu'));
+    expect(filter, findsOneWidget);
+    expect(find.text('Filtros: Tudo'), findsOneWidget);
+    expect(find.byKey(Key('saturn-ranked-card-' + film.id)), findsOneWidget);
+    expect(find.byKey(Key('saturn-ranked-card-' + book.id)), findsOneWidget);
+
+    await tester.ensureVisible(filter);
+    await tester.tap(filter);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Filmes').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Filtros: Filmes'), findsOneWidget);
+    expect(find.byKey(Key('saturn-ranked-card-' + film.id)), findsOneWidget);
+    expect(find.byKey(Key('saturn-ranked-card-' + book.id)), findsNothing);
+  });
+
   testWidgets('Favoritos inteligentes e criação de coleção preservam os dados',
       (tester) async {
     tester.view.devicePixelRatio = 1;
