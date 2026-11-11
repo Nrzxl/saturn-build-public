@@ -2640,6 +2640,12 @@ class _SaturnHomeState extends State<SaturnHome>
         : null;
     final metalColor = inOrbit ? firstTier?.color : tier?.color;
     final partnerMetalColor = secondTier?.color;
+    // Personal controls always follow the active profile's actual rating.
+    // In Nossa Órbita, split rims/backgrounds retain both independent tiers.
+    final actionMetal = SaturnReviewClassification.fromRating(personal)?.color;
+    final bothMetallic = inOrbit &&
+        firstTier != null && secondTier != null &&
+        firstTier != secondTier;
     final selected = _selectedWorkIds.contains(work.id);
     final zeroStarMovie = SaturnReviewClassification.shouldShowFlies(
         work.kind, personal) ||
@@ -2653,6 +2659,41 @@ class _SaturnHomeState extends State<SaturnHome>
         _selectedWorkIds.remove(work.id);
       }
     });
+    Widget libraryAction({
+      required Key key,
+      required String tooltip,
+      required IconData icon,
+      required VoidCallback onPressed,
+    }) => Expanded(child: Container(
+      margin: const EdgeInsets.symmetric(horizontal: 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: bothMetallic ? null
+            : (actionMetal ?? gold).withValues(alpha: .13),
+        gradient: bothMetallic
+            ? LinearGradient(
+                colors: [
+                  firstTier!.color.withValues(alpha: .22),
+                  secondTier!.color.withValues(alpha: .22),
+                ],
+                stops: const [0, 1],
+              )
+            : null,
+        border: Border.all(
+          color: (actionMetal ?? const Color(0xFF796075))
+              .withValues(alpha: .63)),
+      ),
+      child: IconButton(
+        key: key,
+        tooltip: tooltip,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints(minHeight: 34, minWidth: 32),
+        padding: EdgeInsets.zero,
+        iconSize: 20,
+        onPressed: onPressed,
+        icon: Icon(icon, color: actionMetal ?? ivory),
+      ),
+    ));
     return SaturnHoverLift(
       child: AnimatedContainer(
         key: Key('saturn-ranked-card-' + work.id),
@@ -2691,7 +2732,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   ),
                   if (zeroStarMovie)
                     const Positioned.fill(child: SaturnZeroStarFlies()),
-                  if (!_selectingWorks) ...[
+                  if (compact && !_selectingWorks) ...[
                     Positioned(top: 2, left: 2,
                       child: IconButton.filledTonal(
                         key: Key('saturn-ranked-favorite-' + work.id),
@@ -2728,22 +2769,60 @@ class _SaturnHomeState extends State<SaturnHome>
                       color: ivory, fontSize: 12.5,
                       fontWeight: FontWeight.w700, height: 1.12)),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 1, 8, 4),
-                  child: Text(
-                    tier == null || stars == null
-                        ? (work.year > 0
-                            ? work.kind + ' · ' + work.year.toString()
-                            : work.kind)
-                        : stars.toStringAsFixed(1) + ' ★',
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: tier?.color ?? const Color(0xFFCEB9C6),
-                      fontSize: 10,
-                      fontWeight: tier == null
-                          ? FontWeight.w400 : FontWeight.w700),
+                if (inOrbit && !compact)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 3, 6, 5),
+                    child: Row(children: [
+                      for (var person = 0; person < 2; person++) ...[
+                        if (person > 0) const SizedBox(width: 3),
+                        Expanded(child: Builder(builder: (context) {
+                          final score = SaturnReviewClassification.stars(
+                            records['${person}:${work.id}']);
+                          final shade = SaturnReviewClassification.fromRating(
+                            records['${person}:${work.id}'])?.color;
+                          return Container(
+                            key: Key('saturn-library-person-${person}-${work.id}'),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 5),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(7),
+                              color: (shade ?? const Color(0xFF615061))
+                                  .withValues(alpha: .18),
+                              border: Border.all(
+                                color: (shade ?? const Color(0xFF736075))
+                                    .withValues(alpha: .72)),
+                            ),
+                            child: Text(
+                              '${person == profile ? 'Você' : profiles[person]} '
+                              '${score == null ? '—' : '${score.toStringAsFixed(1)} ★'}',
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: shade ?? const Color(0xFFE1CBD4),
+                                fontWeight: FontWeight.bold, fontSize: 10),
+                            ),
+                          );
+                        })),
+                      ],
+                    ]),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 1, 8, 4),
+                    child: Text(
+                      stars == null
+                          ? (work.year > 0
+                              ? work.kind + ' · ' + work.year.toString()
+                              : work.kind)
+                          : 'Você · ' + stars.toStringAsFixed(1) + ' ★',
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: actionMetal ?? const Color(0xFFCEB9C6),
+                        fontSize: 10,
+                        fontWeight: stars == null
+                            ? FontWeight.w400 : FontWeight.w700),
+                    ),
                   ),
-                ),
                 if (tier != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
@@ -2755,47 +2834,30 @@ class _SaturnHomeState extends State<SaturnHome>
                         fontSize: 10.5, height: 1.15)),
                   ),
                 if (!compact && !_selectingWorks)
-                  SizedBox(height: 35, child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      IconButton(
-                        tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
-                        constraints: const BoxConstraints(
-                          minWidth: 35, minHeight: 33),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 18,
-                        onPressed: () => _toggleWatchlist(work),
-                        icon: Icon(_isWatchlisted(work)
-                            ? Icons.bookmark_added_rounded
-                            : Icons.bookmark_add_outlined,
-                            color: gold)),
-                      IconButton(
-                        tooltip: work.kind == 'Livro'
-                            ? 'Marcar como lido' : 'Marcar como assistido',
-                        constraints: const BoxConstraints(
-                          minWidth: 35, minHeight: 33),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 18,
-                        onPressed: () => _toggleCompleted(work),
-                        icon: Icon(_isDone(work)
-                            ? Icons.check_circle_rounded
-                            : Icons.check_circle_outline_rounded,
-                            color: gold)),
-                      IconButton(
-                        tooltip: shared.contains(work.id)
-                            ? 'Retirar da Nossa Órbita'
-                            : 'Adicionar à Nossa Órbita',
-                        constraints: const BoxConstraints(
-                          minWidth: 35, minHeight: 33),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 18,
-                        onPressed: () => toggleShared(work),
-                        icon: const SaturnMark(size: 18)),
-                    ],
-                  )),
+                  SizedBox(height: 42, child: Row(children: [
+                    libraryAction(
+                      key: Key('saturn-ranked-collections-' + work.id),
+                      tooltip: 'Adicionar às coleções',
+                      icon: Icons.create_new_folder_outlined,
+                      onPressed: () => _showCollectionPicker(work)),
+                    libraryAction(
+                      key: Key('saturn-ranked-favorite-' + work.id),
+                      tooltip: _isFavorite(work)
+                          ? 'Retirar dos Favoritos' : 'Favoritar',
+                      icon: _isFavorite(work)
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      onPressed: () => _toggleFavorite(work)),
+                    libraryAction(
+                      key: Key('saturn-ranked-completed-' + work.id),
+                      tooltip: work.kind == 'Livro'
+                          ? (_isDone(work) ? 'Lido' : 'Marcar como lido')
+                          : (_isDone(work) ? 'Já visto' : 'Marcar como visto'),
+                      icon: _isDone(work)
+                          ? Icons.check_circle_rounded
+                          : Icons.check_circle_outline_rounded,
+                      onPressed: () => _toggleCompleted(work)),
+                  ])),
               ],
             ),
           ),
@@ -3366,7 +3428,7 @@ class _SaturnHomeState extends State<SaturnHome>
           ),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            mainAxisExtent: 316,
+            mainAxisExtent: 337,
             mainAxisSpacing: 2,
             crossAxisSpacing: 2,
           ),
@@ -3730,18 +3792,42 @@ class _SaturnHomeState extends State<SaturnHome>
   Widget _sharedPersonLine(String name, int person, Work work,
       SaturnCoupleInsights insights) {
     final record = insights.profile(person, work.id);
-    final rated = record['rating'];
-    final stars = rated is num && rated > 0
-        ? ' • ★ ${starsFromLegacy(rated).toStringAsFixed(1)}'
-        : '';
-    return Padding(
-      padding: const EdgeInsets.only(top: 5),
-      child: Text(
-        '$name: ${insights.profileStatus(
-          person, work.id, book: work.kind == 'Livro')}$stars',
-        maxLines: 2, overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Color(0xFFE5D1DB), fontSize: 11, height: 1.25),
+    final score = SaturnReviewClassification.stars(record);
+    final tier = SaturnReviewClassification.fromRating(record);
+    final tone = tier?.color ?? const Color(0xFFBFA9B8);
+    final label = person == profile ? 'Você · $name' : name;
+    return Container(
+      key: Key('saturn-shared-person-${person}-${work.id}'),
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(11),
+        color: tone.withValues(alpha: .12),
+        border: Border.all(color: tone.withValues(alpha: .64)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(child: Text(label,
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: ivory, fontSize: 12,
+                fontWeight: FontWeight.w800))),
+            const SizedBox(width: 4),
+            Text(score == null ? 'Sem nota'
+                : '${score.toStringAsFixed(1)} ★',
+              style: TextStyle(
+                color: tone, fontWeight: FontWeight.w900,
+                fontSize: 13)),
+          ]),
+          const SizedBox(height: 3),
+          Text(insights.profileStatus(
+            person, work.id, book: work.kind == 'Livro'),
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFFE5D1DB), fontSize: 10)),
+        ],
       ),
     );
   }
@@ -5400,30 +5486,58 @@ class _SaturnHomeState extends State<SaturnHome>
                 Builder(builder: (context) {
                   final sent = SaturnCoupleSuggestion.alreadySent(
                     _ritualOps, from: profile, workId: w.id);
-                  return OutlinedButton.icon(
-                    key: const Key('saturn-suggest-to-partner'),
-                    onPressed: () {
-                      if (sent == null) {
-                        _suggestToPartner(w);
-                      } else {
-                        _withdrawSuggestion(sent);
-                      }
-                      if (ctx.mounted) refresh(() {});
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: sent == null
-                        ? gold : const Color(0xFFBC829E)),
-                    ),
-                    icon: Icon(sent == null
-                      ? Icons.nightlight_round : Icons.undo_rounded,
-                      color: sent == null
-                        ? gold : const Color(0xFFF0B4CC), size: 17),
-                    label: Text(sent == null
-                      ? 'Sugerir para ' + profiles[1 - profile]
-                      : sent.status == 'accepted'
-                        ? 'Sugestão aceita · Retirar'
-                        : 'Enviado para ' + profiles[1 - profile] + ' ✓ · Retirar'),
-                  );
+                  final inSharedOrbit = shared.contains(w.id);
+                  return Row(children: [
+                    Expanded(child: Tooltip(
+                      message: sent == null
+                          ? 'Sugerir para ' + profiles[1 - profile]
+                          : sent.status == 'accepted'
+                            ? 'Sugestão aceita · tocar para retirar'
+                            : 'Enviado para ' + profiles[1 - profile] +
+                                ' · tocar para retirar',
+                      child: OutlinedButton.icon(
+                        key: const Key('saturn-suggest-to-partner'),
+                        onPressed: () {
+                          if (sent == null) {
+                            _suggestToPartner(w);
+                          } else {
+                            _withdrawSuggestion(sent);
+                          }
+                          if (ctx.mounted) refresh(() {});
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: sent == null
+                              ? gold : const Color(0xFFBC829E)),
+                        ),
+                        icon: Icon(sent == null
+                            ? Icons.nightlight_round : Icons.undo_rounded,
+                          color: sent == null ? gold
+                              : const Color(0xFFF0B4CC), size: 17),
+                        label: Text(sent == null ? 'Sugerir' : 'Retirar sugestão',
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                    )),
+                    const SizedBox(width: 8),
+                    Expanded(child: Tooltip(
+                      message: inSharedOrbit
+                          ? 'Retirar da Nossa Órbita'
+                          : 'Adicionar à Nossa Órbita',
+                      child: OutlinedButton.icon(
+                        key: const Key('saturn-details-shared-orbit'),
+                        onPressed: () {
+                          toggleShared(w);
+                          if (ctx.mounted) refresh(() {});
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: inSharedOrbit
+                              ? gold : const Color(0xFF806A78))),
+                        icon: const SaturnMark(size: 20),
+                        label: Text(inSharedOrbit
+                            ? 'Na Nossa Órbita ✓' : 'Nossa Órbita',
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                    )),
+                  ]);
                 }),
                 const SizedBox(height: 14),
                 const Text('MINHAS LISTAS',
