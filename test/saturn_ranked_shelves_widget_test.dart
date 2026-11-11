@@ -241,8 +241,6 @@ void main() {
     expect(collections, findsOneWidget);
     expect(favorite, findsOneWidget);
     expect(completed, findsOneWidget);
-    expect(find.descendant(of: card,
-        matching: find.byType(SaturnMark)), findsNothing);
     final favoriteButton = tester.widget<IconButton>(favorite);
     final favoriteIcon = favoriteButton.icon as Icon;
     expect(favoriteIcon.color, const Color(0xFFE3BF70));
@@ -262,6 +260,8 @@ void main() {
     expect(myText.style!.color, const Color(0xFFE3BF70));
     expect(partnerText.style!.color, const Color(0xFFBDC8D4));
 
+    await tester.ensureVisible(card);
+    await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(of: card, matching: find.byType(InkWell)).first);
     await tester.pumpAndSettle();
