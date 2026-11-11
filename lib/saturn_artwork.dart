@@ -47,12 +47,13 @@ class SaturnArtwork {
           'w92', 'w154', 'w185', 'w342', 'w500', 'w780',
         };
         if (candidates.contains(parts[2])) {
-          parts[2] = devicePixels >= 390 ? 'w780' : 'w500';
+          parts[2] = devicePixels >= 540 ? 'w780'
+              : devicePixels >= 300 ? 'w500' : 'w342';
           return uri.replace(pathSegments: parts).toString();
         }
       }
     }
-    if (uri.host == 'static.tvmaze.com' &&
+    if (uri.host == 'static.tvmaze.com' && devicePixels >= 340 &&
         uri.path.contains('/medium_portrait/')) {
       return uri.replace(
         path: uri.path.replaceFirst(
