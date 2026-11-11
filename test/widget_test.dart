@@ -350,10 +350,12 @@ void main() {
     expect(find.text('Filme em Conjunto'), findsOneWidget);
     expect(find.text('Livro em Conjunto'), findsOneWidget);
     await scrollPersonal(tester,
-      find.byKey(const Key('saturn-collection-filter-Livros')),
+      find.byKey(const Key('saturn-collection-filter-menu')),
       step: -220);
     await tester.tap(
-      find.byKey(const Key('saturn-collection-filter-Livros')));
+      find.byKey(const Key('saturn-collection-filter-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Livros').last);
     await tester.pumpAndSettle();
     await scrollPersonal(tester,
       find.byKey(Key('saturn-ranked-card-' + book.id)));
