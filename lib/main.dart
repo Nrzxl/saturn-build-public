@@ -3571,18 +3571,22 @@ class _SaturnHomeState extends State<SaturnHome>
         : _smartCollectionIds(active).map((id) => savedWorks[id])
             .whereType<Work>().where((w) => !_isArchived(w)).toList();
     final items = _filteredCollection(view, false);
-    return ListView(
+    return CustomScrollView(
       key: const PageStorageKey('saturn_personal_collection'),
-      children: [
-      _collectionHeader(false, all.length),
-      _smartCollectionsOverview(),
-      _collectionSelectionToolbar(items, showFilters: true),
-      _collectionContents(items),
-      if (items.isEmpty)
-        const Padding(padding: EdgeInsets.all(16),
-          child: Text('Esta coleção está vazia. '
-              'Adicione títulos por Explorar ou Recomendações.')),
-    ]);
+      slivers: [
+        SliverToBoxAdapter(child: _collectionHeader(false, all.length)),
+        SliverToBoxAdapter(child: _smartCollectionsOverview()),
+        SliverToBoxAdapter(child:
+            _collectionSelectionToolbar(items, showFilters: true)),
+        ..._collectionGallerySlivers(items),
+        if (items.isEmpty)
+          const SliverToBoxAdapter(
+            child: Padding(padding: EdgeInsets.all(16),
+              child: Text('Esta coleção está vazia. '
+                  'Adicione títulos por Explorar ou Recomendações.')),
+          ),
+      ],
+    );
   }
 
 
