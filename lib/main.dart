@@ -3318,28 +3318,6 @@ class _SaturnHomeState extends State<SaturnHome>
 
   /// Responsive at phone, tablet and desktop widths. Keep cover cards and
   /// multi-select in the same layout, rather than returning to giant rows.
-  Widget _rankedGalleryGrid(List<Work> items) =>
-      LayoutBuilder(builder: (context, constraints) {
-    final columns = (constraints.maxWidth / 182).floor().clamp(2, 6).toInt();
-    return GridView.builder(
-      key: Key('saturn-ranked-gallery-' + items.first.id),
-      padding: const EdgeInsets.fromLTRB(9, 3, 9, 13),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        mainAxisExtent: 316,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-      ),
-      itemBuilder: (context, index) =>
-          _rankedPosterCard(items[index]),
-    );
-  });
-
-  /// Seamless cover wall, highest personal ratings first. A small metallic
-  /// rim conveys the category without labels or interstitial headings.
   /// Web/PWA: single viewport means only the visible posters are laid out.
   /// Unlike a shrink-wrapped GridView, this sliver does not build 42 covers
   /// before the visitor can scroll.
@@ -3380,26 +3358,6 @@ class _SaturnHomeState extends State<SaturnHome>
           ),
         ),
     ];
-  }
-
-  Widget _collectionContents(List<Work> items) {
-    if (items.isEmpty) return const SizedBox.shrink();
-    final ranked = SaturnReviewClassification.sorted<Work>(
-      items, (work) => entry(work));
-    final visible = ranked.take(_visibleGalleryCards)
-        .toList(growable: false);
-    return Column(children: [
-      _rankedGalleryGrid(visible),
-      if (ranked.length > visible.length)
-        Padding(padding: const EdgeInsets.fromLTRB(16, 2, 16, 18),
-          child: OutlinedButton.icon(
-            key: const Key('saturn-gallery-load-more'),
-            onPressed: () => setState(() => _visibleGalleryCards += 42),
-            icon: const Icon(Icons.expand_more_rounded),
-            label: Text('Mostrar mais capas '
-                '(${visible.length} de ${ranked.length})'),
-          )),
-    ]);
   }
 
   static const _automaticCollections = <(String, String, IconData)>[
