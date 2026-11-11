@@ -3243,28 +3243,79 @@ class _SaturnHomeState extends State<SaturnHome>
 
   Widget _collectionFilters(bool sharedList) {
     final selected = sharedList ? _sharedKind : _collectionKind;
+    final scope = sharedList ? 'shared' : 'collection';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Wrap(spacing: 7, runSpacing: 2, children: [
-        for (final kind in _collectionTypes.keys)
-          ChoiceChip(
-            key: Key('saturn-${sharedList ? 'shared' : 'collection'}-filter-$kind'),
-            label: Text(kind),
-            selected: selected == kind,
-            selectedColor: wine,
-            onSelected: (_) => setState(() {
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: PopupMenuButton<String>(
+          key: Key('saturn-' + scope + '-filter-menu'),
+          tooltip: 'Filtrar títulos por tipo',
+          initialValue: selected,
+          offset: const Offset(0, 6),
+          color: const Color(0xFF291D2B),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+            side: const BorderSide(color: Color(0x665F465A)),
+          ),
+          onSelected: (kind) {
+            if (kind == selected) return;
+            setState(() {
               if (sharedList) {
                 _sharedKind = kind;
               } else {
                 _collectionKind = kind;
               }
-              // Prevent bulk actions on items hidden by the changed filter.
+              // Never keep bulk actions selected on newly hidden cards.
               _selectingWorks = false;
               _selectedWorkIds.clear();
               _visibleGalleryCards = 42;
-            }),
+            });
+          },
+          itemBuilder: (context) => [
+            for (final kind in _collectionTypes.keys)
+              PopupMenuItem<String>(
+                key: Key('saturn-' + scope + '-filter-' + kind),
+                value: kind,
+                child: Row(
+                  children: [
+                    Icon(
+                      selected == kind
+                          ? Icons.check_circle_rounded
+                          : Icons.circle_outlined,
+                      size: 18,
+                      color: selected == kind
+                          ? gold : const Color(0xFFB89DAB),
+                    ),
+                    const SizedBox(width: 11),
+                    Text(kind, style: TextStyle(
+                      color: selected == kind ? gold : ivory,
+                      fontWeight: selected == kind
+                          ? FontWeight.w600 : FontWeight.normal,
+                    )),
+                  ],
+                ),
+              ),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF291D2B),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: const Color(0x886C5162)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.tune_rounded, color: gold, size: 18),
+              const SizedBox(width: 8),
+              Text('Filtros: ' + selected,
+                style: const TextStyle(color: ivory, fontSize: 13)),
+              const SizedBox(width: 9),
+              const Icon(Icons.keyboard_arrow_down_rounded,
+                  color: gold, size: 18),
+            ]),
           ),
-      ]),
+        ),
+      ),
     );
   }
 
