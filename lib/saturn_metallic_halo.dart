@@ -40,7 +40,7 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
         : Timer.periodic(const Duration(milliseconds: 4300), (_) {
             // Offstage tabs and reduced-motion visitors do not need
             // periodic halo rebuilds while these cards are invisible.
-            if (mounted && TickerMode.of(context) &&
+            if (mounted && TickerMode.getNotifier(context).value &&
                 !MediaQuery.disableAnimationsOf(context)) {
               setState(() => _shifted = !_shifted);
             }
