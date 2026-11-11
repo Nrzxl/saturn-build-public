@@ -66,7 +66,11 @@ class SaturnPwaTests(unittest.TestCase):
         # catalog snapshots must never be cached/cleared by custom workers.
         self.assertIn("saturn-cover-cache-sw.js", html)
         worker = (WEB / "saturn-cover-cache-sw.js").read_text(encoding="utf-8")
-        self.assertIn("url.origin !== 'https://covers.openlibrary.org'", worker)
+        self.assertIn("url.origin === 'https://covers.openlibrary.org'", worker)
+        self.assertIn("CINEMATIC_HOSTS", worker)
+        self.assertIn("image.tmdb.org", worker)
+        self.assertIn("event.request.method !== 'GET'", worker)
+        self.assertIn("!CINEMATIC_HOSTS.has(url.hostname)", worker)
         self.assertIn("MAX_CACHED_COVERS = 180", worker)
         self.assertNotIn("supabase.co", worker)
         self.assertNotIn("main.dart.js", worker)
