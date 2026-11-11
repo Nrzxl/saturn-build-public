@@ -38,7 +38,12 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
     _timer = widget.color == null && widget.partnerColor == null
         ? null
         : Timer.periodic(const Duration(milliseconds: 4300), (_) {
-            if (mounted) setState(() => _shifted = !_shifted);
+            // Offstage tabs and reduced-motion visitors do not need
+            // periodic halo rebuilds while these cards are invisible.
+            if (mounted && TickerMode.of(context) &&
+                !MediaQuery.disableAnimationsOf(context)) {
+              setState(() => _shifted = !_shifted);
+            }
           });
   }
 
