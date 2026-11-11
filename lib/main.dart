@@ -3340,6 +3340,48 @@ class _SaturnHomeState extends State<SaturnHome>
 
   /// Seamless cover wall, highest personal ratings first. A small metallic
   /// rim conveys the category without labels or interstitial headings.
+  /// Web/PWA: single viewport means only the visible posters are laid out.
+  /// Unlike a shrink-wrapped GridView, this sliver does not build 42 covers
+  /// before the visitor can scroll.
+  List<Widget> _collectionGallerySlivers(List<Work> items) {
+    if (items.isEmpty) return const <Widget>[];
+    final ranked = SaturnReviewClassification.sorted<Work>(
+      items, (work) => entry(work));
+    final visible = ranked.take(_visibleGalleryCards).toList(growable: false);
+    return [
+      SliverLayoutBuilder(builder: (context, constraints) {
+        final columns = (constraints.crossAxisExtent / 182)
+            .floor().clamp(2, 6).toInt();
+        return SliverGrid(
+          key: Key('saturn-ranked-gallery-' + visible.first.id),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => _rankedPosterCard(visible[index]),
+            childCount: visible.length,
+          ),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisExtent: 316,
+            mainAxisSpacing: 2,
+            crossAxisSpacing: 2,
+          ),
+        );
+      }),
+      if (ranked.length > visible.length)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 18),
+            child: OutlinedButton.icon(
+              key: const Key('saturn-gallery-load-more'),
+              onPressed: () => setState(() => _visibleGalleryCards += 42),
+              icon: const Icon(Icons.expand_more_rounded),
+              label: Text('Mostrar mais capas '
+                  '(${visible.length} de ${ranked.length})'),
+            ),
+          ),
+        ),
+    ];
+  }
+
   Widget _collectionContents(List<Work> items) {
     if (items.isEmpty) return const SizedBox.shrink();
     final ranked = SaturnReviewClassification.sorted<Work>(
