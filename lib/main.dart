@@ -3142,7 +3142,8 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Widget _collectionSelectionToolbar(Iterable<Work> source,
-      {bool sharedList = false, bool watchlist = false}) {
+      {bool sharedList = false, bool watchlist = false,
+      bool showFilters = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Wrap(
@@ -3154,6 +3155,7 @@ class _SaturnHomeState extends State<SaturnHome>
                 ? Icons.close_rounded : Icons.library_add_check_outlined),
             label: Text(_selectingWorks ? 'Cancelar' : 'Selecionar vários'),
           ),
+          if (showFilters) _collectionFilters(sharedList),
           if (_selectingWorks) ...[
             Text('${_selectedWorkIds.length} selecionados',
               style: const TextStyle(color: gold, fontSize: 12)),
@@ -3244,11 +3246,7 @@ class _SaturnHomeState extends State<SaturnHome>
   Widget _collectionFilters(bool sharedList) {
     final selected = sharedList ? _sharedKind : _collectionKind;
     final scope = sharedList ? 'shared' : 'collection';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: PopupMenuButton<String>(
+    return PopupMenuButton<String>(
           key: Key('saturn-' + scope + '-filter-menu'),
           tooltip: 'Filtrar títulos por tipo',
           initialValue: selected,
@@ -3314,8 +3312,6 @@ class _SaturnHomeState extends State<SaturnHome>
                   color: gold, size: 18),
             ]),
           ),
-        ),
-      ),
     );
   }
 
@@ -3537,8 +3533,7 @@ class _SaturnHomeState extends State<SaturnHome>
       children: [
       _collectionHeader(false, all.length),
       _smartCollectionsOverview(),
-      _collectionFilters(false),
-      _collectionSelectionToolbar(items),
+      _collectionSelectionToolbar(items, showFilters: true),
       _collectionContents(items),
       if (items.isEmpty)
         const Padding(padding: EdgeInsets.all(16),
@@ -4886,7 +4881,6 @@ class _SaturnHomeState extends State<SaturnHome>
         _pastBookReminders(DateTime.now()),
         _partnerShelves(),
         _sharedMomentFilters(),
-        _collectionFilters(true),
         if (featured != null)
           _sharedFeatured(featured, insights),
         if (memories.isNotEmpty) ...[
@@ -4894,7 +4888,8 @@ class _SaturnHomeState extends State<SaturnHome>
           ...memories.map((work) => _sharedMemoryCard(work, insights)),
         ],
         _heading('Nossa biblioteca'),
-        _collectionSelectionToolbar(items, sharedList: true),
+        _collectionSelectionToolbar(items,
+            sharedList: true, showFilters: true),
         _collectionContents(items),
         if (items.isEmpty)
           Padding(
