@@ -198,4 +198,76 @@ void main() {
     expect(halo.partnerColor, const Color(0xFFBDC8D4));
   });
 
+
+  testWidgets('Biblioteca mostra só 3 ações, notas ouro/prata separadas',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(900, 1400);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    const film = Work('tmdb:movie:99117', 'História em duas cores',
+      'Filme', 'Aventura de teste.', 2026, provider: 'TMDB');
+    SharedPreferences.setMockInitialValues({
+      'catalog_saved': jsonEncode({film.id: film.toJson()}),
+      'records': jsonEncode({
+        '0:' + film.id: {
+          'status': 'Concluído',
+          'rating': 9.0,
+          'notes': 'Amei o filme',
+        },
+        '1:' + film.id: {
+          'status': 'Concluído',
+          'rating': 6.0,
+          'notes': 'Gostei de algumas cenas',
+        },
+      }),
+      'shared': jsonEncode([film.id]),
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Coleção'));
+    await tester.pumpAndSettle();
+
+    final card = find.byKey(Key('saturn-ranked-card-' + film.id));
+    expect(card, findsOneWidget);
+    expect(find.descendant(of: card, matching: find.byType(IconButton)),
+        findsNWidgets(3));
+    final collections =
+        find.byKey(Key('saturn-ranked-collections-' + film.id));
+    final favorite =
+        find.byKey(Key('saturn-ranked-favorite-' + film.id));
+    final completed =
+        find.byKey(Key('saturn-ranked-completed-' + film.id));
+    expect(collections, findsOneWidget);
+    expect(favorite, findsOneWidget);
+    expect(completed, findsOneWidget);
+    final favoriteButton = tester.widget<IconButton>(favorite);
+    final favoriteIcon = favoriteButton.icon as Icon;
+    expect(favoriteIcon.color, const Color(0xFFE3BF70));
+
+    final myChip = find.byKey(
+        Key('saturn-library-person-0-' + film.id));
+    final partnerChip = find.byKey(
+        Key('saturn-library-person-1-' + film.id));
+    expect(myChip, findsOneWidget);
+    expect(partnerChip, findsOneWidget);
+    final myText = tester.widget<Text>(
+      find.descendant(of: myChip, matching: find.byType(Text)));
+    final partnerText = tester.widget<Text>(
+      find.descendant(of: partnerChip, matching: find.byType(Text)));
+    expect(myText.data, 'Você 4.5 ★');
+    expect(partnerText.data, 'Ela 3.0 ★');
+    expect(myText.style!.color, const Color(0xFFE3BF70));
+    expect(partnerText.style!.color, const Color(0xFFBDC8D4));
+
+    await tester.ensureVisible(card);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: card, matching: find.byType(InkWell)).first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('saturn-details-shared-orbit')),
+        findsOneWidget);
+    expect(find.byKey(const Key('saturn-suggest-to-partner')),
+        findsOneWidget);
+  });
 }

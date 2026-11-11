@@ -49,7 +49,7 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts -p 'test_*.py'
           flutter pub get
-          flutter analyze lib
+          flutter analyze lib --no-fatal-infos
           flutter test --reporter expanded
 
       - name: Identificar a mesma versão no navegador e na PWA

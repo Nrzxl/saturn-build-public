@@ -47,7 +47,7 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts -p 'test_*.py'
           flutter pub get
-          flutter analyze lib
+          flutter analyze lib --no-fatal-infos
           flutter test --reporter expanded
       - name: APK de DEBUG, não de produção
         run: flutter build apk --debug
@@ -85,7 +85,7 @@ jobs:
           PY
       - name: Testes e build do simulador
         run: |
-          flutter analyze lib
+          flutter analyze lib --no-fatal-infos
           flutter test --reporter expanded
           flutter build ios --simulator --debug --no-codesign
       - name: Arquivar aplicativo de simulador

@@ -650,7 +650,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(seriesCard);
     await tester.pumpAndSettle();
-    expect(find.text('O QUE NÓS ACHAMOS'), findsOneWidget);
+    expect(find.text('NOSSAS AVALIAÇÕES · NOTAS INDIVIDUAIS'), findsOneWidget);
+    expect(find.text('SUA NOTA'), findsOneWidget);
+    expect(find.text('NOTA DA OUTRA PESSOA'), findsOneWidget);
     expect(find.textContaining('Eu amei a história!'), findsWidgets);
     expect(find.text('8.4/10'), findsNothing);
     expect(find.text('92%'), findsNothing);
