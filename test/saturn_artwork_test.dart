@@ -8,6 +8,9 @@ void main() {
       'https://image.tmdb.org/t/p/w780/someposter.jpg');
     expect(SaturnArtwork.bestUrl(
       'https://image.tmdb.org/t/p/w342/someposter.jpg', devicePixels: 200),
+      'https://image.tmdb.org/t/p/w342/someposter.jpg');
+    expect(SaturnArtwork.bestUrl(
+      'https://image.tmdb.org/t/p/w185/someposter.jpg', devicePixels: 430),
       'https://image.tmdb.org/t/p/w500/someposter.jpg');
   });
 
@@ -20,6 +23,10 @@ void main() {
       'https://covers.openlibrary.org/b/id/1234-M.jpg?default=false',
       devicePixels: 480),
       'https://covers.openlibrary.org/b/id/1234-L.jpg?default=false');
+    expect(SaturnArtwork.bestUrl(
+      'https://static.tvmaze.com/uploads/images/medium_portrait/1/22.jpg',
+      devicePixels: 110),
+      'https://static.tvmaze.com/uploads/images/medium_portrait/1/22.jpg');
     expect(SaturnArtwork.bestUrl(
       'https://covers.openlibrary.org/b/id/1234-M.jpg',
       devicePixels: 120),
