@@ -684,7 +684,8 @@ void main() {
     expect(find.text('Explorar'), findsOneWidget);
     expect(find.text('Coleção'), findsOneWidget);
     expect(find.text('Nós dois'), findsOneWidget);
-    expect(find.byTooltip('Atualizar SATURN'), findsOneWidget);
+    expect(find.byTooltip('Sincronizar e verificar atualizações'), findsOneWidget);
+    expect(find.byTooltip('Atualizar SATURN'), findsNothing);
     expect(find.text('Nossos streamings'), findsNothing);
     expect(find.text('Minha Watchlist'), findsOneWidget);
     await tester.scrollUntilVisible(

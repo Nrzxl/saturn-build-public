@@ -280,8 +280,8 @@ class _SaturnHomeState extends State<SaturnHome>
       icon: Icon(_cloud?.connected == true
           ? Icons.cloud_done_outlined : Icons.cloud_sync_outlined),
       label: Text(_cloud?.connected == true
-          ? 'Nossa Órbita conectada · gerenciar'
-          : 'Entrar e sincronizar Nossa Órbita',
+          ? 'Sincronização e atualizações · Nossa Órbita'
+          : 'Conectar, sincronizar e atualizar SATURN',
         maxLines: 1, overflow: TextOverflow.ellipsis),
     ),
   );
@@ -326,6 +326,31 @@ class _SaturnHomeState extends State<SaturnHome>
   bool _loadingOtherRecommendations = false;
   bool loadingRecommendations = false;
   int _filmRecommendationPage = 0;
+  final Set<String> _warmedCovers = <String>{};
+
+  /// Warm only a few real, above-the-fold covers after the first frame.
+  /// Image caching is bounded; the PWA worker persists public artwork.
+  Future<void> _warmFirstCovers(Iterable<Work> works) async {
+    final urls = <String>[];
+    for (final work in works) {
+      final original = SaturnBookCover.resolve(work.id, work.posterUrl);
+      final url = SaturnArtwork.bestUrl(original, devicePixels: 440);
+      if (!url.startsWith('https://') || !_warmedCovers.add(url)) continue;
+      urls.add(url);
+      if (urls.length >= 4) break;
+    }
+    for (final url in urls) {
+      if (!mounted) return;
+      try {
+        await precacheImage(
+          ResizeImage(NetworkImage(url), width: 360), context)
+            .timeout(const Duration(seconds: 6));
+      } catch (_) {
+        // An unreachable poster must not hold up navigation or first paint.
+      }
+    }
+  }
+
   final profiles = ['Eu', 'Ela'];
   final profileAvatars = ['🪐', '🌙'];
   static const _avatarChoices = <String>[
@@ -408,6 +433,11 @@ class _SaturnHomeState extends State<SaturnHome>
                 }.values.toList(growable: false)
               : additions;
           if (additions.isNotEmpty) _filmRecommendationPage = nextPage;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            unawaited(_warmFirstCovers(recommendedMovies.take(4)));
+          }
         });
       }
     } catch (_) {
@@ -700,7 +730,28 @@ class _SaturnHomeState extends State<SaturnHome>
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: const Color(0xFF201820),
-      builder: (context) => SaturnOrbitSyncSheet(cloud: _cloud),
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * 0.83,
+        child: DefaultTabController(
+          length: 2,
+          child: Column(children: [
+            const TabBar(
+              indicatorColor: gold,
+              labelColor: gold,
+              unselectedLabelColor: Color(0xFFBFA9B7),
+              tabs: [
+                Tab(icon: Icon(Icons.sync_rounded), text: 'Sincronização'),
+                Tab(icon: Icon(Icons.system_update_alt_rounded),
+                    text: 'Atualizações'),
+              ],
+            ),
+            Expanded(child: TabBarView(children: [
+              SaturnOrbitSyncSheet(cloud: _cloud),
+              const SaturnUpdateCenter(),
+            ])),
+          ]),
+        ),
+      ),
     );
     final cloud = _cloud;
     if (cloud != null && cloud.orbitId != null) {
@@ -1025,15 +1076,6 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
-  void _showUpdates() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF251B24),
-      isScrollControlled: true,
-      builder: (ctx) => const SaturnUpdateCenter(),
-    );
-  }
-
   Map<String, dynamic> entry(Work w) =>
       Map<String, dynamic>.from(records['${profile}:${w.id}'] ?? {});
 
@@ -1061,6 +1103,15 @@ class _SaturnHomeState extends State<SaturnHome>
   List<String> _smartCollectionIds(String id) {
     if (id.startsWith('collection:')) {
       return SaturnSmartCollections.workIds(_collectionItemOps, id);
+    }
+    if (id == 'suggestions') {
+      // Sugestoes reais do casal, sem alterar status salvos em andamento.
+      return SaturnCoupleSuggestion.visible(_ritualOps)
+          .where((item) => (item.from == profile || item.to == profile) &&
+              savedWorks.containsKey(item.workId))
+          .map((item) => item.workId)
+          .toSet()
+          .toList(growable: false);
     }
     return SaturnSmartCollections.smartIds(id,
       profile: profile,
@@ -2044,7 +2095,7 @@ class _SaturnHomeState extends State<SaturnHome>
         actions: [
           IconButton(
             key: const Key('saturn-header-sync'),
-            tooltip: 'Sincronizar nossa órbita',
+            tooltip: 'Sincronizar e verificar atualizações',
             constraints: const BoxConstraints(
                 minWidth: 48, minHeight: 48),
             icon: Icon(
@@ -2054,11 +2105,6 @@ class _SaturnHomeState extends State<SaturnHome>
               color: gold,
             ),
             onPressed: _showOrbitSync,
-          ),
-          IconButton(
-            tooltip: 'Atualizar SATURN',
-            icon: const Icon(Icons.system_update_alt_rounded, color: gold),
-            onPressed: _showUpdates,
           ),
           PopupMenuButton<int>(
             tooltip: 'Perfis · personalizar',
@@ -2168,7 +2214,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   NavigationRailDestination(
                     icon: Icon(Icons.bookmarks_outlined), label: Text('Coleção')),
                   NavigationRailDestination(
-                    icon: Icon(Icons.favorite_border), label: Text('Nós dois')),
+                    icon: SaturnMark(size: 24), label: Text('Nós dois')),
                   NavigationRailDestination(
                     icon: Icon(Icons.bar_chart), label: Text('Dados')),
                 ],
@@ -2212,7 +2258,7 @@ class _SaturnHomeState extends State<SaturnHome>
           NavigationDestination(
               icon: Icon(Icons.bookmarks_outlined), label: 'Coleção'),
           NavigationDestination(
-              icon: Icon(Icons.favorite_border), label: 'Nós dois'),
+              icon: SaturnMark(size: 24), label: 'Nós dois'),
           NavigationDestination(
               icon: Icon(Icons.bar_chart), label: 'Dados'),
         ],
@@ -2368,28 +2414,7 @@ class _SaturnHomeState extends State<SaturnHome>
                             )),
                     ),
                   ),
-                  if (featured != null)
-                    Positioned(
-                      top: spacious ? 21 : 24,
-                      right: spacious ? 31 : 13,
-                      bottom: spacious ? 21 : 78,
-                      width: spacious ? 183 : 124,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(15),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 450),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeIn,
-                          child: PosterThumbnail(
-                            key: ValueKey('featured-' + featured.id),
-                            work: featured,
-                            width: spacious ? 183 : 124,
-                            height: spacious ? 265 : 220,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ),
-                    ),
+                  // Cena de ponta a ponta, sem pôster sobreposto à imagem.
                   Padding(
                     padding: EdgeInsets.symmetric(
                       horizontal: spacious ? 35 : 22,
@@ -2421,7 +2446,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         ConstrainedBox(
                           constraints: BoxConstraints(maxWidth:
                             featured == null ? constraints.maxWidth
-                                : constraints.maxWidth * (spacious ? 0.60 : 0.58)),
+                                : constraints.maxWidth * (spacious ? 0.55 : 0.72)),
                           child: TweenAnimationBuilder<double>(
                             key: ValueKey('saturn-hero-copy-${featured?.id ?? 'empty'}'),
                             tween: Tween(begin: 0.15, end: 1),
@@ -2759,17 +2784,16 @@ class _SaturnHomeState extends State<SaturnHome>
                             : Icons.check_circle_outline_rounded,
                             color: gold)),
                       IconButton(
-                        tooltip: 'Adicionar à Nossa Órbita',
+                        tooltip: shared.contains(work.id)
+                            ? 'Retirar da Nossa Órbita'
+                            : 'Adicionar à Nossa Órbita',
                         constraints: const BoxConstraints(
                           minWidth: 35, minHeight: 33),
                         padding: EdgeInsets.zero,
                         visualDensity: VisualDensity.compact,
                         iconSize: 18,
                         onPressed: () => toggleShared(work),
-                        icon: Icon(shared.contains(work.id)
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                            color: gold)),
+                        icon: const SaturnMark(size: 18)),
                     ],
                   )),
               ],
@@ -3039,6 +3063,9 @@ class _SaturnHomeState extends State<SaturnHome>
         onOpen: _details,
         onToggleShared: (work) => _catalogEditionAction(work, toggleShared),
         isShared: (work) => shared.contains(work.id),
+        onSuggest: (work) => _catalogEditionAction(work, _suggestToPartner),
+        isSuggested: (work) => SaturnCoupleSuggestion.alreadySent(
+          _ritualOps, from: profile, workId: work.id) != null,
         onToggleWatchlist: (work) =>
             _catalogEditionAction(work, _toggleWatchlist),
         isWatchlisted: _isWatchlisted,
@@ -3216,13 +3243,14 @@ class _SaturnHomeState extends State<SaturnHome>
           colors: [Color(0xFF49233A), Color(0xFF241A2A), night]),
       ),
       child: Row(children: [
-        Icon(sharedList ? Icons.favorite_rounded
-            : Icons.collections_bookmark_rounded, color: gold, size: 32),
+        sharedList ? const SaturnMark(size: 32)
+            : const Icon(Icons.collections_bookmark_rounded,
+                color: gold, size: 32),
         const SizedBox(width: 13),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(sharedList ? 'Nossa órbita ♡' : 'Minha coleção',
+            Text(sharedList ? 'Nossa Órbita' : 'Minha coleção',
               style: const TextStyle(color: ivory, fontFamily: 'serif',
                 fontSize: 25, fontWeight: FontWeight.bold)),
             const SizedBox(height: 5),
@@ -3364,7 +3392,7 @@ class _SaturnHomeState extends State<SaturnHome>
     ('favorites', 'Favoritos', Icons.favorite_rounded),
     ('watchlist', 'Watchlist', Icons.bookmark_added_rounded),
     ('completed', 'Concluídos', Icons.check_circle_rounded),
-    ('in-progress', 'Em andamento', Icons.timelapse_rounded),
+    ('suggestions', 'Sugestões', Icons.nightlight_round),
   ];
 
   Widget _smartCollectionCard(String id, String name, IconData icon,
@@ -3484,7 +3512,7 @@ class _SaturnHomeState extends State<SaturnHome>
       ),
       const Padding(
         padding: EdgeInsets.fromLTRB(17, 0, 17, 11),
-        child: Text('Favoritos e Watchlist se atualizam sozinhos. '
+        child: Text('Favoritos, Watchlist e Sugestões se atualizam sozinhos. '
             'Crie suas próprias listas e escolha uma capa.',
           style: TextStyle(color: Color(0xFFC6ACBC), fontSize: 11)),
       ),
@@ -3590,8 +3618,7 @@ class _SaturnHomeState extends State<SaturnHome>
           const Expanded(child: Text('NOSSA ÓRBITA',
             style: TextStyle(color: gold, letterSpacing: 2.2,
               fontSize: 11, fontWeight: FontWeight.bold))),
-          const Icon(Icons.favorite_rounded,
-            color: Color(0xFFE9A8BD), size: 23),
+          const SaturnMark(size: 23),
         ]),
         const SizedBox(height: 18),
         const Text('Duas histórias. Um universo.',
@@ -5014,20 +5041,16 @@ class _SaturnHomeState extends State<SaturnHome>
                 ),
               ),
               Tooltip(
-                message: 'Adicionar à Nossa Órbita',
+                message: shared.contains(w.id)
+                    ? 'Retirar da Nossa Órbita'
+                    : 'Adicionar à Nossa Órbita',
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: () => toggleShared(w),
                   child: SizedBox(
                     width: 34, height: 44,
                     child: Center(
-                      child: Icon(
-                        shared.contains(w.id)
-                            ? Icons.favorite : Icons.favorite_border,
-                        size: 20,
-                        color: shared.contains(w.id)
-                            ? const Color(0xFFDA728F) : gold,
-                      ),
+                      child: const SaturnMark(size: 20),
                     ),
                   ),
                 ),
@@ -5084,7 +5107,7 @@ class _SaturnHomeState extends State<SaturnHome>
           ),
           if (hasBackdrop)
             Positioned.fill(child: Image.network(
-              SaturnArtwork.bestUrl(backdrop, devicePixels: 1400),
+              SaturnArtwork.bestUrl(backdrop, devicePixels: 1400, panorama: true),
               fit: BoxFit.cover,
               alignment: Alignment.center,
               filterQuality: FilterQuality.high,
@@ -5112,12 +5135,12 @@ class _SaturnHomeState extends State<SaturnHome>
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              stops: const [0, 0.48, 1],
+              stops: const [0, .28, .62, 1],
               colors: hasBackdrop
-                  ? const [Color(0xE91A1522), Color(0x9F231829),
-                           Color(0x281B1525)]
-                  : const [Color(0xCA1A1522), Color(0x6B231829),
-                           Color(0x111B1525)],
+                  ? const [Color(0xF61A1522), Color(0xE11A1522),
+                           Color(0x6C231829), Color(0x101B1525)]
+                  : const [Color(0xF01A1522), Color(0xCE1A1522),
+                           Color(0x70231829), Color(0x141B1525)],
             ),
           )),
           const DecoratedBox(decoration: BoxDecoration(
@@ -5392,7 +5415,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         ? gold : const Color(0xFFBC829E)),
                     ),
                     icon: Icon(sent == null
-                      ? Icons.favorite_border_rounded : Icons.undo_rounded,
+                      ? Icons.nightlight_round : Icons.undo_rounded,
                       color: sent == null
                         ? gold : const Color(0xFFF0B4CC), size: 17),
                     label: Text(sent == null
@@ -5927,6 +5950,8 @@ class CatalogExplore extends StatefulWidget {
   final Future<void> Function(Work) onOpen;
   final void Function(Work) onToggleShared;
   final bool Function(Work) isShared;
+  final void Function(Work)? onSuggest;
+  final bool Function(Work)? isSuggested;
   final void Function(Work) onToggleWatchlist;
   final bool Function(Work) isWatchlisted;
   final void Function(Work) onToggleCompleted;
@@ -5943,6 +5968,8 @@ class CatalogExplore extends StatefulWidget {
     required this.onOpen,
     required this.onToggleShared,
     required this.isShared,
+    this.onSuggest,
+    this.isSuggested,
     required this.onToggleWatchlist,
     required this.isWatchlisted,
     required this.onToggleCompleted,
@@ -6449,7 +6476,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                 // Deterministic poster/footer geometry avoids long titles
                 // crossing into artwork while cards load or resize.
                 mainAxisExtent: (((width - 28 - (columns - 1) * 12) /
-                    columns) * 1.40 + 80).clamp(290.0, 390.0),
+                    columns) * 1.42 + 150).clamp(350.0, 485.0),
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
               ),
@@ -6506,10 +6533,11 @@ class _CatalogExploreState extends State<CatalogExplore> {
   /// gradient instead of two separate layers with a visible horizontal seam.
   Widget _coverCard(Work work) {
     final loved = widget.isShared(work);
+    final suggested = widget.isSuggested?.call(work) == true;
+    final favorite = widget.isFavorite?.call(work) == true;
     final artUrl = SaturnArtwork.bestUrl(
-      SaturnBookCover.resolve(work.id, work.posterUrl),
-      devicePixels: 540,
-    );
+      SaturnBookCover.resolve(work.id, work.posterUrl), devicePixels: 540);
+    const actionSize = BoxConstraints(minWidth: 31, minHeight: 32);
     return FutureBuilder<Color>(
       future: SaturnArtwork.toneFor(artUrl),
       builder: (context, snapshot) {
@@ -6533,116 +6561,120 @@ class _CatalogExploreState extends State<CatalogExplore> {
               child: InkWell(
                 key: Key('saturn-cinematic-cover-' + work.id),
                 onTap: () => widget.onOpen(work),
-                child: Stack(fit: StackFit.expand, children: [
-                  // Fit the *entire* poster from its top edge. The
-                  // bottom fades into one continuous matte surface.
-                  PosterThumbnail(work: work, width: double.infinity,
-                      height: double.infinity, fit: BoxFit.fitWidth,
-                      alignment: Alignment.topCenter),
-                  Positioned.fill(child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: const [0, .42, .64, .81, 1],
-                        colors: [
-                          const Color(0x540C0B15),
-                          Colors.transparent,
-                          tone.withValues(alpha: .10),
-                          base.withValues(alpha: .90),
-                          base,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: Stack(fit: StackFit.expand, children: [
+                      PosterThumbnail(work: work, width: double.infinity,
+                        height: double.infinity, fit: BoxFit.cover,
+                        alignment: Alignment.topCenter),
+                      if (widget.showZeroStarFlies?.call(work) ?? false)
+                        const Positioned.fill(child: SaturnZeroStarFlies()),
+                    ])),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [tone.withValues(alpha: .53), base],
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(work.kind.toUpperCase(),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: gold,
+                              letterSpacing: 1.2, fontSize: 9,
+                              fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 4),
+                          SizedBox(height: 36, child: Text(work.title,
+                            maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: ivory,
+                              fontFamily: 'serif', fontSize: 13.5,
+                              fontWeight: FontWeight.bold, height: 1.18))),
+                          Text([
+                            if (work.year > 0) work.year.toString(),
+                            if (work.kind == 'Livro' && work.creator.isNotEmpty)
+                              work.creator
+                            else if (work.kind != 'Livro') work.provider,
+                          ].join(' · '), maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFE4CAD6), fontSize: 10)),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 1, runSpacing: 0,
+                            children: [
+                              IconButton(
+                                tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
+                                constraints: actionSize, padding: EdgeInsets.zero,
+                                iconSize: 18,
+                                onPressed: () => widget.onToggleWatchlist(work),
+                                icon: Icon(widget.isWatchlisted(work)
+                                    ? Icons.bookmark_added : Icons.bookmark_add_outlined,
+                                    color: gold)),
+                              IconButton(
+                                key: Key('saturn-explore-shared-' + work.id),
+                                tooltip: loved ? 'Remover da Nossa Órbita'
+                                    : 'Adicionar à Nossa Órbita',
+                                constraints: actionSize, padding: EdgeInsets.zero,
+                                style: IconButton.styleFrom(
+                                  backgroundColor: loved
+                                      ? const Color(0x805E394F)
+                                      : Colors.transparent),
+                                onPressed: () => widget.onToggleShared(work),
+                                icon: const SaturnMark(size: 19)),
+                              IconButton(
+                                key: Key('saturn-explore-suggest-' + work.id),
+                                tooltip: suggested ? 'Sugestão já enviada'
+                                    : 'Sugerir para a outra pessoa',
+                                constraints: actionSize, padding: EdgeInsets.zero,
+                                iconSize: 19,
+                                onPressed: widget.onSuggest == null
+                                    ? null : () => widget.onSuggest!(work),
+                                icon: Icon(Icons.nightlight_round,
+                                  color: suggested ? gold : ivory)),
+                              IconButton(
+                                key: Key('saturn-explore-favorite-' + work.id),
+                                tooltip: favorite ? 'Retirar dos Favoritos' : 'Favoritar',
+                                constraints: actionSize, padding: EdgeInsets.zero,
+                                iconSize: 18,
+                                onPressed: widget.onToggleFavorite == null
+                                    ? null : () => widget.onToggleFavorite!(work),
+                                icon: Icon(favorite
+                                    ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                    color: const Color(0xFFF2B0C4))),
+                              IconButton(
+                                key: Key('saturn-explore-collections-' + work.id),
+                                tooltip: 'Organizar em coleções',
+                                constraints: actionSize, padding: EdgeInsets.zero,
+                                iconSize: 18,
+                                onPressed: widget.onManageCollections == null
+                                    ? null : () => widget.onManageCollections!(work),
+                                icon: const Icon(
+                                  Icons.create_new_folder_outlined, color: ivory)),
+                              IconButton(
+                                tooltip: work.kind == 'Livro'
+                                    ? 'Marcar como lido' : 'Marcar como assistido',
+                                constraints: actionSize, padding: EdgeInsets.zero,
+                                iconSize: 18,
+                                onPressed: () => widget.onToggleCompleted(work),
+                                icon: Icon(widget.isCompleted(work)
+                                    ? Icons.check_circle : Icons.check_circle_outline,
+                                    color: widget.isCompleted(work)
+                                      ? const Color(0xFF97CDB4) : ivory)),
+                            ],
+                          ),
                         ],
                       ),
                     ),
-                  )),
-                  if (widget.showZeroStarFlies?.call(work) ?? false)
-                    const Positioned.fill(child: SaturnZeroStarFlies()),
-                  Positioned(top: 5, left: 5,
-                    child: IconButton.filledTonal(
-                      tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => widget.onToggleWatchlist(work),
-                      icon: Icon(widget.isWatchlisted(work)
-                        ? Icons.bookmark_added : Icons.bookmark_add_outlined,
-                        color: ivory, size: 18))),
-                  Positioned(top: 5, right: 5,
-                    child: IconButton.filledTonal(
-                      tooltip: 'Adicionar à Nossa Órbita',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => widget.onToggleShared(work),
-                      icon: Icon(loved
-                        ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
-                        size: 18,
-                        color: loved ? const Color(0xFFF0B6C2) : ivory))),
-                  Positioned(top: 51, right: 5,
-                    child: IconButton.filledTonal(
-                      key: Key('saturn-explore-favorite-' + work.id),
-                      tooltip: widget.isFavorite?.call(work) == true
-                          ? 'Retirar dos Favoritos' : 'Favoritar',
-                      visualDensity: VisualDensity.compact,
-                      icon: Icon(widget.isFavorite?.call(work) == true
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                          size: 18, color: const Color(0xFFF2B0C4)),
-                      onPressed: widget.onToggleFavorite == null ? null
-                          : () => widget.onToggleFavorite!(work))),
-                  Positioned(top: 98, right: 5,
-                    child: IconButton.filledTonal(
-                      key: Key('saturn-explore-collections-' + work.id),
-                      tooltip: 'Organizar em coleções',
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(
-                          Icons.create_new_folder_outlined, size: 18),
-                      onPressed: widget.onManageCollections == null ? null
-                          : () => widget.onManageCollections!(work))),
-                  Positioned(bottom: 102, right: 5,
-                    child: IconButton.filledTonal(
-                      tooltip: work.kind == 'Livro'
-                        ? 'Marcar como lido' : 'Marcar como assistido',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => widget.onToggleCompleted(work),
-                      icon: Icon(widget.isCompleted(work)
-                        ? Icons.check_circle : Icons.check_circle_outline,
-                        color: widget.isCompleted(work)
-                          ? const Color(0xFF97CDB4) : ivory,
-                        size: 18))),
-                  Positioned(bottom: 114, left: 11, right: 51,
-                    child: Text(work.kind.toUpperCase(),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: ivory, letterSpacing: 1.5,
-                        fontSize: 9, fontWeight: FontWeight.w800))),
-                  Positioned(bottom: 9, left: 11, right: 10,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(height: 41,
-                          child: Align(alignment: Alignment.topLeft,
-                            child: Text(work.title,
-                              maxLines: 2, overflow: TextOverflow.ellipsis,
-                              softWrap: true,
-                              style: const TextStyle(
-                                color: ivory, fontFamily: 'serif',
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14, height: 1.17)),
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text([
-                          if (work.year > 0) work.year.toString(),
-                          if (work.kind == 'Livro' &&
-                              work.creator.isNotEmpty) work.creator
-                          else if (work.kind != 'Livro') work.provider,
-                        ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFE4CAD6), fontSize: 10)),
-                      ],
-                    ),
-                  ),
-                ]),
+                  ],
+                ),
               ),
             ),
           ),

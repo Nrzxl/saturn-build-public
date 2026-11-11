@@ -112,4 +112,57 @@ void main() {
       prefs.getString('catalog_saved')!) as Map;
     expect(works.containsKey(film.id), isTrue);
   });
+
+  testWidgets('Sugestões mostra indicações reais sem alterar Em andamento',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1000, 1080);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    const suggested = Work('tmdb:movie:90111', 'Título sugerido para nós',
+        'Filme', 'Sinopse.', 2026);
+    const ongoing = Work('tmdb:movie:90112', 'Título em andamento',
+        'Filme', 'Sinopse.', 2026);
+    SharedPreferences.setMockInitialValues({
+      'catalog_saved': jsonEncode({
+        suggested.id: suggested.toJson(),
+        ongoing.id: ongoing.toJson(),
+      }),
+      'records': jsonEncode({
+        '0:' + suggested.id: {'status': 'Em andamento'},
+        '0:' + ongoing.id: {'status': 'Em andamento'},
+      }),
+      'saturn_ritual_ops_v1': jsonEncode({
+        'suggestion:1:100': {
+          'workId': suggested.id,
+          'from': 1, 'to': 0,
+          'status': 'pending', 'updatedAt': 100,
+        },
+      }),
+    });
+    await tester.pumpWidget(const SaturnApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Coleção'));
+    await tester.pumpAndSettle();
+
+    final suggestions =
+        find.byKey(const Key('saturn-smart-collection-suggestions'));
+    expect(suggestions, findsOneWidget);
+    await tester.ensureVisible(suggestions);
+    await tester.tap(suggestions);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(Key('saturn-ranked-card-' + suggested.id)),
+        findsOneWidget);
+    expect(find.byKey(Key('saturn-ranked-card-' + ongoing.id)),
+        findsNothing);
+
+    final prefs = await SharedPreferences.getInstance();
+    final persisted = jsonDecode(prefs.getString('records')!) as Map;
+    expect((persisted['0:' + suggested.id] as Map)['status'],
+        'Em andamento');
+    expect((persisted['0:' + ongoing.id] as Map)['status'],
+        'Em andamento');
+  });
 }
