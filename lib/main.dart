@@ -3922,21 +3922,20 @@ class _SaturnHomeState extends State<SaturnHome>
                   style: const TextStyle(
                     color: ivory, fontSize: 14, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
-                for (var person = 0; person < 2; person++)
+                for (var person = 0; person < 2; person++) ...[
+                  _sharedPersonLine(
+                    profiles[person], person, work, insights),
                   if ((insights.profile(person, work.id)['notes'] ?? '')
                       .toString().trim().isNotEmpty) ...[
-                    Text(profiles[person],
-                      style: const TextStyle(
-                        color: gold, fontSize: 10,
-                        fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
                     Text(
                       '“${insights.profile(person, work.id)['notes'].toString().trim()}”',
                       maxLines: 2, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFFE6D6DF),
                         fontSize: 11, height: 1.35)),
-                    const SizedBox(height: 4),
                   ],
+                ],
               ],
             )),
           ]),
