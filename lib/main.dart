@@ -3267,22 +3267,185 @@ class _SaturnHomeState extends State<SaturnHome>
     ]);
   }
 
+  static const _automaticCollections = <(String, String, IconData)>[
+    ('favorites', 'Favoritos', Icons.favorite_rounded),
+    ('watchlist', 'Watchlist', Icons.bookmark_added_rounded),
+    ('completed', 'Concluídos', Icons.check_circle_rounded),
+    ('in-progress', 'Em andamento', Icons.timelapse_rounded),
+  ];
+
+  Widget _smartCollectionCard(String id, String name, IconData icon,
+      {Map<String, dynamic>? custom, bool all = false}) {
+    final ids = all
+        ? allWorks.where((w) => !_isArchived(w) &&
+            (entry(w)['status'] != null ||
+             _isWatchlisted(w) || _isFavorite(w))).map((w) => w.id).toList()
+        : _smartCollectionIds(id);
+    final coverWorkId = (custom?['coverWorkId'] ?? '').toString();
+    final customCoverUrl = (custom?['coverUrl'] ?? '').toString();
+    Work? cover;
+    if (coverWorkId.isNotEmpty) cover = savedWorks[coverWorkId];
+    for (final workId in ids) {
+      if (cover?.posterUrl.startsWith('https://') == true) break;
+      final work = savedWorks[workId];
+      if (work?.posterUrl.startsWith('https://') == true) {
+        cover = work;
+        break;
+      }
+    }
+    final imageUrl = SaturnSmartCollections.validCoverUrl(customCoverUrl)
+        ? customCoverUrl : (cover?.posterUrl ?? '');
+    final active = _selectedSmartCollection == id;
+    return SizedBox(
+      width: 148, height: 196,
+      child: Material(
+        color: const Color(0xFF2A2031),
+        borderRadius: BorderRadius.circular(15),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: Key('saturn-smart-collection-' + id),
+          onTap: () => setState(() {
+            _selectedSmartCollection = id;
+            _visibleGalleryCards = 42;
+            _selectedWorkIds.clear();
+            _selectingWorks = false;
+          }),
+          child: Stack(fit: StackFit.expand, children: [
+            if (imageUrl.startsWith('https://'))
+              Image.network(
+                SaturnArtwork.bestUrl(imageUrl, devicePixels: 400),
+                fit: BoxFit.cover, cacheWidth: 440,
+                errorBuilder: (_, __, ___) => const Center(
+                  child: SaturnMark(size: 47)))
+            else
+              const Center(child: SaturnMark(size: 47)),
+            const DecoratedBox(decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x220F1018), Color(0xBD1C1423),
+                    Color(0xF91B1322)],
+                stops: [0, .66, 1],
+              ),
+            )),
+            Positioned(top: 6, left: 7,
+              child: Icon(icon, size: 17,
+                color: active ? gold : ivory)),
+            if (custom != null)
+              Positioned(top: 0, right: 0,
+                child: IconButton.filledTonal(
+                  key: Key('saturn-edit-collection-' + id),
+                  tooltip: 'Editar nome ou capa',
+                  icon: const Icon(Icons.edit_rounded, size: 17),
+                  onPressed: () => _editPersonalCollection(custom))),
+            Positioned(left: 10, bottom: 10, right: 8,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'serif', fontWeight: FontWeight.bold,
+                      color: ivory, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text('${ids.length} títulos',
+                    style: const TextStyle(
+                      color: Color(0xFFE9CDBA), fontSize: 10)),
+                ],
+              ),
+            ),
+            if (active)
+              Positioned.fill(child: IgnorePointer(
+                child: DecoratedBox(decoration: BoxDecoration(
+                  border: Border.all(color: gold, width: 2.5),
+                  borderRadius: BorderRadius.circular(15),
+                )),
+              )),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _smartCollectionsOverview() {
+    final custom = _personalCollections;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(17, 11, 13, 5),
+        child: Row(children: [
+          const Expanded(child: Text('Coleções inteligentes',
+            style: TextStyle(color: ivory,
+              fontFamily: 'serif', fontSize: 19,
+              fontWeight: FontWeight.bold))),
+          TextButton.icon(
+            key: const Key('saturn-new-collection'),
+            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+            label: const Text('Criar coleção'),
+            onPressed: () async {
+              final created = await _createPersonalCollection();
+              if (mounted && created != null) {
+                setState(() => _selectedSmartCollection = created);
+              }
+            }),
+        ]),
+      ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(17, 0, 17, 11),
+        child: Text('Favoritos e Watchlist se atualizam sozinhos. '
+            'Crie suas próprias listas e escolha uma capa.',
+          style: TextStyle(color: Color(0xFFC6ACBC), fontSize: 11)),
+      ),
+      SizedBox(height: 205,
+        child: ListView.separated(
+          key: const Key('saturn-smart-collection-shelf'),
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          itemCount: 1 + _automaticCollections.length + custom.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return _smartCollectionCard('all', 'Toda minha coleção',
+                  Icons.grid_view_rounded, all: true);
+            }
+            if (index <= _automaticCollections.length) {
+              final item = _automaticCollections[index - 1];
+              return _smartCollectionCard(item.$1, item.$2, item.$3);
+            }
+            final item = custom[index - 1 - _automaticCollections.length];
+            return _smartCollectionCard(item['id'].toString(),
+                item['name'].toString(), Icons.folder_special_rounded,
+                custom: item);
+          },
+        ),
+      ),
+    ]);
+  }
+
   Widget _collection() {
-    final all = allWorks.where((w) =>
-        !_isArchived(w) &&
-        (entry(w)['status'] != null || currentWatchlist.contains(w.id)))
-        .toList();
-    final items = _filteredCollection(all, false);
+    final all = allWorks.where((w) => !_isArchived(w) &&
+        (entry(w)['status'] != null || currentWatchlist.contains(w.id) ||
+         _isFavorite(w) ||
+         _personalCollections.any((collection) =>
+           SaturnSmartCollections.contains(_collectionItemOps,
+             collection['id'].toString(), w.id)))).toList();
+    final available = {'all', for (final type in _automaticCollections) type.$1,
+        for (final row in _personalCollections) row['id'].toString()};
+    final active = available.contains(_selectedSmartCollection)
+        ? _selectedSmartCollection : 'all';
+    final view = active == 'all' ? all
+        : _smartCollectionIds(active).map((id) => savedWorks[id])
+            .whereType<Work>().where((w) => !_isArchived(w)).toList();
+    final items = _filteredCollection(view, false);
     return ListView(children: [
       _collectionHeader(false, all.length),
+      _smartCollectionsOverview(),
       _collectionFilters(false),
       _collectionSelectionToolbar(items),
       _collectionContents(items),
       if (items.isEmpty)
-        Padding(padding: const EdgeInsets.all(16),
-          child: Text(all.isEmpty
-              ? 'Sua coleção está vazia. Explore e escolha um título.'
-              : 'Nenhum título desta categoria na sua coleção.')),
+        const Padding(padding: EdgeInsets.all(16),
+          child: Text('Esta coleção está vazia. '
+              'Adicione títulos por Explorar ou Recomendações.')),
     ]);
   }
 
