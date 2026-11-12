@@ -9,6 +9,9 @@ external JSPromise<JSString> _saturnPushPermission();
 @JS('saturnPushSubscribe')
 external JSPromise<JSString> _saturnPushSubscribe(JSString publicKey);
 
+@JS('saturnPushUnsubscribe')
+external JSPromise<JSString> _saturnPushUnsubscribe();
+
 class SaturnBrowserPush {
   static String support() => _saturnPushSupport().toDart;
 
@@ -17,4 +20,7 @@ class SaturnBrowserPush {
 
   static Future<String> subscribe(String key) async =>
       (await _saturnPushSubscribe(key.toJS).toDart).toDart;
+
+  static Future<String> unsubscribe() async =>
+      (await _saturnPushUnsubscribe().toDart).toDart;
 }
