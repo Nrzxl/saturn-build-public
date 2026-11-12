@@ -81,3 +81,43 @@ self.addEventListener('fetch', event => {
     return response;
   })());
 });
+
+
+/* Web Push shares this exact service-worker scope with cover caching.
+ * It receives already-encrypted messages through the browser PushService.
+ * Never cache private notification data or Supabase responses.
+ */
+self.addEventListener('push', event => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_) { /* malformed messages get a neutral notification */ }
+  const title = String(payload.title || 'SATURN · Nossa Órbita').slice(0,90);
+  const body = String(payload.body || 'Há novidades na Nossa Órbita.').slice(0,175);
+  const base = new URL('./', self.registration.scope);
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
+    icon: new URL('icons/Icon-192.png', base).href,
+    badge: new URL('icons/Icon-192.png', base).href,
+    tag: String(payload.tag || 'saturn-notification').slice(0,260),
+    data: {url: base.href},
+    renotify: false
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const destination = self.registration.scope;
+  event.waitUntil((async () => {
+    const windows = await clients.matchAll({
+      type: 'window', includeUncontrolled: true
+    });
+    for (const view of windows) {
+      if (view.url.startsWith(destination) && 'focus' in view) {
+        await view.focus();
+        return;
+      }
+    }
+    if (clients.openWindow) await clients.openWindow(destination);
+  })());
+});
