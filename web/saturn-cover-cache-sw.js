@@ -95,14 +95,24 @@ self.addEventListener('push', event => {
   const title = String(payload.title || 'SATURN · Nossa Órbita').slice(0,90);
   const body = String(payload.body || 'Há novidades na Nossa Órbita.').slice(0,175);
   const base = new URL('./', self.registration.scope);
-  event.waitUntil(self.registration.showNotification(title, {
+  const appIcon = new URL('icons/Icon-192.png', base).href;
+  // System notifications are platform-rendered: image/icon is supported
+  // on many browsers; custom borders and animated insects are not.
+  let cover = '';
+  try {
+    const candidate = new URL(String(payload.image || ''));
+    if (saturnArtworkStore(candidate)) cover = candidate.href;
+  } catch (_) { /* missing or invalid artwork: keep the SATURN icon */ }
+  const options = {
     body,
-    icon: new URL('icons/Icon-192.png', base).href,
-    badge: new URL('icons/Icon-192.png', base).href,
+    icon: cover || appIcon,
+    badge: appIcon,
     tag: String(payload.tag || 'saturn-notification').slice(0,260),
     data: {url: base.href},
     renotify: false
-  }));
+  };
+  if (cover) options.image = cover;
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', event => {

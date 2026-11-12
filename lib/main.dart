@@ -34,6 +34,7 @@ import 'saturn_artwork.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
 import 'saturn_notification_inbox.dart';
+import 'saturn_notification_card.dart';
 import 'saturn_web_push.dart';
 import 'saturn_couple_suggestions.dart';
 import 'saturn_year_recap.dart';
@@ -438,39 +439,27 @@ class _SaturnHomeState extends State<SaturnHome>
                             '${date.month.toString().padLeft(2, '0')} '
                             '${date.hour.toString().padLeft(2, '0')}:'
                             '${date.minute.toString().padLeft(2, '0')}';
-                        final icon = switch (item.kind) {
-                          'review' => Icons.rate_review_outlined,
-                          'suggestion' => Icons.favorite_border_rounded,
-                          'series' => Icons.live_tv_outlined,
-                          'book' => Icons.auto_stories_outlined,
-                          _ => Icons.notifications_none,
-                        };
-                        return ListTile(
+                        final work = savedWorks[item.workId];
+                        final record = records['${item.actor}:${item.workId}'];
+                        final original = work == null
+                            ? '' : SaturnBookCover.resolve(
+                                work.id, work.posterUrl);
+                        final poster = original.isEmpty ? ''
+                            : SaturnArtwork.bestUrl(
+                                original, devicePixels: 330);
+                        return SaturnNoticeCard(
                           key: Key('saturn-notice-' + item.id),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 4),
-                          leading: Icon(icon, color: gold, size: 23),
-                          title: Text(item.headline,
-                              style: TextStyle(
-                                color: ivory,
-                                fontWeight: unread
-                                    ? FontWeight.w800 : FontWeight.w500,
-                                fontSize: 13)),
-                          subtitle: Text(
-                            '${profiles[item.actor]} · ${item.title}\n$when',
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: Color(0xFFCDB8C5), fontSize: 11)),
-                          trailing: unread
-                              ? const Icon(Icons.circle,
-                                  size: 9, color: gold)
-                              : const Icon(Icons.chevron_right,
-                                  color: Color(0xFF826B79)),
+                          headline: item.headline,
+                          title: item.title,
+                          author: profiles[item.actor],
+                          when: when,
+                          kind: work?.kind ?? '',
+                          posterUrl: poster,
+                          rating: record is Map ? record['rating'] : null,
+                          unread: unread,
                           onTap: () {
                             unawaited(_markNotificationsRead([item]));
                             Navigator.pop(ctx);
-                            final work = savedWorks[item.workId];
                             if (work == null) {
                               _navigateTab(3);
                             } else {
