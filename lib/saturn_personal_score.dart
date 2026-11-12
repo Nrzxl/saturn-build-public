@@ -30,7 +30,7 @@ class SaturnPersonalScore extends StatelessWidget {
         border: Border.all(color: metal.withValues(alpha: .68)),
       ),
       child: Text(
-        '$'+'{name} '+'$'+'{score.toStringAsFixed(1)} ★',
+        '${name} ${score.toStringAsFixed(1)} ★',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
