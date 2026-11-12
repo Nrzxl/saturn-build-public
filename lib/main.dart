@@ -2520,12 +2520,13 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   /// Trilhos horizontais para as sugestões e livros já entregues pelas APIs.
-  Widget _cinematicShelf(Iterable<Work> source) {
+  Widget _cinematicShelf(Iterable<Work> source, {String? shelfKey}) {
     final titles = source.take(12).toList(growable: false);
     if (titles.isEmpty) return const SizedBox.shrink();
     return SizedBox(
       height: 249,
       child: ListView.separated(
+        key: shelfKey == null ? null : Key(shelfKey),
         padding: const EdgeInsets.fromLTRB(16, 9, 16, 9),
         scrollDirection: Axis.horizontal,
         itemCount: titles.length,
@@ -2954,7 +2955,7 @@ class _SaturnHomeState extends State<SaturnHome>
               style: TextStyle(color: Color(0xFFB5A1A9)),
             ),
           ),
-        _rankedShelf(watchlistTitles,
+        _cinematicShelf(watchlistTitles,
             shelfKey: 'saturn-home-watchlist-shelf'),
         if (watchlistTitles.isNotEmpty)
           Align(
@@ -3030,7 +3031,7 @@ class _SaturnHomeState extends State<SaturnHome>
               fontSize: 12, color: Color(0xFFB5A1A9)),
           ),
         ),
-        _rankedShelf(bookshelfTitles,
+        _cinematicShelf(bookshelfTitles,
             shelfKey: 'saturn-home-bookshelf-shelf'),
         if (bookshelfTitles.isEmpty)
           const Padding(
