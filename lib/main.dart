@@ -1593,6 +1593,10 @@ class _SaturnHomeState extends State<SaturnHome>
 
   void _toggleCompleted(Work w) {
     final old = entry(w);
+    final monthlyKey = SaturnOrbitRituals.nomination(
+      SaturnOrbitRituals.monthPeriod(DateTime.now()), profile);
+    final selectedMonthly = w.kind == 'Livro' &&
+        SaturnOrbitRituals.workId(_ritualOps, monthlyKey) == w.id;
     final done = _isDone(w);
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
@@ -1613,7 +1617,11 @@ class _SaturnHomeState extends State<SaturnHome>
         };
       }
     });
-    _save();
+    final saved = _save();
+    if (selectedMonthly && !done) {
+      unawaited(saved.then((_) => SaturnWebPush.dispatch(_cloud,
+        kind: 'book', workId: w.id, key: monthlyKey, at: stamp)));
+    }
   }
 
   String _statusLabel(Work w) {
@@ -1625,7 +1633,18 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   void update(Work w, Map<String, dynamic> value) {
+    final old = entry(w);
     final stamp = DateTime.now().millisecondsSinceEpoch;
+    final note = (value['notes'] ?? '').toString().trim();
+    final rating = value['rating'];
+    final reviewChanged = rating is num && note.isNotEmpty &&
+        (old['rating'] != rating || old['notes'] != value['notes']);
+    final monthlyKey = SaturnOrbitRituals.nomination(
+      SaturnOrbitRituals.monthPeriod(DateTime.now()), profile);
+    final selectedMonthly = w.kind == 'Livro' &&
+        SaturnOrbitRituals.workId(_ritualOps, monthlyKey) == w.id &&
+        value['status'] == 'Concluído' &&
+        old['status'] != 'Concluído' && old['status'] != 'Lido';
     setState(() {
       if (!savedWorks.containsKey(w.id)) savedWorks[w.id] = w;
       _archivedFromCollection.remove('${profile}:${w.id}');
@@ -1642,7 +1661,15 @@ class _SaturnHomeState extends State<SaturnHome>
         };
       }
     });
-    _save();
+    final saved = _save();
+    if (reviewChanged) {
+      unawaited(saved.then((_) => SaturnWebPush.dispatch(_cloud,
+        kind: 'review', workId: w.id, at: stamp)));
+    }
+    if (selectedMonthly) {
+      unawaited(saved.then((_) => SaturnWebPush.dispatch(_cloud,
+        kind: 'book', workId: w.id, key: monthlyKey, at: stamp)));
+    }
   }
 
   void toggleShared(Work w) {
@@ -1684,12 +1711,15 @@ class _SaturnHomeState extends State<SaturnHome>
       return;
     }
     final stamp = DateTime.now().millisecondsSinceEpoch;
+    late final String key;
     setState(() {
       savedWorks.putIfAbsent(work.id, () => work);
-      SaturnCoupleSuggestion.send(_ritualOps,
+      key = SaturnCoupleSuggestion.send(_ritualOps,
           from: profile, workId: work.id, at: stamp);
     });
-    _save();
+    final saved = _save();
+    unawaited(saved.then((_) => SaturnWebPush.dispatch(_cloud,
+      kind: 'suggestion', workId: work.id, key: key, at: stamp)));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('Sugestão enviada para ' + profiles[1 - profile])));
   }
@@ -4350,7 +4380,12 @@ class _SaturnHomeState extends State<SaturnHome>
         };
       }
     });
-    _save();
+    final saved = _save();
+    if (!registerHerCurrent) {
+      final key = SaturnOrbitRituals.seriesPrefix + number.toString();
+      unawaited(saved.then((_) => SaturnWebPush.dispatch(_cloud,
+        kind: 'series', workId: work.id, key: key, at: stamp)));
+    }
   }
 
   void _finishSharedSeries(SaturnSeriesTurn current) {
