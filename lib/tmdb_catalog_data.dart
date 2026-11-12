@@ -126,6 +126,7 @@ class TmdbCatalogData {
     required int page,
     String? streaming,
     int? genreId,
+    int rotationSeed = 0,
     int perPage = 36,
   }) async {
     final categories = switch (filter) {
@@ -157,12 +158,18 @@ class TmdbCatalogData {
       }
       if (genreId != null) {
         final genres = record['genreIds'];
-        if (genres is! List || !genres.contains(genreId)) return false;
+        if (genres is! List ||
+            !genres.any((value) => _genreMatches(genreId, value))) {
+          return false;
+        }
       }
       if (wanted.isEmpty) return true;
-      final full = _normal(
-        '${record['title'] ?? ''} ${record['originalTitle'] ?? ''}',
-      );
+      final aliases = record['aliases'];
+      final full = _normal([
+        record['title'] ?? '',
+        record['originalTitle'] ?? '',
+        if (aliases is List) ...aliases,
+      ].join(' '));
       return full.contains(wanted);
     }).toList();
 
@@ -181,9 +188,32 @@ class TmdbCatalogData {
       });
     }
 
+    // Each fresh Explore visit starts at a different place within a stable
+    // popularity-ranked discovery window. The seed stays fixed across pages.
+    if (wanted.isEmpty && rotationSeed != 0 && selected.length > perPage) {
+      final window = selected.length < 360 ? selected.length : 360;
+      final offset = rotationSeed.abs() % window;
+      final front = [...selected.sublist(offset, window),
+        ...selected.sublist(0, offset)];
+      selected.setRange(0, window, front);
+    }
     final offset = (page.clamp(1, 500).toInt() - 1) * perPage;
     if (offset >= selected.length) return [];
     return selected.skip(offset).take(perPage).toList(growable: false);
+  }
+
+  static bool _genreMatches(int selected, Object? actual) {
+    if (actual is! num) return false;
+    final id = actual.toInt();
+    // TMDB uses different IDs for certain movie and television genres.
+    const aliases = <int, List<int>>{
+      28: [28, 10759], 12: [12, 10759],
+      14: [14, 10765], 878: [878, 10765],
+      10749: [10749, 10766],
+      10751: [10751],
+      53: [53, 10759],
+    };
+    return (aliases[selected] ?? [selected]).contains(id);
   }
 
   static String _normal(String value) {
@@ -193,6 +223,7 @@ class TmdbCatalogData {
     for (var i = 0; i < from.length; i++) {
       text = text.replaceAll(from[i], into[i]);
     }
-    return text;
+    return text.replaceAll(RegExp(r'[^a-z0-9\u0080-\uFFFF]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }
