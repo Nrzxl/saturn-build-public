@@ -410,7 +410,7 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
     await tester.tap(find.text('Explorar'));
     await tester.pumpAndSettle();
-    expect(find.text('Filtros: tipos, gêneros e streaming'), findsOneWidget);
+    expect(find.text('Filtros: tipos e streaming'), findsOneWidget);
   });
 
   testWidgets('Obra salva abre ficha com capa e streamings', (tester) async {
@@ -659,18 +659,20 @@ void main() {
     expect(find.text('79/100'), findsOneWidget);
   });
 
-  testWidgets('Catálogo apresenta filtro único e modal por tipo/gênero',
+  testWidgets('Catálogo apresenta filtros compactos e gêneros apenas no card',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const SaturnApp());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Explorar'));
     await tester.pumpAndSettle();
-    expect(find.text('Filtros: tipos, gêneros e streaming'), findsOneWidget);
-    await tester.tap(find.text('Filtros: tipos, gêneros e streaming'));
+    expect(find.text('Filtros: tipos e streaming'), findsOneWidget);
+    await tester.tap(find.text('Filtros: tipos e streaming'));
     await tester.pumpAndSettle();
     expect(find.text('TIPO DE HISTÓRIA'), findsOneWidget);
     expect(find.text('STREAMING NO BRASIL'), findsOneWidget);
+    expect(find.text('GÊNERO'), findsNothing);
+    expect(find.textContaining('Os gêneros aparecem diretamente nos cards'), findsOneWidget);
     await tester.tap(find.text('Livros').last);
     await tester.pumpAndSettle();
     expect(find.text('GÊNERO LITERÁRIO'), findsOneWidget);
