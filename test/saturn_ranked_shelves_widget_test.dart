@@ -69,11 +69,27 @@ void main() {
     expect(railWidget.scrollDirection, Axis.horizontal);
     // ListView.separated adds one separator between each of the 9 covers.
     expect(railWidget.childrenDelegate.estimatedChildCount, 17);
+    final firstHeart = find.byKey(
+      Key('saturn-recommend-favorite-${films.first.id}'));
+    final firstCollection = find.byKey(
+      Key('saturn-recommend-collections-${films.first.id}'));
+    expect(firstHeart, findsOneWidget);
+    expect(firstCollection, findsOneWidget);
+    final posterStack = find.ancestor(
+      of: firstHeart, matching: find.byType(Stack)).first;
+    expect(find.descendant(of: posterStack,
+      matching: find.byType(IconButton)), findsNWidgets(2));
+    final heart = tester.widget<IconButton>(firstHeart);
+    expect((heart.icon as Icon).shadows, isNotEmpty);
 
     final books = find.byKey(const Key('saturn-home-bookshelf-shelf'));
     await tester.scrollUntilVisible(books, 270,
       scrollable: find.byType(Scrollable).first, maxScrolls: 18);
     expect(tester.widget<ListView>(books).scrollDirection, Axis.horizontal);
+    expect(find.byKey(
+        Key('saturn-recommend-favorite-${book.id}')), findsOneWidget);
+    expect(find.byKey(
+        Key('saturn-recommend-collections-${book.id}')), findsOneWidget);
     expect(find.text('Livros • Minha estante'), findsOneWidget);
   });
 
