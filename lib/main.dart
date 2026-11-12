@@ -2973,6 +2973,16 @@ class _SaturnHomeState extends State<SaturnHome>
           ),
         _heading('Descobertas variadas · tudo'),
         _cinematicShelf(_mixedHomeDiscoveries()),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: loadingRecommendations || _loadingOtherRecommendations
+                ? null
+                : () => _loadHomeRecommendations(refreshMovies: true),
+            icon: const Icon(Icons.casino_outlined, size: 18),
+            label: const Text('Novas descobertas em todas as categorias'),
+          ),
+        ),
         _heading('Descobertas variadas · filmes'),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 18),
@@ -2999,16 +3009,6 @@ class _SaturnHomeState extends State<SaturnHome>
             child: Text('Sem sugestões no momento. Confira sua conexão.',
               style: TextStyle(color: Color(0xFFB5A1A9))),
           ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: loadingRecommendations
-                ? null
-                : () => _loadHomeRecommendations(refreshMovies: true),
-            icon: const Icon(Icons.casino_outlined, size: 18),
-            label: const Text('Novas descobertas'),
-          ),
-        ),
         ..._homeGenreRecommendations(
           heading: 'Descobertas variadas · séries',
           filter: CatalogFilter.series,
