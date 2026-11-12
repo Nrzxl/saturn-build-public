@@ -33,6 +33,9 @@ class SaturnTrailerPreview extends StatefulWidget {
         pointerEvents: PointerEvents.initial,
       );
 
+  /// A pause, buffering, or a user gesture must never dismiss the story.
+  static bool isNaturalEnd(PlayerState state) => state == PlayerState.ended;
+
   /// Browser Web/PWA: silent autoplay can start without a click when allowed.
   /// Never force an audible play; native builds retain their current behavior.
   static bool shouldAutoplay({required bool web, required bool hero}) =>
@@ -50,9 +53,6 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   bool _pendingFinish = false;
   bool _finished = false;
   int _candidateIndex = 0;
-
-  /// A pause, buffering, or a user gesture must never dismiss the story.
-  static bool isNaturalEnd(PlayerState state) => state == PlayerState.ended;
 
   static bool validVideoId(String id) =>
       RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id);
@@ -131,7 +131,8 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   /// Dismiss YouTube's end-screen and restore the cinematic story artwork
   /// after an actual ended event. The viewer may explicitly replay it.
   void _restoreStoryWhenEnded(PlayerState state) {
-    if (!isNaturalEnd(state) || _pendingFinish || _finished || !mounted) {
+    if (!SaturnTrailerPreview.isNaturalEnd(state) ||
+        _pendingFinish || _finished || !mounted) {
       return;
     }
     _pendingFinish = true;

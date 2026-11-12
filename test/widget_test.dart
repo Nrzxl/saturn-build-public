@@ -569,7 +569,7 @@ void main() {
     expect(savedLists['0'], isEmpty);
   });
 
-  testWidgets('Coleção: seleção em massa arquiva sem apagar a resenha',
+  testWidgets('Coleção não mostra seleção em massa e preserva resenhas',
       (tester) async {
     final film = Work(
       'tmdb:movie:550', 'Filme da Minha Coleção', 'Filme',
@@ -592,28 +592,16 @@ void main() {
     await scrollPersonal(tester,
       find.byKey(Key('saturn-ranked-card-' + film.id)));
     expect(find.text('Filme da Minha Coleção'), findsOneWidget);
-    await scrollPersonal(tester,
-      find.text('Selecionar vários'), step: -230);
-    await tester.tap(find.text('Selecionar vários'));
-    await tester.pumpAndSettle();
-    await scrollPersonal(tester,
-      find.byKey(Key('saturn-ranked-card-' + film.id)));
-    await tester.tap(find.byType(Checkbox).first);
-    await tester.pumpAndSettle();
-    await scrollPersonal(tester,
-      find.text('Ações em massa'), step: -230);
-    await tester.tap(find.text('Ações em massa'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Remover da minha coleção').last);
-    await tester.pumpAndSettle();
+    // Multi-selection has moved to Explorar; the collection retains filters.
+    expect(find.text('Selecionar vários'), findsNothing);
+    expect(find.byKey(const Key('saturn-collection-filter-menu')),
+      findsOneWidget);
 
     final prefs = await SharedPreferences.getInstance();
-    final archived = prefs.getStringList('saturn_archived_v1') ?? [];
-    expect(archived, contains('0:tmdb:movie:550'));
     final saved = jsonDecode(prefs.getString('records')!) as Map;
     expect((saved['0:tmdb:movie:550'] as Map)['notes'],
       'Não podemos perder este comentário!');
-    expect(find.text('Filme da Minha Coleção'), findsNothing);
+    expect(find.text('Filme da Minha Coleção'), findsOneWidget);
   });
 
   testWidgets('A outra pessoa tem nota e comentário na ficha',

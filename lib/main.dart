@@ -3225,6 +3225,8 @@ class _SaturnHomeState extends State<SaturnHome>
             child: TextButton.icon(
               onPressed: () => setState(() {
                 tab = 2;
+                _selectingWorks = false;
+                _selectedWorkIds.clear();
                 _recentTabs.remove(2);
                 _recentTabs.add(2);
                 if (_recentTabs.length > 2) _recentTabs.removeAt(0);
@@ -3308,6 +3310,8 @@ class _SaturnHomeState extends State<SaturnHome>
             child: TextButton.icon(
               onPressed: () => setState(() {
                 tab = 2;
+                _selectingWorks = false;
+                _selectedWorkIds.clear();
                 _recentTabs.remove(2);
                 _recentTabs.add(2);
                 if (_recentTabs.length > 2) _recentTabs.removeAt(0);
@@ -6866,6 +6870,9 @@ class _CatalogExploreState extends State<CatalogExplore> {
                               PopupMenuItem(
                                 value: 'shared',
                                 child: Text('Adicionar à Nossa Órbita')),
+                              PopupMenuItem(
+                                value: 'remove',
+                                child: Text('Remover da minha coleção')),
                             ],
                             child: Chip(
                               label: const Text('Ações em massa'),
@@ -6971,12 +6978,36 @@ class _CatalogExploreState extends State<CatalogExplore> {
     });
   }
 
-  void _batchSelectedCollected(String action) {
+  Future<void> _batchSelectedCollected(String action) async {
     final valid = _results.where((work) =>
         _selectedCollectedIds.contains(work.id) &&
         widget.isInAnyCollection(work)).toList(growable: false);
     if (valid.isEmpty) return;
+    // Preserve the old bulk archive capability, with explicit confirmation
+    // now that selection is in Explorar instead of Coleção.
+    if (action == 'remove') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('Remover da minha coleção?'),
+          content: Text(
+            '${valid.length} título(s) serão arquivados somente no '
+            'seu perfil. Suas notas e resenhas serão preservadas.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Cancelar')),
+            FilledButton(
+              key: const Key('saturn-explore-archive-confirm'),
+              onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Confirmar remoção')),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) return;
+    }
     widget.onBatchAction(valid, action);
+    if (!mounted) return;
     setState(() {
       _selectedCollectedIds.clear();
       _selectingCollected = false;
