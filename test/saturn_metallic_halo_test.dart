@@ -26,6 +26,22 @@ void main() {
     expect(find.text('Sem halo'), findsOneWidget);
     expect(find.byType(AnimatedContainer), findsNothing);
   });
+  testWidgets('Mutual zero intensifies bronze without changing tier',
+      (tester) async {
+    const bronze = Color(0xFFC38A62);
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(
+      body: SaturnMetallicHalo(color: bronze, partnerColor: bronze,
+        intenseBronze: true, child: Text('Zero em dobro')),
+    )));
+    final halo = tester.widget<SaturnMetallicHalo>(
+        find.byType(SaturnMetallicHalo));
+    expect(halo.intenseBronze, isTrue);
+    final shell = tester.widget<AnimatedContainer>(
+        find.byType(AnimatedContainer).first);
+    expect((shell.padding! as EdgeInsets).left, greaterThan(3));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('Shared halo combines two real tiers and glows on a match',
       (tester) async {
     const gold = Color(0xFFE3BF70);
