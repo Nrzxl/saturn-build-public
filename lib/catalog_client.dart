@@ -374,7 +374,7 @@ class CatalogClient {
       final found = await _snapshot(
         filter: filter, query: query, page: p,
         streaming: streaming, genreId: genreId);
-      if (found.isNotEmpty || streaming != null || genreId != null) {
+      if (found.isNotEmpty || streaming != null) {
         if (filter == CatalogFilter.all && streaming == null && genreId == null) {
           try {
             final books = await _books(query, page: p,
@@ -388,7 +388,7 @@ class CatalogClient {
       }
     } catch (_) {
       // Older catalogs remain usable while the public TMDB feed is absent.
-      if (streaming != null || genreId != null) return [];
+      if (streaming != null) return [];
     }
     final requests = <Future<List<CatalogEntry>>>[];
     final errors = <String>[];
@@ -419,7 +419,8 @@ class CatalogClient {
     if (filter == CatalogFilter.all || filter == CatalogFilter.anime) {
       requests.add(safe('animes', () => _anime(query: query, page: p)));
     }
-    if (filter == CatalogFilter.all || filter == CatalogFilter.books) {
+    if (filter == CatalogFilter.books ||
+        (filter == CatalogFilter.all && genreId == null)) {
       // An explicit author/title search must not be constrained by a
       // previously selected discovery subject (e.g. Agatha Christie while
       // Literatura brasileira was active).
@@ -439,7 +440,10 @@ class CatalogClient {
       throw StateError('Não foi possível consultar ${errors.join(', ')}. Tente novamente.');
     }
     return filter == CatalogFilter.books
-        ? _prioritizePortuguese(works) : works;
+        ? _prioritizePortuguese(works)
+        : genreId == null ? works
+        : works.where((work) => work.genreIds.contains(genreId))
+            .toList(growable: false);
   }
 
   /// Descoberta por categorias: carregamento real a partir de serviços
@@ -461,7 +465,7 @@ class CatalogClient {
         filter: filter, query: '', page: p,
         streaming: streaming, genreId: genreId,
         rotationSeed: rotationSeed);
-      if (found.isNotEmpty || streaming != null || genreId != null) {
+      if (found.isNotEmpty || streaming != null) {
         if (filter == CatalogFilter.all && streaming == null && genreId == null) {
           try {
             return _unique([
@@ -475,7 +479,7 @@ class CatalogClient {
         return found;
       }
     } catch (_) {
-      if (streaming != null || genreId != null) return [];
+      if (streaming != null) return [];
     }
     final requests = <Future<List<CatalogEntry>>>[];
     final errors = <String>[];
@@ -504,7 +508,8 @@ class CatalogClient {
     if (filter == CatalogFilter.all || filter == CatalogFilter.anime) {
       requests.add(safe('animes', () => _anime(page: sourcePage)));
     }
-    if (filter == CatalogFilter.all || filter == CatalogFilter.books) {
+    if (filter == CatalogFilter.books ||
+        (filter == CatalogFilter.all && genreId == null)) {
       requests.add(safe('livros',
           () => _discoverBooks(sourcePage, subject: bookSubject)));
       if (filter == CatalogFilter.books) {
@@ -520,7 +525,10 @@ class CatalogClient {
       throw StateError('Sem acesso aos catálogos (${errors.join(', ')}). Verifique a rede.');
     }
     return filter == CatalogFilter.books
-        ? _prioritizePortuguese(works) : works;
+        ? _prioritizePortuguese(works)
+        : genreId == null ? works
+        : works.where((work) => work.genreIds.contains(genreId))
+            .toList(growable: false);
   }
 
   static List<CatalogEntry> _prioritizePortuguese(
@@ -672,10 +680,39 @@ class CatalogClient {
         posterUrl: art,
         creator: (raw['artistName'] ?? '').toString(),
         provider: 'Apple TV Store',
+        genreIds: _genreIdsFromNames(raw['primaryGenreName']),
+        runtimeMinutes: raw['trackTimeMillis'] is num &&
+            (raw['trackTimeMillis'] as num) > 0
+            ? ((raw['trackTimeMillis'] as num).toDouble() / 60000).round()
+            : null,
         detailUrl: (raw['trackViewUrl'] ?? '').toString(),
       ));
     }
     return items;
+  }
+
+  /// Verified genres from fallback providers, mapped to the same IDs as
+  /// the SATURN filter UI. No title guessing or invented classifications.
+  static List<int> _genreIdsFromNames(Object? raw) {
+    final names = raw is List ? raw : [raw];
+    const mapping = <String, List<int>>{
+      'action': [28], 'action & adventure': [28, 12],
+      'adventure': [12], 'animation': [16], 'anime': [16],
+      'comedy': [35], 'crime': [80], 'documentary': [99],
+      'drama': [18], 'family': [10751], 'kids & family': [10751],
+      'fantasy': [14], 'horror': [27], 'mystery': [9648],
+      'romance': [10749], 'romantic comedy': [10749, 35],
+      'science fiction': [878], 'sci-fi': [878],
+      'sci-fi & fantasy': [878, 14], 'thriller': [53],
+      'suspense': [53], 'war': [10752],
+    };
+    final ids = <int>{};
+    for (final name in names) {
+      if (name is! String) continue;
+      final lower = name.trim().toLowerCase();
+      ids.addAll(mapping[lower] ?? const <int>[]);
+    }
+    return ids.toList(growable: false);
   }
 
   static const _dramaLanguages = <String>{
@@ -761,6 +798,7 @@ class CatalogClient {
             image is Map ? (image['original'] ?? image['medium'] ?? '').toString() : '',
         creator: network is Map ? (network['name'] ?? '').toString() : '',
         provider: 'TVmaze',
+        genreIds: _genreIdsFromNames(raw['genres']),
         detailUrl: (raw['url'] ?? '').toString(),
         streamingLinks: extractOfficialTitleLinks([
           {'url': (raw['officialSite'] ?? '').toString()},
@@ -1264,6 +1302,7 @@ class CatalogClient {
       startDate { year }
       coverImage { large extraLarge }
       siteUrl
+      genres
       externalLinks { site url }
     ''';
 
@@ -1311,6 +1350,7 @@ class CatalogClient {
             ? (cover['extraLarge'] ?? cover['large'] ?? '').toString() : '',
         creator: '',
         provider: 'AniList',
+        genreIds: _genreIdsFromNames(raw['genres']),
         detailUrl: (raw['siteUrl'] ?? '').toString(),
         streamingLinks: extractOfficialTitleLinks(raw['externalLinks']),
       ));
