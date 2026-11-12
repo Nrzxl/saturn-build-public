@@ -6266,6 +6266,13 @@ class _CatalogExploreState extends State<CatalogExplore> {
     80: 'Crime', 99: 'Documentário', 18: 'Drama', 10751: 'Família',
     14: 'Fantasia', 27: 'Terror', 9648: 'Mistério',
     10749: 'Romance', 878: 'Ficção científica', 53: 'Suspense',
+    36: 'História', 37: 'Faroeste', 10402: 'Música',
+    10752: 'Guerra',
+    // TMDB television genres: available for series, dramas and animes.
+    10759: 'Ação e aventura', 10762: 'Infantil',
+    10764: 'Reality', 10765: 'Ficção e fantasia',
+    10766: 'Novela', 10767: 'Talk show',
+    10768: 'Guerra e política',
   };
 
   Future<void> _openFilters() async {
