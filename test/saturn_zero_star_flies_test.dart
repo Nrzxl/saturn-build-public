@@ -29,6 +29,19 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('Mutual zero gets a denser pointer-transparent swarm',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(
+      body: SizedBox(width: 155, height: 205,
+        child: SaturnZeroStarFlies(dense: true)),
+    )));
+    final flies = tester.widget<SaturnZeroStarFlies>(
+        find.byType(SaturnZeroStarFlies));
+    expect(flies.dense, isTrue);
+    expect(find.byType(CustomPaint), findsWidgets);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('Reduced-motion disables the animated insects',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(
