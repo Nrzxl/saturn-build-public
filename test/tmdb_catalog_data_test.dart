@@ -307,7 +307,9 @@ void main() {
           'type': 'Scripted',
           'genres': ['Comedy'],
           'premiered': '2024-03-12',
-        }]), 200);
+        }]), 200, headers: const {
+          'content-type': 'application/json; charset=utf-8',
+        });
       }
       return http.Response('No TMDB feed', 404);
     });
