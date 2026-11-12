@@ -431,29 +431,6 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
-  Widget _mobileSyncShortcut(String section) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 9, 16, 4),
-    child: OutlinedButton.icon(
-      key: Key('saturn-' + section + '-sync-shortcut'),
-      onPressed: _showOrbitSync,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(double.infinity, 52),
-        alignment: Alignment.centerLeft,
-        side: const BorderSide(color: Color(0x997C6070)),
-        foregroundColor: gold,
-        backgroundColor: const Color(0xFF302334),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15)),
-      ),
-      icon: Icon(_cloud?.connected == true
-          ? Icons.cloud_done_outlined : Icons.cloud_sync_outlined),
-      label: Text(_cloud?.connected == true
-          ? 'Sincronização e atualizações · Nossa Órbita'
-          : 'Conectar, sincronizar e atualizar SATURN',
-        maxLines: 1, overflow: TextOverflow.ellipsis),
-    ),
-  );
-
   Map<String, dynamic> records = {};
   final Map<int, Set<String>> _noticeRead = {0: <String>{}, 1: <String>{}};
   final Map<int, int> _noticeBaseline = {0: 0, 1: 0};
@@ -528,6 +505,7 @@ class _SaturnHomeState extends State<SaturnHome>
   String _collectionKind = 'Tudo';
   String _sharedKind = 'Tudo';
   String _sharedMoment = 'Todas';
+  bool _orbitMemoriesExpanded = false;
   String _partnerShelfView = 'Watchlist';
   static const _collectionTypes = <String, String>{
     'Tudo': '', 'Filmes': 'Filme', 'Séries': 'Série',
@@ -1699,6 +1677,7 @@ class _SaturnHomeState extends State<SaturnHome>
 
   Widget _coupleSuggestionsCard() {
     final suggestions = SaturnCoupleSuggestion.visible(_ritualOps)
+        .where((item) => item.status == 'pending')
         .take(12).toList(growable: false);
     return Container(
       key: const Key('saturn-couple-suggestions'),
@@ -2689,19 +2668,7 @@ class _SaturnHomeState extends State<SaturnHome>
                             fontSize: 12, height: 1.35),
                         ),
                         const SizedBox(height: 18),
-                        Wrap(spacing: 8, runSpacing: 8, children: [
-                          FilledButton.icon(
-                            onPressed: () => _navigateTab(1),
-                            icon: const Icon(Icons.explore_outlined, size: 18),
-                            label: const Text('Descobrir histórias'),
-                          ),
-                          if (featured != null)
-                            OutlinedButton.icon(
-                              onPressed: () => _details(featured),
-                              icon: const Icon(Icons.info_outline, size: 18),
-                              label: const Text('Ver detalhes'),
-                            ),
-                        ]),
+
                       ],
                     ),
                   ),
@@ -3091,10 +3058,6 @@ class _SaturnHomeState extends State<SaturnHome>
   ];
 
   Widget _start() {
-    final continuing = allWorks.where(
-      (work) => !_isArchived(work) &&
-          entry(work)['status'] == 'Em andamento',
-    ).toList();
     final watchlistTitles = allWorks.where((work) =>
       !_isArchived(work) && work.kind != 'Livro' &&
       currentWatchlist.contains(work.id)).toList(growable: false);
@@ -3108,8 +3071,6 @@ class _SaturnHomeState extends State<SaturnHome>
     ).length;
     return ListView(
       children: [
-        if (MediaQuery.sizeOf(context).width < 1000)
-          _mobileSyncShortcut('home'),
         _cinematicHero(ownCount),
         _heading('Minha Watchlist'),
         _collectionSelectionToolbar(
@@ -3255,31 +3216,6 @@ class _SaturnHomeState extends State<SaturnHome>
             onPressed: () => _openCatalogFilter(CatalogFilter.books),
             icon: const Icon(Icons.menu_book_outlined, size: 18),
             label: const Text('Explorar livros'),
-          ),
-        ),
-        _heading('Continuar de onde parou'),
-        if (continuing.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 18, vertical: 5),
-            child: Text('Comece uma leitura ou série e marque como Em andamento.',
-              style: TextStyle(color: Color(0xFFB5A1A9))),
-          ),
-        ...continuing.map(_tile),
-        _heading('Nossa órbita ♡'),
-        if (shared.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 18, vertical: 5),
-            child: Text('Suas histórias favoritas a dois aparecerão aqui.',
-              style: TextStyle(color: Color(0xFFB5A1A9))),
-          ),
-        ...allWorks.where((work) => shared.contains(work.id)).take(3).map(_tile),
-        _heading('Descubra novas histórias'),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
-          child: TextButton.icon(
-            onPressed: () => _navigateTab(1),
-            icon: const Icon(Icons.explore_outlined),
-            label: const Text('Abrir o catálogo com capas reais'),
           ),
         ),
         const SizedBox(height: 30),
@@ -3918,37 +3854,10 @@ class _SaturnHomeState extends State<SaturnHome>
         Wrap(spacing: 8, runSpacing: 8, children: [
           _orbitMetric('histórias', insights.ids.length,
             Icons.auto_stories_outlined),
-          _orbitMetric('vividas pelos dois', insights.completedTogether,
-            Icons.check_circle_outline_rounded),
-          _orbitMetric('em andamento', insights.inProgress,
-            Icons.timelapse_rounded),
           _orbitMetric('com memórias', insights.memories,
             Icons.favorite_border_rounded),
         ]),
-        const SizedBox(height: 16),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          FilledButton.icon(
-            onPressed: () => _navigateTab(1),
-            icon: const Icon(Icons.explore_outlined, size: 18),
-            label: const Text('Descobrir juntos')),
-          OutlinedButton.icon(
-            onPressed: _showOrbitSync,
-            icon: Icon(_cloud?.connected == true
-                ? Icons.cloud_done_outlined
-                : Icons.cloud_off_outlined, size: 18),
-            label: Text(_cloud?.connected == true
-                ? 'Órbita conectada' : 'Sincronização'),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        Text(
-          _cloud?.connected == true
-              ? 'Perfis conectados à Nossa Órbita.'
-              : 'Estas memórias estão neste aparelho. Para aparecerem no '
-                'outro celular, a sincronização precisa ser configurada.',
-          style: const TextStyle(
-            color: Color(0xFFDAC6CF), fontSize: 11, height: 1.35),
-        ),
+
       ]),
     );
   }
@@ -5177,13 +5086,22 @@ class _SaturnHomeState extends State<SaturnHome>
     ).lastOrNull ?? items.lastOrNull;
     final memories = items.where(
       (work) => insights.hasMemory(work.id),
-    ).take(3).toList(growable: false);
+    ).toList(growable: false)
+      ..sort((a, b) {
+        int mostRecent(Work work) {
+          var latest = 0;
+          for (var person = 0; person < 2; person++) {
+            final at = insights.profile(person, work.id)['updatedAt'];
+            if (at is num && at.toInt() > latest) latest = at.toInt();
+          }
+          return latest;
+        }
+        return mostRecent(b).compareTo(mostRecent(a));
+      });
     return CustomScrollView(
       key: const PageStorageKey('saturn_shared_orbit'),
       slivers: [
         SliverList(delegate: SliverChildListDelegate([
-        if (MediaQuery.sizeOf(context).width < 1000)
-          _mobileSyncShortcut('couple'),
         _sharedUniverseHero(insights),
         _sharedCoverWall(),
         _coupleSuggestionsCard(),
@@ -5209,7 +5127,21 @@ class _SaturnHomeState extends State<SaturnHome>
           _sharedFeatured(featured, insights),
         if (memories.isNotEmpty) ...[
           _heading('Memórias da nossa órbita'),
-          ...memories.map((work) => _sharedMemoryCard(work, insights)),
+          ...(_orbitMemoriesExpanded ? memories : memories.take(1))
+              .map((work) => _sharedMemoryCard(work, insights)),
+          if (memories.length > 1)
+            Align(alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const Key('saturn-orbit-memories-expand'),
+                onPressed: () => setState(() =>
+                    _orbitMemoriesExpanded = !_orbitMemoriesExpanded),
+                icon: Icon(_orbitMemoriesExpanded
+                  ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+                label: Text(_orbitMemoriesExpanded
+                  ? 'Recolher memórias'
+                  : 'Ver mais ${memories.length - 1} memórias'),
+              ),
+            ),
         ],
         _heading('Nossa biblioteca'),
         _collectionSelectionToolbar(items,
@@ -5666,23 +5598,20 @@ class _SaturnHomeState extends State<SaturnHome>
                         color: Color(0xFFD3BFC7), fontSize: 12)),
                   ),
                 const SizedBox(height: 19),
-                if (w.kind == 'Filme' || w.kind == 'Livro') ...[
+                if (w.kind == 'Livro') ...[
                   const Text('NOSSA ÓRBITA · INDICAÇÕES',
                     style: TextStyle(color: gold, fontSize: 11,
                       letterSpacing: 1.5)),
                   const SizedBox(height: 7),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      final period = w.kind == 'Livro'
-                          ? SaturnOrbitRituals.monthPeriod(DateTime.now())
-                          : SaturnOrbitRituals.weekendPeriod(DateTime.now());
+                      final period =
+                          SaturnOrbitRituals.monthPeriod(DateTime.now());
                       await _setRitualNomination(period, profile, w);
                       if (ctx.mounted) refresh(() {});
                     },
                     icon: const Icon(Icons.favorite_border_rounded),
-                    label: Text(w.kind == 'Livro'
-                        ? 'Escolher como meu livro do mês'
-                        : 'Indicar como meu filme do fim de semana'),
+                    label: const Text('Escolher como meu livro do mês'),
                   ),
                   const SizedBox(height: 16),
                 ],
