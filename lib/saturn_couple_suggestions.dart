@@ -89,7 +89,7 @@ class SaturnCoupleSuggestion {
     }
     ops[key] = {
       'from': from, 'to': to, 'workId': workId,
-      'status': 'pending', 'updatedAt': at,
+      'status': 'pending', 'createdAt': at, 'updatedAt': at,
     };
     return key;
   }
