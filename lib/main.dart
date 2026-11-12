@@ -2859,6 +2859,29 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
+  /// All is interleaved from the four independently rotated real feeds.
+  /// No fifth network request, title fabrication or duplicate is required.
+  List<Work> _mixedHomeDiscoveries() {
+    final groups = <List<Work>>[
+      recommendedMovies, recommendedSeries, recommendedAnime, recommendedBooks,
+    ];
+    final start = (_homeDiscoverySeed ~/ 73) % groups.length;
+    final result = <Work>[];
+    final seen = <String>{};
+    for (var depth = 0; depth < 24 && result.length < 24; depth++) {
+      for (var shift = 0; shift < groups.length; shift++) {
+        final items = groups[(start + shift) % groups.length];
+        if (depth >= items.length) continue;
+        final work = items[depth];
+        if (!_isDone(work) && !currentWatchlist.contains(work.id) &&
+            seen.add(work.id)) {
+          result.add(work);
+        }
+      }
+    }
+    return result;
+  }
+
   List<Widget> _homeGenreRecommendations({
     required String heading, required CatalogFilter filter,
     required List<Work> titles, required String emptyText,
@@ -2948,6 +2971,8 @@ class _SaturnHomeState extends State<SaturnHome>
               label: const Text('Ver todas as capas'),
             ),
           ),
+        _heading('Descobertas variadas · tudo'),
+        _cinematicShelf(_mixedHomeDiscoveries()),
         _heading('Descobertas variadas · filmes'),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 18),
