@@ -70,6 +70,8 @@ class Work {
   final Map<String, String> externalRatings;
   final double? tmdbScore;
   final int? tmdbVoteCount;
+  final int? runtimeMinutes;
+  final int? seasonCount;
   final String watchUrl;
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
@@ -89,6 +91,7 @@ class Work {
        this.imdbId = '',
        this.genreIds = const [], this.externalRatings = const {},
        this.tmdbScore, this.tmdbVoteCount,
+       this.runtimeMinutes, this.seasonCount,
        this.availabilityUpdatedAt = '',
        this.availabilityChecked = false});
 
@@ -104,6 +107,8 @@ class Work {
         externalRatings: entry.externalRatings,
         tmdbScore: entry.tmdbScore,
         tmdbVoteCount: entry.tmdbVoteCount,
+        runtimeMinutes: entry.runtimeMinutes,
+        seasonCount: entry.seasonCount,
         watchUrl: entry.watchUrl,
         trailerYoutubeId: entry.trailerYoutubeId,
         nativeTrailerUrl: entry.nativeTrailerUrl,
@@ -144,6 +149,10 @@ class Work {
             ? (data['tmdbScore'] as num).toDouble() : null,
         tmdbVoteCount: data['tmdbVoteCount'] is num
             ? (data['tmdbVoteCount'] as num).toInt() : null,
+        runtimeMinutes: data['runtimeMinutes'] is num
+            ? (data['runtimeMinutes'] as num).toInt() : null,
+        seasonCount: data['seasonCount'] is num
+            ? (data['seasonCount'] as num).toInt() : null,
         watchProviders: data['watchProviders'] is List
             ? (data['watchProviders'] as List).map(
                 (value) => value.toString()).toList(growable: false)
@@ -171,6 +180,8 @@ class Work {
         'externalRatings': externalRatings,
         'tmdbScore': tmdbScore,
         'tmdbVoteCount': tmdbVoteCount,
+        'runtimeMinutes': runtimeMinutes,
+        'seasonCount': seasonCount,
         'watchProviders': watchProviders,
         'watchUrl': watchUrl,
         'trailerYoutubeId': trailerYoutubeId,
@@ -2664,35 +2675,15 @@ class _SaturnHomeState extends State<SaturnHome>
       required String tooltip,
       required IconData icon,
       required VoidCallback onPressed,
-    }) => Expanded(child: Container(
-      margin: const EdgeInsets.symmetric(horizontal: 3),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: bothMetallic ? null
-            : (actionMetal ?? gold).withValues(alpha: .13),
-        gradient: bothMetallic
-            ? LinearGradient(
-                colors: [
-                  firstTier.color.withValues(alpha: .22),
-                  secondTier.color.withValues(alpha: .22),
-                ],
-                stops: const [0, 1],
-              )
-            : null,
-        border: Border.all(
-          color: (actionMetal ?? const Color(0xFF796075))
-              .withValues(alpha: .63)),
-      ),
-      child: IconButton(
-        key: key,
-        tooltip: tooltip,
-        visualDensity: VisualDensity.compact,
-        constraints: const BoxConstraints(minHeight: 34, minWidth: 32),
-        padding: EdgeInsets.zero,
-        iconSize: 20,
-        onPressed: onPressed,
-        icon: Icon(icon, color: actionMetal ?? ivory),
-      ),
+    }) => Expanded(child: IconButton(
+      key: key,
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minHeight: 34, minWidth: 32),
+      padding: EdgeInsets.zero,
+      iconSize: 22,
+      onPressed: onPressed,
+      icon: Icon(icon, color: actionMetal ?? ivory),
     ));
     return SaturnHoverLift(
       child: AnimatedContainer(
@@ -2734,7 +2725,7 @@ class _SaturnHomeState extends State<SaturnHome>
                     const Positioned.fill(child: SaturnZeroStarFlies()),
                   if (compact && !_selectingWorks) ...[
                     Positioned(top: 2, left: 2,
-                      child: IconButton.filledTonal(
+                      child: IconButton(
                         key: Key('saturn-ranked-favorite-' + work.id),
                         tooltip: _isFavorite(work)
                             ? 'Retirar dos Favoritos' : 'Favoritar',
@@ -2744,7 +2735,7 @@ class _SaturnHomeState extends State<SaturnHome>
                           color: const Color(0xFFF2B0C4), size: 17),
                         onPressed: () => _toggleFavorite(work))),
                     Positioned(top: 2, right: 2,
-                      child: IconButton.filledTonal(
+                      child: IconButton(
                         key: Key('saturn-ranked-collections-' + work.id),
                         tooltip: 'Organizar em coleções',
                         icon: const Icon(
@@ -6099,6 +6090,9 @@ class CatalogExplore extends StatefulWidget {
 
 class _CatalogExploreState extends State<CatalogExplore> {
   final _query = TextEditingController();
+  final _scrollController = ScrollController();
+  Timer? _searchDebounce;
+  int _discoverySeed = DateTime.now().microsecondsSinceEpoch;
   final _catalog = CatalogClient();
   late CatalogFilter _filter = widget.requestedFilter;
   StreamingService? _streamingFilter;
@@ -6116,9 +6110,29 @@ class _CatalogExploreState extends State<CatalogExplore> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_checkInfiniteScroll);
     if (widget.active) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
     }
+  }
+
+  void _checkInfiniteScroll() {
+    if (!widget.active || !_scrollController.hasClients ||
+        _loading || _loadingMore || !_loaded || !_hasMore ||
+        _results.isEmpty || _error != null) return;
+    if (_scrollController.position.extentAfter < 850) {
+      _load(more: true);
+    }
+  }
+
+  void _onQueryChanged(String value) {
+    _searchDebounce?.cancel();
+    if (value.trim().isNotEmpty && value.trim().length < 2) return;
+    _searchDebounce = Timer(const Duration(milliseconds: 340), () {
+      if (mounted) _search();
+    });
   }
 
   @override
@@ -6127,14 +6141,19 @@ class _CatalogExploreState extends State<CatalogExplore> {
     if (widget.requestedFilter != oldWidget.requestedFilter) {
       _selectFilter(widget.requestedFilter);
     }
-    if (widget.active && !oldWidget.active && !_loaded && !_loading) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    if (widget.active && !oldWidget.active) {
+      _discoverySeed += 73;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.active) _search();
+      });
     }
   }
 
   @override
   void dispose() {
     _request++;
+    _searchDebounce?.cancel();
+    _scrollController.dispose();
     _query.dispose();
     _catalog.close();
     super.dispose();
@@ -6166,12 +6185,13 @@ class _CatalogExploreState extends State<CatalogExplore> {
                   ? _bookSubject : null)
           : await _catalog.discover(_filter,
               page: page, streaming: _streamingFilter?.name,
-              genreId: _genreId,
+              genreId: _genreId, rotationSeed: _discoverySeed,
               bookSubject: _filter == CatalogFilter.books
                   ? _bookSubject : null);
       if (!mounted || request != _request) return;
       final converted = entries.map(Work.fromCatalog);
       setState(() {
+        final beforeCount = _results.length;
         if (more) {
           final existing = {for (final work in _results) work.id: work};
           for (final work in converted) {
@@ -6182,10 +6202,16 @@ class _CatalogExploreState extends State<CatalogExplore> {
           _results = converted.toList(growable: false);
         }
         _page = page;
-        _hasMore = entries.isNotEmpty && page < 150;
+        _hasMore = entries.isNotEmpty && page < 150 &&
+            (!more || _results.length > beforeCount);
         _loading = false;
         _loadingMore = false;
       });
+      if (_hasMore) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _checkInfiniteScroll();
+        });
+      }
     } catch (_) {
       if (!mounted || request != _request) return;
       setState(() {
@@ -6201,7 +6227,10 @@ class _CatalogExploreState extends State<CatalogExplore> {
     if (_filter == next) return;
     setState(() {
       _filter = next;
-      if (next == CatalogFilter.books) _streamingFilter = null;
+      if (next == CatalogFilter.books) {
+        _streamingFilter = null;
+        _genreId = null;
+      }
     });
     _request++;
     _loading = false;
@@ -6378,6 +6407,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
   }
 
   void _search() {
+    _searchDebounce?.cancel();
     // Subject chips are discovery presets, not permanent constraints on
     // explicit author/title searches. The filter must not silently exclude
     // Agatha Christie after browsing Brazilian literature.
@@ -6407,6 +6437,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
       // Cards com largura adequada tanto no iPhone quanto no desktop.
       final columns = (width / 205).floor().clamp(2, 8).toInt();
       return CustomScrollView(
+        controller: _scrollController,
         key: const PageStorageKey('saturn_catalog_grid'),
         slivers: [
           SliverPadding(
@@ -6457,6 +6488,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                   TextField(
                     controller: _query,
                     textInputAction: TextInputAction.search,
+                    onChanged: _onQueryChanged,
                     onSubmitted: (_) => _search(),
                     decoration: InputDecoration(
                       hintText: _filter == CatalogFilter.books
@@ -6602,16 +6634,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
                   padding: EdgeInsets.all(18),
                   child: CircularProgressIndicator(color: gold),
                 ),
-              if (_hasMore && !_loading && !_loadingMore &&
-                  _results.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: OutlinedButton.icon(
-                    onPressed: () => _load(more: true),
-                    icon: const Icon(Icons.expand_more),
-                    label: const Text('Carregar mais títulos'),
-                  ),
-                ),
+              // Infinite scrolling fetches the next page near the footer.
+              // No manual loading button is needed.
               if (_error != null)
                 TextButton.icon(
                   onPressed: _search,
@@ -6645,8 +6669,6 @@ class _CatalogExploreState extends State<CatalogExplore> {
   /// One continuous illustration surface, with an integrated soft-bottom
   /// gradient instead of two separate layers with a visible horizontal seam.
   Widget _coverCard(Work work) {
-    final loved = widget.isShared(work);
-    final suggested = widget.isSuggested?.call(work) == true;
     final favorite = widget.isFavorite?.call(work) == true;
     final artUrl = SaturnArtwork.bestUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl), devicePixels: 540);
@@ -6681,6 +6703,18 @@ class _CatalogExploreState extends State<CatalogExplore> {
                       PosterThumbnail(work: work, width: double.infinity,
                         height: double.infinity, fit: BoxFit.cover,
                         alignment: Alignment.topCenter),
+                      Positioned(
+                        left: 0, right: 0, bottom: 0,
+                        height: 76,
+                        child: IgnorePointer(child: DecoratedBox(
+                          decoration: BoxDecoration(gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent,
+                              tone.withValues(alpha: .94)],
+                          )),
+                        )),
+                      ),
                       if (widget.showZeroStarFlies?.call(work) ?? false)
                         const Positioned.fill(child: SaturnZeroStarFlies()),
                     ])),
@@ -6690,7 +6724,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [tone.withValues(alpha: .53), base],
+                          colors: [tone.withValues(alpha: .94), base],
                         ),
                       ),
                       child: Column(
@@ -6717,41 +6751,46 @@ class _CatalogExploreState extends State<CatalogExplore> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFFE4CAD6), fontSize: 10)),
+                          if (work.runtimeMinutes != null &&
+                              work.runtimeMinutes! > 0 &&
+                              work.kind == 'Filme')
+                            Text('${work.runtimeMinutes} min',
+                              style: const TextStyle(
+                                fontSize: 10, color: Color(0xFFE4CAD6))),
+                          if (work.seasonCount != null &&
+                              work.seasonCount! > 0 &&
+                              (work.kind == 'Série' || work.kind == 'Dorama' ||
+                               work.kind == 'Anime'))
+                            Text('${work.seasonCount} '
+                                '${work.seasonCount == 1 ? 'temporada' : 'temporadas'}',
+                              style: const TextStyle(
+                                fontSize: 10, color: Color(0xFFE4CAD6))),
+                          if (work.tmdbScore != null &&
+                              work.id.startsWith('tmdb:'))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(children: [
+                                for (var i = 0; i < 10; i++)
+                                  Icon(work.tmdbScore! >= i + 1
+                                      ? Icons.star_rounded
+                                      : work.tmdbScore! > i
+                                        ? Icons.star_half_rounded
+                                        : Icons.star_outline_rounded,
+                                    size: 11, color: gold),
+                                const SizedBox(width: 3),
+                                Flexible(child: Text(
+                                  '${work.tmdbScore!.toStringAsFixed(1)}/10',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 10, color: ivory))),
+                              ]),
+                            ),
                           const SizedBox(height: 6),
                           Wrap(
                             alignment: WrapAlignment.center,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             spacing: 1, runSpacing: 0,
                             children: [
-                              IconButton(
-                                tooltip: work.kind == 'Livro' ? 'Quero ler' : 'Watchlist',
-                                constraints: actionSize, padding: EdgeInsets.zero,
-                                iconSize: 18,
-                                onPressed: () => widget.onToggleWatchlist(work),
-                                icon: Icon(widget.isWatchlisted(work)
-                                    ? Icons.bookmark_added : Icons.bookmark_add_outlined,
-                                    color: gold)),
-                              IconButton(
-                                key: Key('saturn-explore-shared-' + work.id),
-                                tooltip: loved ? 'Remover da Nossa Órbita'
-                                    : 'Adicionar à Nossa Órbita',
-                                constraints: actionSize, padding: EdgeInsets.zero,
-                                style: IconButton.styleFrom(
-                                  backgroundColor: loved
-                                      ? const Color(0x805E394F)
-                                      : Colors.transparent),
-                                onPressed: () => widget.onToggleShared(work),
-                                icon: const SaturnMark(size: 19)),
-                              IconButton(
-                                key: Key('saturn-explore-suggest-' + work.id),
-                                tooltip: suggested ? 'Sugestão já enviada'
-                                    : 'Sugerir para a outra pessoa',
-                                constraints: actionSize, padding: EdgeInsets.zero,
-                                iconSize: 19,
-                                onPressed: widget.onSuggest == null
-                                    ? null : () => widget.onSuggest!(work),
-                                icon: Icon(Icons.nightlight_round,
-                                  color: suggested ? gold : ivory)),
                               IconButton(
                                 key: Key('saturn-explore-favorite-' + work.id),
                                 tooltip: favorite ? 'Retirar dos Favoritos' : 'Favoritar',
