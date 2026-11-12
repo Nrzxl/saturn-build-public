@@ -164,6 +164,71 @@ void main() {
     expect(restored.externalRatings, work.externalRatings);
   });
 
+  test('TMDB genre filter works across categories, pages and TV aliases',
+      () async {
+    final requests = <String>[];
+    final fake = MockClient((request) async {
+      requests.add(request.url.path);
+      final path = request.url.path;
+      final rows = path.endsWith('/movies.json')
+          ? <Map<String, dynamic>>[
+              for (var i = 0; i < 38; i++)
+                {
+                  ...title(id: 'tmdb:movie:${2000 + i}',
+                      name: 'Comédia verificada $i'),
+                  'genreIds': [35],
+                  'popularity': 300 - i,
+                },
+              {
+                ...title(id: 'tmdb:movie:9000', name: 'Outro gênero'),
+                'genreIds': [18], 'popularity': 3,
+              },
+            ]
+          : path.endsWith('/series.json')
+              ? <Map<String, dynamic>>[
+                  {
+                    ...title(id: 'tmdb:tv:201', name: 'Comédia de série',
+                        kind: 'Série'),
+                    'genreIds': [35], 'seasonCount': 2, 'popularity': 200,
+                  },
+                  {
+                    ...title(id: 'tmdb:tv:202', name: 'Ação de televisão',
+                        kind: 'Série'),
+                    'genreIds': [10759], 'popularity': 150,
+                  },
+                ]
+              : <Map<String, dynamic>>[];
+      return http.Response(jsonEncode({
+        'schema': 1, 'country': 'BR', 'results': rows,
+      }), 200, headers: const {
+        'content-type': 'application/json; charset=utf-8',
+      });
+    });
+    final catalog = CatalogClient(client: fake, enableTmdb: true);
+    addTearDown(catalog.close);
+    final first = await catalog.discover(
+        CatalogFilter.all, page: 1, rotationSeed: 73, genreId: 35);
+    final second = await catalog.discover(
+        CatalogFilter.all, page: 2, rotationSeed: 73, genreId: 35);
+    expect(first.length, 36);
+    expect(second.length, 3);
+    expect({...first.map((w) => w.id), ...second.map((w) => w.id)},
+        hasLength(39));
+    expect([...first, ...second].every((w) => w.genreIds.contains(35)),
+        isTrue);
+    expect([...first, ...second].any((w) => w.id == 'tmdb:tv:201'),
+        isTrue);
+    expect(requests.every((path) =>
+        !path.contains('openlibrary.org')), isTrue);
+
+    final action = await catalog.discover(
+        CatalogFilter.series, genreId: 28);
+    expect(action.map((w) => w.id).toList(), ['tmdb:tv:202']);
+    final drama = await catalog.discover(
+        CatalogFilter.movies, genreId: 18);
+    expect(drama.map((w) => w.id).toList(), ['tmdb:movie:9000']);
+  });
+
   test('Genre filtering requires real TMDB genre metadata', () async {
     final client = MockClient((request) async {
       if (request.url.path.endsWith('/movies.json')) {
