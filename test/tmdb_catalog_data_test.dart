@@ -199,6 +199,54 @@ void main() {
     expect(restored.externalRatings['rottenTomatoes'], '81%');
   });
 
+  test('Search matches translated names; TV genres and rotation are stable',
+      () async {
+    final client = MockClient((request) async {
+      final isShows = request.url.path.endsWith('/dramas.json');
+      return http.Response(jsonEncode({
+        'schema': 1, 'country': 'BR',
+        'results': isShows ? [
+          {
+            ...title(id: 'tmdb:tv:901', name: 'Ela Era Bonita',
+                kind: 'Dorama'),
+            'originalTitle': '그녀는 예뻤다',
+            'aliases': ['She Was Pretty', 'Ela era bonita'],
+            'genreIds': [10766, 18],
+            'tmdbVoteAverage': 8.3,
+            'seasonCount': 1,
+          },
+        ] : [
+          for (var i = 0; i < 60; i++)
+            {
+              ...title(id: 'tmdb:movie:${1000 + i}', name: 'Filme $i'),
+              'genreIds': [10749],
+              'runtimeMinutes': 121,
+              'popularity': 100 - i,
+            },
+        ],
+      }), 200);
+    });
+    final catalog = TmdbCatalogData(client);
+    final localized = await catalog.query(
+      filter: 'dramas', search: 'She Was Pretty', page: 1);
+    expect(localized, hasLength(1));
+    expect(localized.single['title'], 'Ela Era Bonita');
+    final romance = await catalog.query(
+      filter: 'dramas', search: '', page: 1, genreId: 10749);
+    expect(romance, hasLength(1));
+    expect(romance.single['seasonCount'], 1);
+    final a = await catalog.query(filter: 'movies', search: '',
+        page: 1, perPage: 10, rotationSeed: 89);
+    final b = await catalog.query(filter: 'movies', search: '',
+        page: 2, perPage: 10, rotationSeed: 89);
+    final c = await catalog.query(filter: 'movies', search: '',
+        page: 1, perPage: 10, rotationSeed: 151);
+    expect(a.map((r) => r['id']).toSet()
+        .intersection(b.map((r) => r['id']).toSet()), isEmpty);
+    expect(a.first['id'], isNot(c.first['id']));
+    expect(a.first['runtimeMinutes'], 121);
+  });
+
   test('Non-BR or malformed snapshot does not assert any provider',
       () async {
     final client = MockClient((request) async =>
