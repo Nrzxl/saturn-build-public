@@ -33,6 +33,7 @@ import 'saturn_book_cover.dart';
 import 'saturn_artwork.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
+import 'saturn_notification_inbox.dart';
 import 'saturn_couple_suggestions.dart';
 import 'saturn_year_recap.dart';
 import 'update_center.dart';
@@ -282,6 +283,155 @@ class _SaturnHomeState extends State<SaturnHome>
     }
   }
 
+  List<SaturnNotice> _notificationItems() =>
+      SaturnNotificationInbox.forProfile(
+        profile: profile,
+        records: records,
+        rituals: _ritualOps,
+        titles: {
+          for (final work in savedWorks.values) work.id: work.title,
+        },
+      );
+
+  bool _isNoticeUnread(SaturnNotice notice) =>
+      notice.at > (_noticeBaseline[profile] ?? 0) &&
+      !(_noticeRead[profile] ?? <String>{}).contains(notice.id);
+
+  Future<void> _markNotificationsRead(Iterable<SaturnNotice> notices) async {
+    final targetProfile = profile;
+    setState(() {
+      _noticeRead.putIfAbsent(targetProfile, () => <String>{})
+        .addAll(notices.map((notice) => notice.id));
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('saturn_notifications_read_$targetProfile',
+        (_noticeRead[targetProfile] ?? <String>{}).toList());
+  }
+
+  void _showNotifications() {
+    // The cloud's realtime stream populates the same state used by the
+    // Inbox; nothing is delivered to the OS when the PWA is closed.
+    final notices = _notificationItems();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF221923),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (sheet) => StatefulBuilder(builder: (ctx, redraw) {
+        final entries = _notificationItems();
+        return SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * .70,
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
+              child: Row(children: [
+                const Icon(Icons.notifications_active_outlined,
+                    color: gold, size: 22),
+                const SizedBox(width: 9),
+                const Expanded(child: Text('Notificações · Nossa Órbita',
+                  style: TextStyle(color: ivory, fontFamily: 'serif',
+                      fontSize: 19, fontWeight: FontWeight.bold))),
+                if (entries.any(_isNoticeUnread))
+                  TextButton(
+                    key: const Key('saturn-notifications-read-all'),
+                    onPressed: () async {
+                      await _markNotificationsRead(entries);
+                      if (ctx.mounted) redraw(() {});
+                    },
+                    child: const Text('Ler todas'),
+                  ),
+                IconButton(
+                  tooltip: 'Fechar',
+                  onPressed: () => Navigator.pop(ctx),
+                  icon: const Icon(Icons.close_rounded)),
+              ]),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: entries.isEmpty
+                  ? const Center(child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 26),
+                      child: Text(
+                        'As novidades de vocês vão aparecer aqui '
+                        'quando a Nossa Órbita estiver sincronizada.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFFD9BFCB), height: 1.4))))
+                  : ListView.separated(
+                      itemCount: entries.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 60),
+                      itemBuilder: (context, index) {
+                        final item = entries[index];
+                        final unread = _isNoticeUnread(item);
+                        final date = DateTime
+                            .fromMillisecondsSinceEpoch(item.at).toLocal();
+                        final when =
+                            '${date.day.toString().padLeft(2, '0')}/'
+                            '${date.month.toString().padLeft(2, '0')} '
+                            '${date.hour.toString().padLeft(2, '0')}:'
+                            '${date.minute.toString().padLeft(2, '0')}';
+                        final icon = switch (item.kind) {
+                          'review' => Icons.rate_review_outlined,
+                          'suggestion' => Icons.favorite_border_rounded,
+                          'series' => Icons.live_tv_outlined,
+                          'book' => Icons.auto_stories_outlined,
+                          _ => Icons.notifications_none,
+                        };
+                        return ListTile(
+                          key: Key('saturn-notice-' + item.id),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          leading: Icon(icon, color: gold, size: 23),
+                          title: Text(item.headline,
+                              style: TextStyle(
+                                color: ivory,
+                                fontWeight: unread
+                                    ? FontWeight.w800 : FontWeight.w500,
+                                fontSize: 13)),
+                          subtitle: Text(
+                            '${profiles[item.actor]} · ${item.title}\n$when',
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Color(0xFFCDB8C5), fontSize: 11)),
+                          trailing: unread
+                              ? const Icon(Icons.circle,
+                                  size: 9, color: gold)
+                              : const Icon(Icons.chevron_right,
+                                  color: Color(0xFF826B79)),
+                          onTap: () {
+                            unawaited(_markNotificationsRead([item]));
+                            Navigator.pop(ctx);
+                            final work = savedWorks[item.workId];
+                            if (work == null) {
+                              _navigateTab(3);
+                            } else {
+                              unawaited(_details(work));
+                            }
+                          },
+                        );
+                      },
+                    ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(18, 6, 18, 14),
+              child: Text(
+                'Atualizações aparecem com o SATURN aberto e sincronizado. '
+                'Avisos na tela bloqueada exigem Web Push.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFFA99AA4),
+                  fontSize: 10, height: 1.3)),
+            ),
+          ]),
+        );
+      }),
+    );
+  }
+
   Widget _mobileSyncShortcut(String section) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 9, 16, 4),
     child: OutlinedButton.icon(
@@ -306,6 +456,8 @@ class _SaturnHomeState extends State<SaturnHome>
   );
 
   Map<String, dynamic> records = {};
+  final Map<int, Set<String>> _noticeRead = {0: <String>{}, 1: <String>{}};
+  final Map<int, int> _noticeBaseline = {0: 0, 1: 0};
   Map<String, dynamic> _watchlistOps = {};
   Map<String, dynamic> _sharedOps = {};
   Map<String, dynamic> _archivedOps = {};
@@ -517,6 +669,17 @@ class _SaturnHomeState extends State<SaturnHome>
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
+    // First launch does not flood the new bell with old history.
+    for (var index = 0; index < 2; index++) {
+      final baselineKey = 'saturn_notifications_baseline_$index';
+      final previous = prefs.getInt(baselineKey);
+      final initial = previous ?? DateTime.now().millisecondsSinceEpoch;
+      _noticeBaseline[index] = initial;
+      _noticeRead[index] =
+          (prefs.getStringList('saturn_notifications_read_$index')
+              ?? const <String>[]).toSet();
+      if (previous == null) await prefs.setInt(baselineKey, initial);
+    }
     try {
       final storedRecords = jsonDecode(prefs.getString('records') ?? '{}');
       final storedWatchOps =
@@ -2094,6 +2257,11 @@ class _SaturnHomeState extends State<SaturnHome>
   @override
   Widget build(BuildContext context) {
     final desktop = MediaQuery.sizeOf(context).width >= 1000;
+    final unreadNotifications = SaturnNotificationInbox.unreadCount(
+      _notificationItems(),
+      baseline: _noticeBaseline[profile] ?? 0,
+      read: _noticeRead[profile] ?? <String>{},
+    );
     return Scaffold(
       appBar: AppBar(
         titleSpacing: desktop ? NavigationToolbar.kMiddleSpacing : 8,
@@ -2109,6 +2277,37 @@ class _SaturnHomeState extends State<SaturnHome>
           ],
         ),
         actions: [
+          IconButton(
+            key: const Key('saturn-header-notifications'),
+            tooltip: 'Notificações da Nossa Órbita',
+            constraints: const BoxConstraints(
+                minWidth: 45, minHeight: 48),
+            onPressed: _showNotifications,
+            icon: Stack(clipBehavior: Clip.none, children: [
+              const Icon(Icons.notifications_none_rounded,
+                  size: 25, color: gold),
+              if (unreadNotifications > 0)
+                Positioned(
+                  right: -10, top: -8,
+                  child: Container(
+                    key: const Key('saturn-notifications-badge'),
+                    constraints: const BoxConstraints(
+                        minWidth: 17, minHeight: 17),
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFAA496D),
+                      border: Border.all(color: night, width: 1.4),
+                      borderRadius: BorderRadius.circular(12)),
+                    alignment: Alignment.center,
+                    child: Text(unreadNotifications > 9
+                        ? '9+' : '$unreadNotifications',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+            ]),
+          ),
           IconButton(
             key: const Key('saturn-header-sync'),
             tooltip: 'Sincronizar e verificar atualizações',
