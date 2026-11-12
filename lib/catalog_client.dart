@@ -453,6 +453,9 @@ class CatalogClient {
     int rotationSeed = 0,
   }) async {
     final p = page.clamp(1, 500).toInt();
+    // Backends without TMDB snapshots also rotate their discovery window.
+    // Each tab re-entry adds 73 to the seed; pagination stays contiguous.
+    final sourcePage = p + ((rotationSeed.abs() ~/ 73) % 6);
     try {
       final found = await _snapshot(
         filter: filter, query: '', page: p,
@@ -463,7 +466,7 @@ class CatalogClient {
           try {
             return _unique([
               ...found,
-              ...await _discoverBooks(p, subject: bookSubject),
+              ...await _discoverBooks(sourcePage, subject: bookSubject),
             ]);
           } catch (_) {
             return found;
@@ -490,23 +493,23 @@ class CatalogClient {
     }
 
     if (filter == CatalogFilter.all || filter == CatalogFilter.movies) {
-      requests.add(safe('filmes', () => _discoverMovies(p)));
+      requests.add(safe('filmes', () => _discoverMovies(sourcePage)));
     }
     if (filter == CatalogFilter.all || filter == CatalogFilter.series) {
-      requests.add(safe('séries', () => _discoverShows(p)));
+      requests.add(safe('séries', () => _discoverShows(sourcePage)));
     }
     if (filter == CatalogFilter.all || filter == CatalogFilter.dramas) {
-      requests.add(safe('doramas', () => _discoverDramas(p)));
+      requests.add(safe('doramas', () => _discoverDramas(sourcePage)));
     }
     if (filter == CatalogFilter.all || filter == CatalogFilter.anime) {
-      requests.add(safe('animes', () => _anime(page: p)));
+      requests.add(safe('animes', () => _anime(page: sourcePage)));
     }
     if (filter == CatalogFilter.all || filter == CatalogFilter.books) {
       requests.add(safe('livros',
-          () => _discoverBooks(p, subject: bookSubject)));
+          () => _discoverBooks(sourcePage, subject: bookSubject)));
       if (filter == CatalogFilter.books) {
         requests.add(safe('Google Livros',
-          () => _googleBooks(page: p,
+          () => _googleBooks(page: sourcePage,
             national: bookSubject == 'brazilian_literature')));
       }
     }
