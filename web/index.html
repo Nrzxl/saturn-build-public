@@ -260,6 +260,17 @@
       }
       return Notification.requestPermission();
     };
+    window.saturnPushUnsubscribe = async function () {
+      if (!('serviceWorker' in navigator)) return '';
+      const reg = await navigator.serviceWorker.getRegistration(
+        new URL('./', document.baseURI).href);
+      if (!reg || !reg.pushManager) return '';
+      const existing = await reg.pushManager.getSubscription();
+      if (!existing) return '';
+      const endpoint = existing.endpoint;
+      await existing.unsubscribe();
+      return endpoint;
+    };
     window.saturnPushSubscribe = async function (publicKey) {
       const raw = String(publicKey).replace(/-/g, '+').replace(/_/g, '/');
       const padded = raw.padEnd(Math.ceil(raw.length / 4) * 4, '=');
