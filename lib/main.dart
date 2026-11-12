@@ -2632,25 +2632,6 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
-  /// Horizontal, lazy-loaded home shelves replace long vertical lists.
-  Widget _rankedShelf(List<Work> items, {required String shelfKey}) {
-    if (items.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 273,
-      child: ListView.separated(
-        key: Key(shelfKey),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 3),
-        itemBuilder: (context, index) => SizedBox(
-          width: 155,
-          child: _rankedPosterCard(items[index], compact: true),
-        ),
-      ),
-    );
-  }
-
   /// Only a personal rating plus an actual written review earns a halo.
   Widget _rankedPosterCard(Work work, {bool compact = false}) {
     final personal = entry(work);
