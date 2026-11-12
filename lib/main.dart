@@ -311,7 +311,6 @@ class _SaturnHomeState extends State<SaturnHome>
   void _showNotifications() {
     // The cloud's realtime stream populates the same state used by the
     // Inbox; nothing is delivered to the OS when the PWA is closed.
-    final notices = _notificationItems();
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
