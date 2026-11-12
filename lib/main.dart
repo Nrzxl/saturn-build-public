@@ -6655,220 +6655,239 @@ class _CatalogExploreState extends State<CatalogExplore> {
   }
 
 
-  /// Cinematic card: edge-to-edge original cover, restrained metadata and
-  /// subtle metallic detailing. No extra network requests per visible card.
-  /// One continuous illustration surface, with an integrated soft-bottom
-  /// gradient instead of two separate layers with a visible horizontal seam.
+  /// Full-bleed poster: one continuous image and gradient across the card.
+  /// There is no separate colored footer to create a harsh horizontal seam.
   Widget _coverCard(Work work) {
     final favorite = widget.isFavorite?.call(work) == true;
     final artUrl = SaturnArtwork.paletteUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl));
+    final genreLine = SaturnCatalogLabels.genreLine(work.genreIds);
+    final technical = SaturnCatalogLabels.technical(
+      kind: work.kind,
+      runtimeMinutes: work.runtimeMinutes,
+      seasonCount: work.seasonCount,
+    );
+    final hasTmdbScore = work.id.startsWith('tmdb:') &&
+        work.tmdbScore != null && work.tmdbScore!.isFinite &&
+        work.tmdbScore! >= 0 && work.tmdbScore! <= 10;
     const actionSize = BoxConstraints(minWidth: 31, minHeight: 32);
+
     return FutureBuilder<Color>(
       future: SaturnArtwork.toneFor(artUrl),
-      builder: (context, snapshot) {
-        return TweenAnimationBuilder<Color?>(
-          duration: const Duration(milliseconds: 480),
-          curve: Curves.easeOutCubic,
-          tween: ColorTween(begin: SaturnArtwork.fallback,
-              end: snapshot.data ?? SaturnArtwork.fallback),
-          builder: (context, blendedTone, child) {
-        final tone = blendedTone ?? SaturnArtwork.fallback;
-        final accent = Color.lerp(tone, gold, .48)!;
-        final base = Color.lerp(tone, night, .82)!;
-        return SaturnHoverLift(
-          child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: base,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: accent.withValues(alpha: .65)),
-              boxShadow: [
-                BoxShadow(color: tone.withValues(alpha: .25),
-                    blurRadius: 15, offset: const Offset(0, 6)),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                key: Key('saturn-cinematic-cover-' + work.id),
-                onTap: () => widget.onOpen(work),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: Stack(fit: StackFit.expand, children: [
-                      PosterThumbnail(work: work, width: double.infinity,
-                        height: double.infinity, fit: BoxFit.cover,
-                        alignment: Alignment.topCenter),
-                      // Melt the first pixels and the bottom third of
-                      // the poster into its own dominant cover color.
-                      Positioned(top: 0, left: 0, right: 0, height: 56,
-                        child: IgnorePointer(child: DecoratedBox(
-                          decoration: BoxDecoration(gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            stops: const [0, .35, 1],
-                            colors: [base.withValues(alpha: .43),
-                              tone.withValues(alpha: .12),
-                              Colors.transparent],
-                          )),
-                        )),
+      builder: (context, snapshot) => TweenAnimationBuilder<Color?>(
+        duration: const Duration(milliseconds: 580),
+        curve: Curves.easeOutCubic,
+        tween: ColorTween(
+          begin: SaturnArtwork.fallback,
+          end: snapshot.data ?? SaturnArtwork.fallback,
+        ),
+        builder: (context, blended, _) {
+          final tone = blended ?? SaturnArtwork.fallback;
+          final base = Color.lerp(tone, night, .65)!;
+          final accent = Color.lerp(tone, gold, .43)!;
+          return SaturnHoverLift(
+            child: RepaintBoundary(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: accent.withValues(alpha: .57)),
+                  boxShadow: [
+                    BoxShadow(color: tone.withValues(alpha: .20),
+                      blurRadius: 13, offset: const Offset(0, 5)),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Material(
+                  color: base,
+                  child: InkWell(
+                    key: Key('saturn-cinematic-cover-' + work.id),
+                    onTap: () => widget.onOpen(work),
+                    child: Stack(fit: StackFit.expand, children: [
+                      // The cover continues below the title, year and icons.
+                      PosterThumbnail(
+                        work: work,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
                       ),
-                      Positioned(left: 0, right: 0, bottom: 0,
-                        height: 125,
-                        child: IgnorePointer(child: DecoratedBox(
-                          decoration: BoxDecoration(gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            stops: const [0, .40, .73, 1],
-                            colors: [Colors.transparent,
-                              tone.withValues(alpha: .15),
-                              tone.withValues(alpha: .65),
-                              tone.withValues(alpha: .99)],
-                          )),
+                      Positioned.fill(child: IgnorePointer(child: DecoratedBox(
+                        decoration: BoxDecoration(gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: const [0, .22, .37, .50, .66, .81, 1],
+                          colors: [
+                            base.withValues(alpha: .20),
+                            Colors.transparent,
+                            tone.withValues(alpha: .07),
+                            tone.withValues(alpha: .25),
+                            base.withValues(alpha: .60),
+                            base.withValues(alpha: .92),
+                            base,
+                          ],
                         )),
-                      ),
-                      if (widget.showZeroStarFlies?.call(work) ?? false)
-                        const Positioned.fill(child: SaturnZeroStarFlies()),
-                      if (work.id.startsWith('tmdb:') &&
-                          work.tmdbScore != null && work.tmdbScore!.isFinite)
-                        Positioned(top: 7, right: 7, child: Container(
-                          key: Key('saturn-explore-tmdb-score-' + work.id),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xDA17131D),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: gold.withValues(alpha: .5)),
-                          ),
-                          child: Row(mainAxisSize: MainAxisSize.min,
-                            children: [const Icon(Icons.star_rounded,
-                                color: gold, size: 15),
-                              const SizedBox(width: 3),
-                              Text('${work.tmdbScore!.toStringAsFixed(1)}/10',
-                                style: const TextStyle(color: ivory,
-                                  fontSize: 11, fontWeight: FontWeight.w700)),
-                            ]),
-                        )),
-                    ])),
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [tone.withValues(alpha: .99),
-                            Color.lerp(tone, base, .56)!, base],
-                          stops: const [0, .45, 1],
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+                      ))),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(work.kind.toUpperCase(),
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: gold,
-                              letterSpacing: 1.2, fontSize: 9,
-                              fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 4),
-                          SizedBox(height: 36, child: Text(work.title,
-                            maxLines: 2, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: ivory,
-                              fontFamily: 'serif', fontSize: 13.5,
-                              fontWeight: FontWeight.bold, height: 1.18))),
-                          Text([
-                            if (work.year > 0) work.year.toString(),
-                            if (work.kind == 'Livro' && work.creator.isNotEmpty)
-                              work.creator
-                            else if (work.kind != 'Livro') work.provider,
-                          ].join(' · '), maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFFE4CAD6), fontSize: 10)),
-                          if (work.runtimeMinutes != null &&
-                              work.runtimeMinutes! > 0 &&
-                              work.kind == 'Filme')
-                            Text('${work.runtimeMinutes} min',
-                              style: const TextStyle(
-                                fontSize: 10, color: Color(0xFFE4CAD6))),
-                          if (work.seasonCount != null &&
-                              work.seasonCount! > 0 &&
-                              (work.kind == 'Série' || work.kind == 'Dorama' ||
-                               work.kind == 'Anime'))
-                            Text('${work.seasonCount} '
-                                '${work.seasonCount == 1 ? 'temporada' : 'temporadas'}',
-                              style: const TextStyle(
-                                fontSize: 10, color: Color(0xFFE4CAD6))),
-                          if (work.tmdbScore != null &&
-                              work.id.startsWith('tmdb:'))
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Row(children: [
-                                for (var i = 0; i < 10; i++)
-                                  Icon(work.tmdbScore! >= i + 1
-                                      ? Icons.star_rounded
-                                      : work.tmdbScore! > i
-                                        ? Icons.star_half_rounded
-                                        : Icons.star_outline_rounded,
-                                    size: 11, color: gold),
-                                const SizedBox(width: 3),
-                                Flexible(child: Text(
-                                  '${work.tmdbScore!.toStringAsFixed(1)}/10',
+                          Expanded(child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (widget.showZeroStarFlies?.call(work) ?? false)
+                                const SaturnZeroStarFlies(),
+                              if (hasTmdbScore)
+                                Positioned(top: 8, right: 8,
+                                  child: Container(
+                                    key: Key('saturn-explore-tmdb-score-' + work.id),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 7, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xD21A1720),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: gold.withValues(alpha: .56)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.star_rounded,
+                                          color: gold, size: 14),
+                                        const SizedBox(width: 3),
+                                        Text('${work.tmdbScore!.toStringAsFixed(1)}/10',
+                                          style: const TextStyle(color: ivory,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          )),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(9, 10, 9, 5),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(work.kind.toUpperCase(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: gold,
+                                    letterSpacing: 1.2, fontSize: 9,
+                                    fontWeight: FontWeight.w800)),
+                                const SizedBox(height: 4),
+                                SizedBox(height: 36, child: Text(
+                                  work.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: ivory,
+                                    fontFamily: 'serif', fontSize: 13.5,
+                                    fontWeight: FontWeight.bold, height: 1.18),
+                                )),
+                                Text([
+                                    if (work.year > 0) work.year.toString(),
+                                    if (technical != null) technical,
+                                    if (work.kind == 'Livro' &&
+                                        work.creator.isNotEmpty) work.creator,
+                                  ].join(' · '),
+                                  maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontSize: 10, color: ivory))),
-                              ]),
+                                    color: Color(0xFFE8D6DF), fontSize: 10.5)),
+                                if (genreLine.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 3),
+                                    child: Text(genreLine,
+                                      key: Key('saturn-explore-genres-' + work.id),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Color(0xFFF0D0B5),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500)),
+                                  ),
+                                if (hasTmdbScore)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Row(children: [
+                                      for (var i = 0; i < 10; i++)
+                                        Icon(work.tmdbScore! >= i + 1
+                                            ? Icons.star_rounded
+                                            : work.tmdbScore! > i
+                                                ? Icons.star_half_rounded
+                                                : Icons.star_outline_rounded,
+                                          size: 11, color: gold),
+                                      const SizedBox(width: 4),
+                                      Flexible(child: Text(
+                                        '${work.tmdbScore!.toStringAsFixed(1)}/10',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 10, color: ivory))),
+                                    ]),
+                                  ),
+                                const SizedBox(height: 5),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    IconButton(
+                                      key: Key('saturn-explore-favorite-' + work.id),
+                                      tooltip: favorite
+                                          ? 'Retirar dos Favoritos' : 'Favoritar',
+                                      constraints: actionSize,
+                                      padding: EdgeInsets.zero,
+                                      iconSize: 18,
+                                      onPressed: widget.onToggleFavorite == null
+                                          ? null
+                                          : () => widget.onToggleFavorite!(work),
+                                      icon: Icon(favorite
+                                          ? Icons.favorite_rounded
+                                          : Icons.favorite_border_rounded,
+                                        color: const Color(0xFFF2B0C4)),
+                                    ),
+                                    IconButton(
+                                      key: Key('saturn-explore-collections-' + work.id),
+                                      tooltip: 'Organizar em coleções',
+                                      constraints: actionSize,
+                                      padding: EdgeInsets.zero,
+                                      iconSize: 18,
+                                      onPressed: widget.onManageCollections == null
+                                          ? null
+                                          : () => widget.onManageCollections!(work),
+                                      icon: const Icon(
+                                          Icons.create_new_folder_outlined,
+                                          color: ivory),
+                                    ),
+                                    IconButton(
+                                      tooltip: work.kind == 'Livro'
+                                          ? 'Marcar como lido'
+                                          : 'Marcar como assistido',
+                                      constraints: actionSize,
+                                      padding: EdgeInsets.zero,
+                                      iconSize: 18,
+                                      onPressed: () =>
+                                          widget.onToggleCompleted(work),
+                                      icon: Icon(widget.isCompleted(work)
+                                          ? Icons.check_circle
+                                          : Icons.check_circle_outline,
+                                        color: widget.isCompleted(work)
+                                            ? const Color(0xFF97CDB4) : ivory),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                          const SizedBox(height: 6),
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 1, runSpacing: 0,
-                            children: [
-                              IconButton(
-                                key: Key('saturn-explore-favorite-' + work.id),
-                                tooltip: favorite ? 'Retirar dos Favoritos' : 'Favoritar',
-                                constraints: actionSize, padding: EdgeInsets.zero,
-                                iconSize: 18,
-                                onPressed: widget.onToggleFavorite == null
-                                    ? null : () => widget.onToggleFavorite!(work),
-                                icon: Icon(favorite
-                                    ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                    color: const Color(0xFFF2B0C4))),
-                              IconButton(
-                                key: Key('saturn-explore-collections-' + work.id),
-                                tooltip: 'Organizar em coleções',
-                                constraints: actionSize, padding: EdgeInsets.zero,
-                                iconSize: 18,
-                                onPressed: widget.onManageCollections == null
-                                    ? null : () => widget.onManageCollections!(work),
-                                icon: const Icon(
-                                  Icons.create_new_folder_outlined, color: ivory)),
-                              IconButton(
-                                tooltip: work.kind == 'Livro'
-                                    ? 'Marcar como lido' : 'Marcar como assistido',
-                                constraints: actionSize, padding: EdgeInsets.zero,
-                                iconSize: 18,
-                                onPressed: () => widget.onToggleCompleted(work),
-                                icon: Icon(widget.isCompleted(work)
-                                    ? Icons.check_circle : Icons.check_circle_outline,
-                                    color: widget.isCompleted(work)
-                                      ? const Color(0xFF97CDB4) : ivory)),
-                            ],
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                    ]),
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-          },
-        );
-      },
+          );
+        },
+      ),
     );
   }
+
 }
