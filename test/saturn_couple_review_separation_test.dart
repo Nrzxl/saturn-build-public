@@ -48,6 +48,26 @@ void main() {
     expect(find.textContaining('A resenha dela'), findsOneWidget);
   });
 
+  testWidgets('Parceira sem avaliação não cria cartão de nota vazio',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: SaturnCoupleReview(
+        selfName: 'Eu',
+        otherName: 'Ela',
+        self: {'rating': 8.0, 'notes': 'Gostei'},
+        other: {'notes': '', 'status': 'Quero conhecer'},
+        cloudConnected: true,
+      )),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('saturn-couple-review-self')),
+        findsOneWidget);
+    expect(find.byKey(const Key('saturn-couple-review-other')),
+        findsNothing);
+    expect(find.text('Sem nota'), findsNothing);
+    expect(find.text('4.0 ★'), findsOneWidget);
+  });
+
   testWidgets('Notas inexistentes não herdam cor ou valor do outro perfil',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(
