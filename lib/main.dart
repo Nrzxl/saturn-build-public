@@ -2655,6 +2655,11 @@ class _SaturnHomeState extends State<SaturnHome>
     // In Nossa Órbita, split rims/backgrounds retain both independent tiers.
     final actionMetal = SaturnReviewClassification.fromRating(personal)?.color;
     final selected = _selectedWorkIds.contains(work.id);
+    final bothZero = inOrbit && work.kind == 'Filme' &&
+        SaturnReviewClassification.shouldShowFlies(
+            work.kind, records['0:${work.id}']) &&
+        SaturnReviewClassification.shouldShowFlies(
+            work.kind, records['1:${work.id}']);
     final zeroStarMovie = SaturnReviewClassification.shouldShowFlies(
         work.kind, personal) ||
         (inOrbit && (
@@ -2703,6 +2708,7 @@ class _SaturnHomeState extends State<SaturnHome>
               ? null : Key('saturn-review-halo-' + work.id),
           color: metalColor,
           partnerColor: partnerMetalColor,
+          intenseBronze: bothZero,
           child: Material(
           borderRadius: BorderRadius.circular(15),
           color: const Color(0xFF251C2A),
@@ -2719,7 +2725,8 @@ class _SaturnHomeState extends State<SaturnHome>
                     height: double.infinity,
                   ),
                   if (zeroStarMovie)
-                    const Positioned.fill(child: SaturnZeroStarFlies()),
+                    Positioned.fill(child: SaturnZeroStarFlies(
+                      dense: bothZero)),
                   if (compact && !_selectingWorks) ...[
                     Positioned(top: 2, left: 2,
                       child: IconButton(
@@ -6119,7 +6126,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
     if (!widget.active || !_scrollController.hasClients ||
         _loading || _loadingMore || !_loaded || !_hasMore ||
         _results.isEmpty || _error != null) return;
-    if (_scrollController.position.extentAfter < 850) {
+    if (_scrollController.position.extentAfter < 430) {
       _load(more: true);
     }
   }
@@ -6618,7 +6625,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                 // Deterministic poster/footer geometry avoids long titles
                 // crossing into artwork while cards load or resize.
                 mainAxisExtent: (((width - 28 - (columns - 1) * 12) /
-                    columns) * 1.42 + 150).clamp(350.0, 485.0),
+                    columns) * 1.42 + 166).clamp(365.0, 500.0),
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
               ),
@@ -6673,7 +6680,13 @@ class _CatalogExploreState extends State<CatalogExplore> {
     return FutureBuilder<Color>(
       future: SaturnArtwork.toneFor(artUrl),
       builder: (context, snapshot) {
-        final tone = snapshot.data ?? SaturnArtwork.fallback;
+        return TweenAnimationBuilder<Color?>(
+          duration: const Duration(milliseconds: 480),
+          curve: Curves.easeOutCubic,
+          tween: ColorTween(begin: SaturnArtwork.fallback,
+              end: snapshot.data ?? SaturnArtwork.fallback),
+          builder: (context, blendedTone, child) {
+        final tone = blendedTone ?? SaturnArtwork.fallback;
         final accent = Color.lerp(tone, gold, .48)!;
         final base = Color.lerp(tone, night, .82)!;
         return SaturnHoverLift(
@@ -6700,20 +6713,56 @@ class _CatalogExploreState extends State<CatalogExplore> {
                       PosterThumbnail(work: work, width: double.infinity,
                         height: double.infinity, fit: BoxFit.cover,
                         alignment: Alignment.topCenter),
-                      Positioned(
-                        left: 0, right: 0, bottom: 0,
-                        height: 76,
+                      // Melt the first pixels and the bottom third of
+                      // the poster into its own dominant cover color.
+                      Positioned(top: 0, left: 0, right: 0, height: 56,
                         child: IgnorePointer(child: DecoratedBox(
                           decoration: BoxDecoration(gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
+                            stops: const [0, .35, 1],
+                            colors: [base.withValues(alpha: .43),
+                              tone.withValues(alpha: .12),
+                              Colors.transparent],
+                          )),
+                        )),
+                      ),
+                      Positioned(left: 0, right: 0, bottom: 0,
+                        height: 125,
+                        child: IgnorePointer(child: DecoratedBox(
+                          decoration: BoxDecoration(gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0, .40, .73, 1],
                             colors: [Colors.transparent,
-                              tone.withValues(alpha: .94)],
+                              tone.withValues(alpha: .15),
+                              tone.withValues(alpha: .65),
+                              tone.withValues(alpha: .99)],
                           )),
                         )),
                       ),
                       if (widget.showZeroStarFlies?.call(work) ?? false)
                         const Positioned.fill(child: SaturnZeroStarFlies()),
+                      if (work.id.startsWith('tmdb:') &&
+                          work.tmdbScore != null && work.tmdbScore!.isFinite)
+                        Positioned(top: 7, right: 7, child: Container(
+                          key: Key('saturn-explore-tmdb-score-' + work.id),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xDA17131D),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: gold.withValues(alpha: .5)),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min,
+                            children: [const Icon(Icons.star_rounded,
+                                color: gold, size: 15),
+                              const SizedBox(width: 3),
+                              Text('${work.tmdbScore!.toStringAsFixed(1)}/10',
+                                style: const TextStyle(color: ivory,
+                                  fontSize: 11, fontWeight: FontWeight.w700)),
+                            ]),
+                        )),
                     ])),
                     Container(
                       padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
@@ -6721,7 +6770,9 @@ class _CatalogExploreState extends State<CatalogExplore> {
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [tone.withValues(alpha: .94), base],
+                          colors: [tone.withValues(alpha: .99),
+                            Color.lerp(tone, base, .56)!, base],
+                          stops: const [0, .45, 1],
                         ),
                       ),
                       child: Column(
@@ -6827,6 +6878,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
               ),
             ),
           ),
+        );
+          },
         );
       },
     );
