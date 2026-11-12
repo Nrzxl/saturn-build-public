@@ -235,6 +235,45 @@
       window.setInterval(checkForUpdates, 4 * 60 * 1000);
     })();
   </script>
+
+  <script>
+    // Web Push permission is requested ONLY after the user taps "Ativar".
+    // The existing SATURN worker also handles public cover caching.
+    window.saturnPushSupport = function () {
+      const ua = navigator.userAgent || '';
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) ||
+          !('Notification' in window)) {
+        if (/iPad|iPhone|iPod/.test(ua) &&
+            !window.navigator.standalone &&
+            !window.matchMedia('(display-mode: standalone)').matches) {
+          return 'install';
+        }
+        return 'unsupported';
+      }
+      return Notification.permission === 'denied' ? 'denied' : 'supported';
+    };
+    window.saturnPushPermission = function () {
+      // Call requestPermission before the first await: iOS requires
+      // a directly tapped activation, never a delayed network callback.
+      if (window.saturnPushSupport() !== 'supported') {
+        return Promise.resolve(window.saturnPushSupport());
+      }
+      return Notification.requestPermission();
+    };
+    window.saturnPushSubscribe = async function (publicKey) {
+      const raw = String(publicKey).replace(/-/g, '+').replace(/_/g, '/');
+      const padded = raw.padEnd(Math.ceil(raw.length / 4) * 4, '=');
+      const decoded = atob(padded);
+      const bytes = new Uint8Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) bytes[i] = decoded.charCodeAt(i);
+      const reg = await navigator.serviceWorker.register(
+        './saturn-cover-cache-sw.js', {scope: './'});
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true, applicationServerKey: bytes
+      });
+      return JSON.stringify(sub.toJSON());
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
