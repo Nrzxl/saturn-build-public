@@ -34,6 +34,7 @@ import 'saturn_artwork.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
 import 'saturn_notification_inbox.dart';
+import 'saturn_web_push.dart';
 import 'saturn_couple_suggestions.dart';
 import 'saturn_year_recap.dart';
 import 'update_center.dart';
@@ -309,8 +310,7 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   void _showNotifications() {
-    // The cloud's realtime stream populates the same state used by the
-    // Inbox; nothing is delivered to the OS when the PWA is closed.
+    // Same inbox while open, with opt-in Web Push for the installed PWA.
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -349,6 +349,49 @@ class _SaturnHomeState extends State<SaturnHome>
               ]),
             ),
             const Divider(height: 1),
+            if (SaturnWebPush.support != 'unsupported')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const Key('saturn-enable-web-push'),
+                      onPressed: _registeringPush ? null : () async {
+                        final cloud = _cloud;
+                        if (cloud == null || !cloud.connected) {
+                          setState(() => _pushMessage =
+                              'Conecte a Nossa Órbita antes de ativar.');
+                          if (ctx.mounted) redraw(() {});
+                          return;
+                        }
+                        setState(() { _registeringPush = true; _pushMessage = ''; });
+                        if (ctx.mounted) redraw(() {});
+                        try {
+                          await SaturnWebPush.enable(cloud);
+                          if (mounted) setState(() => _pushMessage =
+                              'Notificações Web Push ativadas neste aparelho.');
+                        } catch (error) {
+                          if (mounted) setState(() => _pushMessage =
+                              error is StateError
+                                  ? error.message.toString()
+                                  : 'Não foi possível ativar Web Push neste aparelho.');
+                        } finally {
+                          if (mounted) setState(() => _registeringPush = false);
+                          if (ctx.mounted) redraw(() {});
+                        }
+                      },
+                      icon: const Icon(Icons.notifications_active_outlined),
+                      label: Text(_registeringPush
+                        ? 'Ativando notificações...'
+                        : 'Ativar notificações no dispositivo'),
+                    ),
+                    if (_pushMessage.isNotEmpty)
+                      Text(_pushMessage, textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFDCC6D0), fontSize: 11)),
+                  ],
+                ),
+              ),
             Expanded(
               child: entries.isEmpty
                   ? const Center(child: Padding(
@@ -419,8 +462,8 @@ class _SaturnHomeState extends State<SaturnHome>
             const Padding(
               padding: EdgeInsets.fromLTRB(18, 6, 18, 14),
               child: Text(
-                'Atualizações aparecem com o SATURN aberto e sincronizado. '
-                'Avisos na tela bloqueada exigem Web Push.',
+                'O histórico sincroniza com a Nossa Órbita. '
+                'Web Push requer permissão em cada aparelho.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Color(0xFFA99AA4),
                   fontSize: 10, height: 1.3)),
@@ -434,6 +477,8 @@ class _SaturnHomeState extends State<SaturnHome>
   Map<String, dynamic> records = {};
   final Map<int, Set<String>> _noticeRead = {0: <String>{}, 1: <String>{}};
   final Map<int, int> _noticeBaseline = {0: 0, 1: 0};
+  bool _registeringPush = false;
+  String _pushMessage = '';
   Map<String, dynamic> _watchlistOps = {};
   Map<String, dynamic> _sharedOps = {};
   Map<String, dynamic> _archivedOps = {};
