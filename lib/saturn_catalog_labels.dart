@@ -34,11 +34,11 @@ class SaturnCatalogLabels {
   }) {
     if (kind == 'Filme' && runtimeMinutes != null &&
         runtimeMinutes > 0 && runtimeMinutes <= 800) {
-      return '$'+'{runtimeMinutes} min';
+      return '${runtimeMinutes} min';
     }
     if ((kind == 'Série' || kind == 'Dorama' || kind == 'Anime') &&
         seasonCount != null && seasonCount > 0 && seasonCount < 200) {
-      return '$'+'{seasonCount} '+'$'+'{seasonCount == 1 ? "temporada" : "temporadas"}';
+      return '${seasonCount} ${seasonCount == 1 ? "temporada" : "temporadas"}';
     }
     return null;
   }
