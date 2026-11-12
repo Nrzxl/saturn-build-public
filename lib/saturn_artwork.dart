@@ -73,6 +73,89 @@ class SaturnArtwork {
     return original;
   }
 
+  /// Palette sampling uses a small version of the SAME edition artwork.
+  /// The full-resolution poster remains untouched and sharp in the UI.
+  /// Loading a w780 cover only to reduce it to 56 pixels wasted bandwidth.
+  static String paletteUrl(String artworkUrl) {
+    final uri = Uri.tryParse(artworkUrl);
+    if (uri == null || uri.scheme != 'https') return artworkUrl;
+    if (uri.host == 'image.tmdb.org') {
+      final parts = uri.pathSegments.toList();
+      if (parts.length >= 4 && parts[0] == 't' && parts[1] == 'p' &&
+          RegExp(r'^w[0-9]+
+  /// hash. Flutter scales samples to a small image for bounded CPU use.
+  /// Failures (network/CORS/unsupported media) safely retain SATURN burgundy.
+  static Future<Color> toneFor(String artworkUrl) {
+    if (!artworkUrl.startsWith('https://')) {
+      return Future.value(fallback);
+    }
+    if (_tones.length >= 280 && !_tones.containsKey(artworkUrl)) {
+      _tones.remove(_tones.keys.first);
+    }
+    return _tones.putIfAbsent(artworkUrl, () async {
+      await _acquirePaletteSlot();
+      try {
+        final colors = await ColorScheme.fromImageProvider(
+          provider: ResizeImage(
+            NetworkImage(artworkUrl),
+            width: 56,
+          ),
+          brightness: Brightness.dark,
+        );
+        return Color.lerp(fallback, colors.primary, .52) ?? fallback;
+      } catch (_) {
+        return fallback;
+      } finally {
+        _releasePaletteSlot();
+      }
+    });
+  }
+}
+).hasMatch(parts[2])) {
+        parts[2] = 'w154';
+        return uri.replace(pathSegments: parts).toString();
+      }
+    }
+    if (uri.host == 'static.tvmaze.com') {
+      return uri.replace(path: uri.path.replaceFirst(
+        '/original_untouched/', '/medium_portrait/')).toString();
+    }
+    if (uri.host == 'covers.openlibrary.org') {
+      return uri.replace(path: uri.path.replaceFirst(
+        RegExp(r'-L[.]jpg
+  /// hash. Flutter scales samples to a small image for bounded CPU use.
+  /// Failures (network/CORS/unsupported media) safely retain SATURN burgundy.
+  static Future<Color> toneFor(String artworkUrl) {
+    if (!artworkUrl.startsWith('https://')) {
+      return Future.value(fallback);
+    }
+    if (_tones.length >= 140 && !_tones.containsKey(artworkUrl)) {
+      _tones.remove(_tones.keys.first);
+    }
+    return _tones.putIfAbsent(artworkUrl, () async {
+      await _acquirePaletteSlot();
+      try {
+        final colors = await ColorScheme.fromImageProvider(
+          provider: ResizeImage(
+            NetworkImage(artworkUrl),
+            width: 56,
+          ),
+          brightness: Brightness.dark,
+        );
+        return Color.lerp(fallback, colors.primary, .52) ?? fallback;
+      } catch (_) {
+        return fallback;
+      } finally {
+        _releasePaletteSlot();
+      }
+    });
+  }
+}
+, caseSensitive: false), '-M.jpg')).toString();
+    }
+    return artworkUrl;
+  }
+
   /// Dominant color is extracted from the actual cover, never from a title
   /// hash. Flutter scales samples to a small image for bounded CPU use.
   /// Failures (network/CORS/unsupported media) safely retain SATURN burgundy.
