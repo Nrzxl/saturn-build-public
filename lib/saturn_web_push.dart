@@ -39,22 +39,40 @@ class SaturnWebPush {
           'subscription': sub});
   }
 
+  static Future<void> disable(SaturnOrbitCloud cloud) async {
+    if (!cloud.connected || cloud.orbitId == null) {
+      throw StateError('Conecte a Nossa Órbita para desativar o Push.');
+    }
+    final endpoint = await browser.SaturnBrowserPush.unsubscribe();
+    if (endpoint.isEmpty) return;
+    await cloud.client.functions.invoke('saturn-push', body: {
+      'action': 'unsubscribe', 'orbitId': cloud.orbitId,
+      'endpoint': endpoint,
+    });
+  }
+
   static Future<void> dispatch(
     SaturnOrbitCloud? cloud, {
     required String kind, required String workId,
     required int at, String key = '',
   }) async {
     if (cloud == null || !cloud.connected || cloud.orbitId == null) return;
-    try {
-      // Publish the event before asking the server to validate and notify.
-      await cloud.syncNow();
-      await cloud.client.functions.invoke('saturn-push', body: {
-        'action': 'dispatch', 'orbitId': cloud.orbitId,
-        'kind': kind, 'workId': workId, 'key': key, 'at': at,
-      });
-    } catch (_) {
-      // Never block a review, suggestion or local edit if push is offline.
-      // The in-app inbox still reads the synced source of truth.
+    // Cloud may already be syncing a simultaneous edit from the partner.
+    // Wait and retry validation rather than losing a notification to a
+    // temporary stale revision or a just-created series record.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        await cloud.syncNow();
+        await cloud.client.functions.invoke('saturn-push', body: {
+          'action': 'dispatch', 'orbitId': cloud.orbitId,
+          'kind': kind, 'workId': workId, 'key': key, 'at': at,
+        });
+        return;
+      } catch (_) {
+        if (attempt == 2) return;
+        await Future<void>.delayed(
+          Duration(milliseconds: 900 * (attempt + 1)));
+      }
     }
   }
 }
