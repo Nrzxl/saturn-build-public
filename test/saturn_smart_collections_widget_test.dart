@@ -35,6 +35,8 @@ void main() {
     final filter = find.byKey(const Key('saturn-collection-filter-menu'));
     expect(filter, findsOneWidget);
     expect(find.text('Filtros: Tudo'), findsOneWidget);
+    // Selection moved to Explorar; Coleção keeps its compact type filter.
+    expect(find.text('Selecionar vários'), findsNothing);
     expect(find.byKey(Key('saturn-ranked-card-' + film.id)), findsOneWidget);
     expect(find.byKey(Key('saturn-ranked-card-' + book.id)), findsOneWidget);
 

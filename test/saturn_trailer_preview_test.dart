@@ -22,6 +22,13 @@ void main() {
     expect(native.strictRelatedVideos, isFalse);
   });
 
+  test('Only the natural trailer end returns to the cinematic sheet', () {
+    expect(SaturnTrailerPreview.isNaturalEnd(PlayerState.ended), isTrue);
+    expect(SaturnTrailerPreview.isNaturalEnd(PlayerState.paused), isFalse);
+    expect(SaturnTrailerPreview.isNaturalEnd(PlayerState.playing), isFalse);
+    expect(SaturnTrailerPreview.isNaturalEnd(PlayerState.buffering), isFalse);
+  });
+
   testWidgets('Story opens with SATURN artwork and existing controls only',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(

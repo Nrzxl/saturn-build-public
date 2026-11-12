@@ -47,7 +47,12 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
   bool _muted = true;
   bool _exhausted = false;
   bool _pendingError = false;
+  bool _pendingFinish = false;
+  bool _finished = false;
   int _candidateIndex = 0;
+
+  /// A pause, buffering, or a user gesture must never dismiss the story.
+  static bool isNaturalEnd(PlayerState state) => state == PlayerState.ended;
 
   static bool validVideoId(String id) =>
       RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id);
@@ -65,7 +70,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
         web: kIsWeb, hero: widget.heroMode)) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _controller == null &&
-          !_exhausted && _candidates.isNotEmpty) {
+          !_exhausted && !_finished && _candidates.isNotEmpty) {
         _activateCandidate(0);
       }
     });
@@ -84,6 +89,8 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
     _controller = null;
     _candidateIndex = 0;
     _pendingError = false;
+    _pendingFinish = false;
+    _finished = false;
     _exhausted = false;
     _muted = true;
     old?.close();
@@ -114,13 +121,35 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
       _candidateIndex = index;
       _controller = replacement;
       _muted = true;
+      _finished = false;
+      _pendingFinish = false;
       _exhausted = false;
     });
     previous?.close();
   }
 
+  /// Dismiss YouTube's end-screen and restore the cinematic story artwork
+  /// after an actual ended event. The viewer may explicitly replay it.
+  void _restoreStoryWhenEnded(PlayerState state) {
+    if (!isNaturalEnd(state) || _pendingFinish || _finished || !mounted) {
+      return;
+    }
+    _pendingFinish = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final previous = _controller;
+      setState(() {
+        _controller = null;
+        _finished = true;
+        _pendingFinish = false;
+      });
+      previous?.close();
+    });
+  }
+
   void _handlePlayerError(YoutubeError error) {
-    if (error == YoutubeError.none || _pendingError || !mounted) return;
+    if (error == YoutubeError.none || _pendingError ||
+        _pendingFinish || _finished || !mounted) return;
     _pendingError = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -200,6 +229,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
     return YoutubeValueBuilder(controller: player,
       builder: (context, value) {
         if (value.hasError) _handlePlayerError(value.error);
+        _restoreStoryWhenEnded(value.playerState);
         return YoutubePlayer(
           key: ValueKey('saturn-youtube-' + _candidates[_candidateIndex]),
           controller: player, aspectRatio: 16 / 9);
@@ -239,6 +269,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
                 const SizedBox(width: 7),
                 Expanded(child: Text(
                   _exhausted ? 'TRAILER INDISPONÍVEL'
+                      : _finished ? 'FICHA CINEMATOGRÁFICA'
                       : player == null ? 'ASSISTIR AO TRAILER'
                       : 'TRAILER OFICIAL',
                   maxLines: 1, overflow: TextOverflow.ellipsis,
@@ -255,7 +286,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
                 else if (player == null)
                   IconButton.filledTonal(
                     key: const Key('saturn-trailer-play-pause'),
-                    tooltip: 'Reproduzir trailer',
+                    tooltip: _finished ? 'Rever trailer' : 'Reproduzir trailer',
                     icon: const Icon(Icons.play_arrow_rounded),
                     onPressed: _togglePlayback)
                 else
@@ -311,6 +342,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
                 const SizedBox(height: 3),
                 Text(_exhausted
                     ? 'Trailer indisponível · buscar outra versão'
+                    : _finished ? 'Trailer concluído · ficha cinematográfica restaurada'
                     : player == null
                         ? 'Reproduzir trailer · áudio original preferencial'
                         : 'Legendas PT-BR quando disponíveis no YouTube',
@@ -331,7 +363,7 @@ class _SaturnTrailerPreviewState extends State<SaturnTrailerPreview> {
             else if (player == null)
               IconButton.filledTonal(
                 key: const Key('saturn-trailer-play-pause'),
-                tooltip: 'Reproduzir trailer',
+                tooltip: _finished ? 'Rever trailer' : 'Reproduzir trailer',
                 icon: const Icon(Icons.play_arrow_rounded),
                 onPressed: _togglePlayback)
             else

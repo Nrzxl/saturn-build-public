@@ -275,6 +275,11 @@ class _SaturnHomeState extends State<SaturnHome>
     final returningToHome = next == 0 && tab != 0;
     setState(() {
       tab = next;
+      if (next == 2) {
+        // Coleção now uses filters only; selection lives in Explorar.
+        _selectingWorks = false;
+        _selectedWorkIds.clear();
+      }
       _recentTabs.remove(next);
       _recentTabs.add(next);
       if (_recentTabs.length > 2) _recentTabs.removeAt(0);
@@ -3388,6 +3393,8 @@ class _SaturnHomeState extends State<SaturnHome>
         onManageCollections: (work) =>
             _catalogEditionAction(work,
                 (edition) => _showCollectionPicker(edition)),
+        onBatchAction: (works, action) =>
+            _applyBulkIds(action, works.map((work) => work.id)),
         showZeroStarFlies: (work) =>
             SaturnReviewClassification.shouldShowFlies(
                 work.kind, records['${profile}:${work.id}']) ||
@@ -3412,14 +3419,17 @@ class _SaturnHomeState extends State<SaturnHome>
       ..addAll(source.map((work) => work.id));
   });
 
-  void _applyBulk(String action) {
-    if (_selectedWorkIds.isEmpty) return;
-    final selected = _selectedWorkIds.toList(growable: false);
+  void _applyBulk(String action) => _applyBulkIds(action, _selectedWorkIds);
+
+  /// Shared atomic operation for the existing partner selection toolbar and
+  /// Explorar's saved-title selection. No data migration or overwrite.
+  void _applyBulkIds(String action, Iterable<String> workIds) {
+    final selected = workIds.toSet().toList(growable: false);
+    if (selected.isEmpty) return;
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
       for (final id in selected) {
-        final work = allWorks.where((w) => w.id == id).firstOrNull;
-        if (work == null) continue;
+        if (!savedWorks.containsKey(id)) continue;
         final recordId = '$profile:$id';
         switch (action) {
           case 'watched':
@@ -3873,8 +3883,15 @@ class _SaturnHomeState extends State<SaturnHome>
       slivers: [
         SliverToBoxAdapter(child: _collectionHeader(false, all.length)),
         SliverToBoxAdapter(child: _smartCollectionsOverview()),
-        SliverToBoxAdapter(child:
-            _collectionSelectionToolbar(items, showFilters: true)),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _collectionFilters(false),
+            ),
+          ),
+        ),
         ..._collectionGallerySlivers(items),
         if (items.isEmpty)
           const SliverToBoxAdapter(
@@ -6239,7 +6256,10 @@ class CatalogExplore extends StatefulWidget {
   final bool Function(Work)? isFavorite;
   final void Function(Work)? onToggleFavorite;
   final void Function(Work)? onManageCollections;
+  /// Allows reusing already fetched catalog pages without a network request.
+  final List<Work> initialResults;
   final bool Function(Work) isInAnyCollection;
+  final void Function(List<Work> works, String action) onBatchAction;
   final bool Function(Work)? showZeroStarFlies;
 
   const CatalogExplore({
@@ -6254,11 +6274,13 @@ class CatalogExplore extends StatefulWidget {
     required this.onToggleWatchlist,
     required this.isWatchlisted,
     required this.isInAnyCollection,
+    required this.onBatchAction,
     required this.onToggleCompleted,
     required this.isCompleted,
     this.isFavorite,
     this.onToggleFavorite,
     this.onManageCollections,
+    this.initialResults = const <Work>[],
     this.showZeroStarFlies,
   });
 
@@ -6272,6 +6294,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
   Timer? _searchDebounce;
   int _discoverySeed = DateTime.now().microsecondsSinceEpoch;
   final _catalog = CatalogClient();
+  bool _selectingCollected = false;
+  final Set<String> _selectedCollectedIds = <String>{};
   late CatalogFilter _filter = widget.requestedFilter;
   StreamingService? _streamingFilter;
   String? _bookSubject;
@@ -6289,7 +6313,12 @@ class _CatalogExploreState extends State<CatalogExplore> {
   void initState() {
     super.initState();
     _scrollController.addListener(_checkInfiniteScroll);
-    if (widget.active) {
+    if (widget.initialResults.isNotEmpty) {
+      _results = widget.initialResults.toList(growable: false);
+      _loaded = true;
+      _hasMore = false;
+    }
+    if (widget.active && widget.initialResults.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _load();
       });
@@ -6352,6 +6381,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
         _hasMore = true;
         _error = null;
         _results = [];
+        _selectedCollectedIds.clear();
       }
     });
     try {
@@ -6403,6 +6433,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
 
   void _selectFilter(CatalogFilter next) {
     if (_filter == next) return;
+    _selectedCollectedIds.clear();
     setState(() {
       _filter = next;
       if (next == CatalogFilter.books) {
@@ -6624,6 +6655,11 @@ class _CatalogExploreState extends State<CatalogExplore> {
       final width = constraints.maxWidth;
       // Cards com largura adequada tanto no iPhone quanto no desktop.
       final columns = (width / 205).floor().clamp(2, 8).toInt();
+      final collectedVisible =
+          _results.where(widget.isInAnyCollection).length;
+      final selectedVisible = _results.where((work) =>
+          _selectedCollectedIds.contains(work.id) &&
+          widget.isInAnyCollection(work)).length;
       return CustomScrollView(
         controller: _scrollController,
         key: const PageStorageKey('saturn_catalog_grid'),
@@ -6758,22 +6794,89 @@ class _CatalogExploreState extends State<CatalogExplore> {
                     ),
                   const SizedBox(height: 12),
                   Row(children: [
-                    Expanded(
-                      child: Text(
-                        _query.text.trim().length >= 2
-                          ? 'Resultados · ${_results.length} títulos'
-                          : 'Descobrir · ${_results.length} títulos',
-                        style: const TextStyle(
-                          fontFamily: 'serif', fontSize: 20,
-                          fontWeight: FontWeight.w600, color: ivory),
+                    Expanded(child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        key: const Key('saturn-explore-select-collected'),
+                        onPressed: () => setState(() {
+                          _selectingCollected = !_selectingCollected;
+                          _selectedCollectedIds.clear();
+                        }),
+                        icon: Icon(_selectingCollected
+                            ? Icons.close_rounded
+                            : Icons.library_add_check_outlined, size: 18),
+                        label: Text(_selectingCollected
+                            ? 'Cancelar seleção' : 'Selecionar vários'),
                       ),
-                    ),
+                    )),
                     IconButton(
                       tooltip: 'Recarregar catálogo',
                       onPressed: _loading ? null : _search,
                       icon: const Icon(Icons.refresh, color: gold),
                     ),
                   ]),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, bottom: 3),
+                    child: Text(
+                      _selectingCollected
+                          ? 'Selecione títulos que já estão na coleção.'
+                          : '$collectedVisible já na coleção',
+                      style: const TextStyle(
+                        color: Color(0xFFBFA9B7), fontSize: 11),
+                    ),
+                  ),
+                  if (_selectingCollected)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 9),
+                      child: Wrap(
+                        spacing: 8, runSpacing: 5,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text('$selectedVisible selecionados',
+                            key: const Key('saturn-explore-selection-count'),
+                            style: const TextStyle(
+                              color: gold, fontSize: 12)),
+                          TextButton(
+                            key: const Key('saturn-explore-select-all-collected'),
+                            onPressed: collectedVisible == 0
+                                ? null : () => setState(() {
+                                  _selectedCollectedIds
+                                    ..clear()
+                                    ..addAll(_results
+                                        .where(widget.isInAnyCollection)
+                                        .map((work) => work.id));
+                                }),
+                            child: const Text('Selecionar todos salvos'),
+                          ),
+                          PopupMenuButton<String>(
+                            key: const Key('saturn-explore-batch-actions'),
+                            enabled: selectedVisible > 0,
+                            tooltip: 'Ações dos títulos selecionados',
+                            onSelected: _batchSelectedCollected,
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'watched',
+                                child: Text('Marcar como visto / lido')),
+                              PopupMenuItem(
+                                value: 'watchlist',
+                                child: Text('Adicionar à Watchlist')),
+                              PopupMenuItem(
+                                value: 'removeWatchlist',
+                                child: Text('Retirar da Watchlist')),
+                              PopupMenuItem(
+                                value: 'shared',
+                                child: Text('Adicionar à Nossa Órbita')),
+                            ],
+                            child: Chip(
+                              label: const Text('Ações em massa'),
+                              avatar: const Icon(Icons.more_horiz_rounded,
+                                size: 18),
+                              backgroundColor: wine,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (widget.active && (_loading || !_loaded))
                     const LinearProgressIndicator(color: gold),
                   if (_error != null)
@@ -6852,11 +6955,40 @@ class _CatalogExploreState extends State<CatalogExplore> {
   }
 
 
+  /// Multi-selection in Explorar is deliberately limited to titles actually
+  /// saved in either partner's collection, never arbitrary catalog results.
+  void _toggleCollectedSelection(Work work) {
+    if (!widget.isInAnyCollection(work)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Selecione apenas títulos já presentes na coleção.'),
+      ));
+      return;
+    }
+    setState(() {
+      if (!_selectedCollectedIds.add(work.id)) {
+        _selectedCollectedIds.remove(work.id);
+      }
+    });
+  }
+
+  void _batchSelectedCollected(String action) {
+    final valid = _results.where((work) =>
+        _selectedCollectedIds.contains(work.id) &&
+        widget.isInAnyCollection(work)).toList(growable: false);
+    if (valid.isEmpty) return;
+    widget.onBatchAction(valid, action);
+    setState(() {
+      _selectedCollectedIds.clear();
+      _selectingCollected = false;
+    });
+  }
+
   /// Full-bleed poster: one continuous image and gradient across the card.
   /// There is no separate colored footer to create a harsh horizontal seam.
   Widget _coverCard(Work work) {
     final favorite = widget.isFavorite?.call(work) == true;
     final alreadyCollected = widget.isInAnyCollection(work);
+    final picked = _selectedCollectedIds.contains(work.id);
     final watchlisted = widget.isWatchlisted(work);
     final artUrl = SaturnArtwork.paletteUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl));
@@ -6900,7 +7032,13 @@ class _CatalogExploreState extends State<CatalogExplore> {
                   color: base,
                   child: InkWell(
                     key: Key('saturn-cinematic-cover-' + work.id),
-                    onTap: () => widget.onOpen(work),
+                    onTap: () {
+                      if (_selectingCollected) {
+                        _toggleCollectedSelection(work);
+                      } else {
+                        widget.onOpen(work);
+                      }
+                    },
                     child: Stack(fit: StackFit.expand, children: [
                       // The cover continues below the title, year and icons.
                       PosterThumbnail(
@@ -6938,22 +7076,25 @@ class _CatalogExploreState extends State<CatalogExplore> {
                                 Positioned(
                                   top: 8, left: 8,
                                   child: Tooltip(
-                                    message: 'Já está em uma coleção',
-                                    child: Container(
+                                    message: _selectingCollected
+                                        ? (picked ? 'Selecionado'
+                                            : 'Selecionar título salvo')
+                                        : 'Já está em uma coleção',
+                                    child: Icon(
+                                      _selectingCollected && picked
+                                          ? Icons.check_box_rounded
+                                          : Icons.check_rounded,
                                       key: Key('saturn-explore-saved-check-' + work.id),
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xDF171C21),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: const Color(0xFF98D6B3),
-                                          width: 1),
-                                      ),
-                                      child: const Icon(
-                                        Icons.check_circle_rounded,
-                                        size: 17,
-                                        color: Color(0xFFABE1BE),
-                                      ),
+                                      size: 22,
+                                      color: _selectingCollected && picked
+                                          ? const Color(0xFFFFD69D)
+                                          : const Color(0xFFF2E8DF),
+                                      shadows: const [
+                                        Shadow(color: Colors.black,
+                                          blurRadius: 7, offset: Offset(0, 1)),
+                                        Shadow(color: Color(0xB9000000),
+                                          blurRadius: 3),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -7048,7 +7189,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
                                     ]),
                                   ),
                                 const SizedBox(height: 5),
-                                Row(
+                                if (!_selectingCollected)
+                                  Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                                   children: [
                                     IconButton(
@@ -7099,7 +7241,25 @@ class _CatalogExploreState extends State<CatalogExplore> {
                                             ? const Color(0xFF97CDB4) : ivory),
                                     ),
                                   ],
-                                ),
+                                )
+                                else
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 7),
+                                    child: Text(
+                                      alreadyCollected
+                                          ? (picked
+                                              ? 'Selecionado'
+                                              : 'Toque para selecionar')
+                                          : 'Não está na coleção',
+                                      maxLines: 1,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: alreadyCollected
+                                            ? gold : const Color(0xFFAD94A3),
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
