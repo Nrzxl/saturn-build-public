@@ -2649,17 +2649,21 @@ class _SaturnHomeState extends State<SaturnHome>
     final secondTier = inOrbit
         ? SaturnReviewClassification.fromRating(records['1:${work.id}'])
         : null;
-    final metalColor = inOrbit ? firstTier?.color : tier?.color;
-    final partnerMetalColor = secondTier?.color;
-    // Personal controls always follow the active profile's actual rating.
-    // In Nossa Órbita, split rims/backgrounds retain both independent tiers.
-    final actionMetal = SaturnReviewClassification.fromRating(personal)?.color;
-    final selected = _selectedWorkIds.contains(work.id);
-    final bothZero = inOrbit && work.kind == 'Filme' &&
+    // The mutual zero effect also works in personal collections, even if
+    // the film has not been added to Nossa Órbita.
+    final bothZero = work.kind == 'Filme' &&
         SaturnReviewClassification.shouldShowFlies(
             work.kind, records['0:${work.id}']) &&
         SaturnReviewClassification.shouldShowFlies(
             work.kind, records['1:${work.id}']);
+    final metalColor = bothZero ? SaturnReviewTier.bronze.color
+        : (inOrbit ? firstTier?.color : tier?.color);
+    final partnerMetalColor = bothZero
+        ? SaturnReviewTier.bronze.color : secondTier?.color;
+    // Personal controls always follow the active profile's actual rating.
+    // In Nossa Órbita, split rims/backgrounds retain both independent tiers.
+    final actionMetal = SaturnReviewClassification.fromRating(personal)?.color;
+    final selected = _selectedWorkIds.contains(work.id);
     final zeroStarMovie = SaturnReviewClassification.shouldShowFlies(
         work.kind, personal) ||
         (inOrbit && (
