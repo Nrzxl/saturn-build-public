@@ -268,12 +268,18 @@ class _SaturnHomeState extends State<SaturnHome>
 
   void _navigateTab(int next) {
     if (next < 0 || next > 4) return;
+    final returningToHome = next == 0 && tab != 0;
     setState(() {
       tab = next;
       _recentTabs.remove(next);
       _recentTabs.add(next);
       if (_recentTabs.length > 2) _recentTabs.removeAt(0);
     });
+    // Like Explore: every new entry cycles through real discoveries.
+    // Previously fetched cards stay visible until fresh ones arrive.
+    if (returningToHome) {
+      unawaited(_loadHomeRecommendations(refreshMovies: true));
+    }
   }
 
   Widget _mobileSyncShortcut(String section) => Padding(
@@ -333,12 +339,11 @@ class _SaturnHomeState extends State<SaturnHome>
   List<Work> recommendedMovies = [];
   List<Work> recommendedSeries = [];
   List<Work> recommendedAnime = [];
-  List<Work> recommendedDramas = [];
   List<Work> recommendedBooks = [];
-  bool _otherRecommendationsRequested = false;
   bool _loadingOtherRecommendations = false;
   bool loadingRecommendations = false;
-  int _filmRecommendationPage = 0;
+  // Fixed per refresh, shared by film/TV/anime/books, never saved to profiles.
+  int _homeDiscoverySeed = 0;
   final Set<String> _warmedCovers = <String>{};
 
   /// Warm only a few real, above-the-fold covers after the first frame.
@@ -429,83 +434,81 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   Future<void> _loadHomeRecommendations({bool refreshMovies = false}) async {
-    if (loadingRecommendations || !mounted) return;
+    if (!mounted || loadingRecommendations || _loadingOtherRecommendations) {
+      return;
+    }
+    if (refreshMovies) _homeDiscoverySeed += 73;
+    final seed = _homeDiscoverySeed;
     setState(() => loadingRecommendations = true);
     try {
-      if (refreshMovies || recommendedMovies.isEmpty) {
-        final nextPage = refreshMovies ? _filmRecommendationPage + 1 : 1;
-        final films = await _homeCatalog.discover(
-          CatalogFilter.movies, page: nextPage);
-        if (!mounted) return;
-        setState(() {
-          final additions = films.map(Work.fromCatalog).toList(growable: false);
-          recommendedMovies = refreshMovies
-              ? <String, Work>{
-                  for (final work in recommendedMovies) work.id: work,
-                  for (final work in additions) work.id: work,
-                }.values.toList(growable: false)
-              : additions;
-          if (additions.isNotEmpty) _filmRecommendationPage = nextPage;
-        });
+      final films = await _homeCatalog.discover(
+        CatalogFilter.movies, page: 1, rotationSeed: seed);
+      if (!mounted) return;
+      final suggestions = films.map(Work.fromCatalog)
+          .where((work) => work.kind == 'Filme' &&
+              work.posterUrl.startsWith('https://'))
+          .toList(growable: false);
+      if (suggestions.isNotEmpty) {
+        setState(() => recommendedMovies = suggestions);
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            unawaited(_warmFirstCovers(recommendedMovies.take(4)));
-          }
+          if (mounted) unawaited(_warmFirstCovers(suggestions.take(4)));
         });
       }
     } catch (_) {
-      // A home continua funcional mesmo sem acesso aos catálogos remotos.
+      // Keep the previous real recommendations when connectivity is lost.
     }
     try {
-      if (recommendedBooks.isEmpty) {
-        final books = await _homeCatalog.discover(CatalogFilter.books);
-        if (!mounted) return;
-        setState(() {
-          recommendedBooks = books.map(Work.fromCatalog).toList(growable: false);
-        });
+      final books = await _homeCatalog.discover(
+        CatalogFilter.books, page: 1, rotationSeed: seed);
+      if (!mounted) return;
+      final suggestions = books.map(Work.fromCatalog)
+          .where((work) => work.kind == 'Livro' &&
+              work.posterUrl.startsWith('https://'))
+          .toList(growable: false);
+      if (suggestions.isNotEmpty) {
+        setState(() => recommendedBooks = suggestions);
       }
     } catch (_) {
-      // Não substituir livros salvos por conteúdo fictício.
+      // Never invent a book when the public catalog cannot be reached.
     } finally {
       if (mounted) setState(() => loadingRecommendations = false);
     }
-    // Defer the three television requests until primary films and books
-    // are ready, avoiding a burst of five requests during first paint.
-    if (!_otherRecommendationsRequested && mounted) {
-      _otherRecommendationsRequested = true;
-      await _loadTelevisionRecommendations();
+    if (mounted) {
+      await _loadTelevisionRecommendations(rotationSeed: seed);
     }
   }
 
-  Future<void> _loadTelevisionRecommendations() async {
+  Future<void> _loadTelevisionRecommendations({
+    required int rotationSeed,
+  }) async {
     if (!mounted) return;
     setState(() => _loadingOtherRecommendations = true);
-    Future<void> category(
-        CatalogFilter filter, void Function(List<Work>) assign) async {
+
+    Future<void> category(CatalogFilter filter,
+        void Function(List<Work>) assign) async {
       try {
-        final result = await _homeCatalog.discover(filter, page: 1);
+        final result = await _homeCatalog.discover(
+          filter, page: 1, rotationSeed: rotationSeed);
         if (!mounted) return;
-        final filtered = result.map(Work.fromCatalog).where((work) =>
-          work.posterUrl.startsWith('https://') &&
-          (filter == CatalogFilter.series ? work.kind == 'Série'
-           : filter == CatalogFilter.anime ? work.kind == 'Anime'
-           : work.kind == 'Dorama')).toList(growable: false);
-        setState(() => assign(filtered));
+        final suggestions = result.map(Work.fromCatalog).where((work) =>
+            work.posterUrl.startsWith('https://') &&
+            (filter == CatalogFilter.series ? work.kind == 'Série'
+              : work.kind == 'Anime')).toList(growable: false);
+        if (suggestions.isNotEmpty) {
+          setState(() => assign(suggestions));
+        }
       } catch (_) {
-        // No invented recommendations or indefinite loading indicators.
+        // Each category fails independently without blocking the others.
       }
     }
 
     try {
-      // Bounded concurrency: two first, one afterward for slower devices.
       await Future.wait([
-        category(CatalogFilter.series, (works) => recommendedSeries = works),
-        category(CatalogFilter.anime, (works) => recommendedAnime = works),
+        category(CatalogFilter.series,
+            (works) => recommendedSeries = works),
+        category(CatalogFilter.anime,
+            (works) => recommendedAnime = works),
       ]);
-      if (mounted) {
-        await category(CatalogFilter.dramas,
-          (works) => recommendedDramas = works);
-      }
     } finally {
       if (mounted) setState(() => _loadingOtherRecommendations = false);
     }
@@ -2936,7 +2939,7 @@ class _SaturnHomeState extends State<SaturnHome>
               label: const Text('Ver todas as capas'),
             ),
           ),
-        _heading('Recomendações de filmes'),
+        _heading('Descobertas variadas · filmes'),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 18),
           child: Text(
@@ -2969,26 +2972,20 @@ class _SaturnHomeState extends State<SaturnHome>
                 ? null
                 : () => _loadHomeRecommendations(refreshMovies: true),
             icon: const Icon(Icons.casino_outlined, size: 18),
-            label: const Text('Outras sugestões'),
+            label: const Text('Novas descobertas'),
           ),
         ),
         ..._homeGenreRecommendations(
-          heading: 'Séries para maratonar',
+          heading: 'Descobertas variadas · séries',
           filter: CatalogFilter.series,
           titles: recommendedSeries,
           emptyText: 'Sem sugestões de séries agora. Explore o catálogo.',
         ),
         ..._homeGenreRecommendations(
-          heading: 'Animes para descobrir',
+          heading: 'Descobertas variadas · animes',
           filter: CatalogFilter.anime,
           titles: recommendedAnime,
           emptyText: 'Sem sugestões de animes agora. Explore o catálogo.',
-        ),
-        ..._homeGenreRecommendations(
-          heading: 'Doramas na sua órbita',
-          filter: CatalogFilter.dramas,
-          titles: recommendedDramas,
-          emptyText: 'Sem sugestões de doramas agora. Explore o catálogo.',
         ),
         _heading('Livros • Minha estante'),
         const Padding(
@@ -3022,14 +3019,16 @@ class _SaturnHomeState extends State<SaturnHome>
               label: const Text('Abrir toda a estante'),
             ),
           ),
-        _heading('Livros para descobrir'),
+        _heading('Descobertas variadas · livros'),
         if (loadingRecommendations && recommendedBooks.isEmpty)
           const Padding(
             padding: EdgeInsets.all(16),
             child: Text('Buscando livros da Open Library...',
               style: TextStyle(color: Color(0xFFB5A1A9))),
           ),
-        _cinematicShelf(recommendedBooks),
+        _cinematicShelf(recommendedBooks.where(
+          (work) => !_isDone(work) &&
+              !currentWatchlist.contains(work.id))),
         if (!loadingRecommendations && recommendedBooks.isEmpty)
           const Padding(
             padding: EdgeInsets.all(16),
