@@ -1624,14 +1624,6 @@ class _SaturnHomeState extends State<SaturnHome>
     }
   }
 
-  String _statusLabel(Work w) {
-    final state = entry(w)['status'];
-    if (state == 'Concluído' || state == 'Assistido' || state == 'Lido') {
-      return w.kind == 'Livro' ? 'Lido' : 'Assistido';
-    }
-    return state?.toString() ?? '';
-  }
-
   void update(Work w, Map<String, dynamic> value) {
     final old = entry(w);
     final stamp = DateTime.now().millisecondsSinceEpoch;
