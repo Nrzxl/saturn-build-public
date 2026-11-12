@@ -74,7 +74,7 @@ class TmdbCatalogData {
         for (final source in sources) {
           try {
             final response = await client.get(
-              Uri.parse('$' + '{source}/$' + '{group}.json'),
+              Uri.parse('${source}/${group}.json'),
               headers: const {'Accept': 'application/json'},
             ).timeout(const Duration(seconds: 8));
             if (response.statusCode != 200) continue;
