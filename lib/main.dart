@@ -2654,9 +2654,6 @@ class _SaturnHomeState extends State<SaturnHome>
     // Personal controls always follow the active profile's actual rating.
     // In Nossa Órbita, split rims/backgrounds retain both independent tiers.
     final actionMetal = SaturnReviewClassification.fromRating(personal)?.color;
-    final bothMetallic = inOrbit &&
-        firstTier != null && secondTier != null &&
-        firstTier != secondTier;
     final selected = _selectedWorkIds.contains(work.id);
     final zeroStarMovie = SaturnReviewClassification.shouldShowFlies(
         work.kind, personal) ||
