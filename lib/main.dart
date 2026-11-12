@@ -20,6 +20,7 @@ import 'saturn_catalog_labels.dart';
 import 'saturn_metallic_halo.dart';
 import 'saturn_zero_star_flies.dart';
 import 'saturn_smart_collections.dart';
+import 'saturn_collection_presence.dart';
 import 'saturn_share.dart';
 import 'saturn_trailer.dart';
 import 'saturn_native_trailer.dart';
@@ -1298,6 +1299,19 @@ class _SaturnHomeState extends State<SaturnHome>
 
   bool _isFavorite(Work work) =>
       SaturnSmartCollections.isFavorite(_favoriteOps, profile, work.id);
+
+  // A checkmark in Explorar means actual collection membership, not simply
+  // having fetched or cached the title. Both synchronized profiles count.
+  bool _isInAnyCollection(Work work) => SaturnCollectionPresence.hasAny(
+    workId: work.id,
+    records: records,
+    watchlists: watchlists,
+    favorites: _favoriteOps,
+    definitions: _collectionOps,
+    items: _collectionItemOps,
+    shared: shared,
+    archived: _archivedFromCollection,
+  );
 
   void _toggleFavorite(Work work) {
     final stamp = DateTime.now().millisecondsSinceEpoch;
@@ -2763,7 +2777,10 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   /// Trilhos horizontais para as sugestões e livros já entregues pelas APIs.
-  Widget _cinematicShelf(Iterable<Work> source, {String? shelfKey}) {
+  Widget _cinematicShelf(Iterable<Work> source, {
+    String? shelfKey,
+    bool completionAction = false,
+  }) {
     final titles = source.take(12).toList(growable: false);
     if (titles.isEmpty) return const SizedBox.shrink();
     return SizedBox(
@@ -2824,19 +2841,40 @@ class _SaturnHomeState extends State<SaturnHome>
                           Positioned(
                             right: 2, top: 2,
                             child: IconButton(
-                              key: Key('saturn-recommend-collections-' + work.id),
-                              tooltip: 'Adicionar a coleção',
+                              key: Key(
+                                (completionAction
+                                    ? 'saturn-home-completed-'
+                                    : 'saturn-home-watchlist-') + work.id),
+                              tooltip: completionAction
+                                  ? (work.kind == 'Livro'
+                                      ? (_isDone(work)
+                                          ? 'Desmarcar como lido'
+                                          : 'Marcar como lido')
+                                      : (_isDone(work)
+                                          ? 'Desmarcar como visto'
+                                          : 'Marcar como visto'))
+                                  : (_isWatchlisted(work)
+                                      ? 'Retirar da Watchlist'
+                                      : 'Adicionar à Watchlist'),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(
                                 minWidth: 40, minHeight: 40),
                               iconSize: 23,
                               onPressed: () => _catalogEditionAction(
-                                  work, (edition) =>
-                                      _showCollectionPicker(edition)),
-                              icon: const Icon(
-                                Icons.create_new_folder_outlined,
-                                color: Color(0xFFFFE7B5),
-                                shadows: [
+                                work, completionAction
+                                    ? _toggleCompleted : _toggleWatchlist),
+                              icon: Icon(
+                                completionAction
+                                    ? (_isDone(work)
+                                        ? Icons.check_circle_rounded
+                                        : Icons.check_circle_outline_rounded)
+                                    : (_isWatchlisted(work)
+                                        ? Icons.bookmark_added_rounded
+                                        : Icons.bookmark_add_outlined),
+                                color: completionAction && _isDone(work)
+                                    ? const Color(0xFF9DD4B5)
+                                    : const Color(0xFFFFE7B5),
+                                shadows: const [
                                   Shadow(color: Colors.black,
                                     blurRadius: 8, offset: Offset(0, 1.5)),
                                   Shadow(color: Color(0xD9000000),
@@ -3174,7 +3212,8 @@ class _SaturnHomeState extends State<SaturnHome>
             ),
           ),
         _cinematicShelf(watchlistTitles,
-            shelfKey: 'saturn-home-watchlist-shelf'),
+            shelfKey: 'saturn-home-watchlist-shelf',
+            completionAction: true),
         if (watchlistTitles.isNotEmpty)
           Align(
             alignment: Alignment.centerRight,
@@ -3250,7 +3289,8 @@ class _SaturnHomeState extends State<SaturnHome>
           ),
         ),
         _cinematicShelf(bookshelfTitles,
-            shelfKey: 'saturn-home-bookshelf-shelf'),
+            shelfKey: 'saturn-home-bookshelf-shelf',
+            completionAction: true),
         if (bookshelfTitles.isEmpty)
           const Padding(
             padding: EdgeInsets.fromLTRB(18, 9, 18, 5),
@@ -3338,6 +3378,7 @@ class _SaturnHomeState extends State<SaturnHome>
         onToggleWatchlist: (work) =>
             _catalogEditionAction(work, _toggleWatchlist),
         isWatchlisted: _isWatchlisted,
+        isInAnyCollection: _isInAnyCollection,
         onToggleCompleted: (work) =>
             _catalogEditionAction(work, _toggleCompleted),
         isCompleted: _isDone,
@@ -6198,6 +6239,7 @@ class CatalogExplore extends StatefulWidget {
   final bool Function(Work)? isFavorite;
   final void Function(Work)? onToggleFavorite;
   final void Function(Work)? onManageCollections;
+  final bool Function(Work) isInAnyCollection;
   final bool Function(Work)? showZeroStarFlies;
 
   const CatalogExplore({
@@ -6211,6 +6253,7 @@ class CatalogExplore extends StatefulWidget {
     this.isSuggested,
     required this.onToggleWatchlist,
     required this.isWatchlisted,
+    required this.isInAnyCollection,
     required this.onToggleCompleted,
     required this.isCompleted,
     this.isFavorite,
@@ -6813,6 +6856,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
   /// There is no separate colored footer to create a harsh horizontal seam.
   Widget _coverCard(Work work) {
     final favorite = widget.isFavorite?.call(work) == true;
+    final alreadyCollected = widget.isInAnyCollection(work);
+    final watchlisted = widget.isWatchlisted(work);
     final artUrl = SaturnArtwork.paletteUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl));
     final genreLine = SaturnCatalogLabels.genreLine(work.genreIds);
@@ -6889,6 +6934,29 @@ class _CatalogExploreState extends State<CatalogExplore> {
                             children: [
                               if (widget.showZeroStarFlies?.call(work) ?? false)
                                 const SaturnZeroStarFlies(),
+                              if (alreadyCollected)
+                                Positioned(
+                                  top: 8, left: 8,
+                                  child: Tooltip(
+                                    message: 'Já está em uma coleção',
+                                    child: Container(
+                                      key: Key('saturn-explore-saved-check-' + work.id),
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xDF171C21),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: const Color(0xFF98D6B3),
+                                          width: 1),
+                                      ),
+                                      child: const Icon(
+                                        Icons.check_circle_rounded,
+                                        size: 17,
+                                        color: Color(0xFFABE1BE),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               if (hasTmdbScore)
                                 Positioned(top: 8, right: 8,
                                   child: Container(
@@ -6999,17 +7067,21 @@ class _CatalogExploreState extends State<CatalogExplore> {
                                         color: const Color(0xFFF2B0C4)),
                                     ),
                                     IconButton(
-                                      key: Key('saturn-explore-collections-' + work.id),
-                                      tooltip: 'Organizar em coleções',
+                                      key: Key('saturn-explore-watchlist-' + work.id),
+                                      tooltip: watchlisted
+                                          ? 'Retirar da Watchlist'
+                                          : 'Adicionar à Watchlist',
                                       constraints: actionSize,
                                       padding: EdgeInsets.zero,
                                       iconSize: 18,
-                                      onPressed: widget.onManageCollections == null
-                                          ? null
-                                          : () => widget.onManageCollections!(work),
-                                      icon: const Icon(
-                                          Icons.create_new_folder_outlined,
-                                          color: ivory),
+                                      onPressed: () =>
+                                          widget.onToggleWatchlist(work),
+                                      icon: Icon(
+                                        watchlisted
+                                            ? Icons.bookmark_added_rounded
+                                            : Icons.bookmark_add_outlined,
+                                        color: watchlisted
+                                            ? const Color(0xFFFFE7B5) : ivory),
                                     ),
                                     IconButton(
                                       tooltip: work.kind == 'Livro'
