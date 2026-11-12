@@ -20,6 +20,7 @@ import 'saturn_catalog_labels.dart';
 import 'saturn_metallic_halo.dart';
 import 'saturn_zero_star_flies.dart';
 import 'saturn_smart_collections.dart';
+import 'saturn_bulk_collection_adder.dart';
 import 'saturn_collection_presence.dart';
 import 'saturn_share.dart';
 import 'saturn_trailer.dart';
@@ -1604,6 +1605,144 @@ class _SaturnHomeState extends State<SaturnHome>
         ),
       ),
     );
+  }
+
+  /// The destination is chosen *after* selecting catalog titles. A newly
+  /// discovered title is persisted only if the user confirms the collection.
+  Future<bool> _addExploredTitlesToCollections(List<Work> works) async {
+    if (!mounted || works.isEmpty) return false;
+    final chosen = <String>{};
+    final destinations = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF261B2A),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, refresh) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 7, 18, 22),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 520),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('Adicionar ${works.length} títulos a…',
+                  key: const Key('saturn-bulk-collection-title'),
+                  style: const TextStyle(
+                    color: ivory, fontSize: 17, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                const Text(
+                  'Escolha uma ou mais coleções. Títulos que já estiverem '
+                  'nelas não serão duplicados.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFFC7ADBD), fontSize: 11)),
+                const SizedBox(height: 10),
+                Flexible(child: ListView(shrinkWrap: true, children: [
+                  const Padding(
+                    padding: EdgeInsets.only(left: 9, top: 5, bottom: 4),
+                    child: Text('COLEÇÕES INTELIGENTES',
+                      style: TextStyle(color: gold, fontSize: 10,
+                        letterSpacing: 1.2)),
+                  ),
+                  CheckboxListTile(
+                    key: const Key('saturn-bulk-destination-watchlist'),
+                    title: const Text('Minha Watchlist'),
+                    secondary: const Icon(Icons.bookmark_add_outlined),
+                    value: chosen.contains('watchlist'),
+                    onChanged: (value) => refresh(() {
+                      if (value == true) { chosen.add('watchlist'); }
+                      else { chosen.remove('watchlist'); }
+                    }),
+                  ),
+                  CheckboxListTile(
+                    key: const Key('saturn-bulk-destination-favorites'),
+                    title: const Text('Favoritos'),
+                    secondary: const Icon(Icons.favorite_border_rounded),
+                    value: chosen.contains('favorites'),
+                    onChanged: (value) => refresh(() {
+                      if (value == true) { chosen.add('favorites'); }
+                      else { chosen.remove('favorites'); }
+                    }),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 9, top: 12, bottom: 4),
+                    child: Text('MINHAS COLEÇÕES',
+                      style: TextStyle(color: gold, fontSize: 10,
+                        letterSpacing: 1.2)),
+                  ),
+                  for (final collection in _personalCollections)
+                    CheckboxListTile(
+                      key: Key('saturn-bulk-destination-' +
+                          collection['id'].toString()),
+                      title: Text(collection['name'].toString()),
+                      value: chosen.contains(collection['id'].toString()),
+                      onChanged: (value) => refresh(() {
+                        final id = collection['id'].toString();
+                        if (value == true) { chosen.add(id); }
+                        else { chosen.remove(id); }
+                      }),
+                    ),
+                  OutlinedButton.icon(
+                    key: const Key('saturn-bulk-create-collection'),
+                    onPressed: () async {
+                      final created = await _createPersonalCollection();
+                      if (created != null && sheetContext.mounted) {
+                        refresh(() => chosen.add(created));
+                      }
+                    },
+                    icon: const Icon(Icons.create_new_folder_outlined),
+                    label: const Text('Criar nova coleção'),
+                  ),
+                ])),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: TextButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('Cancelar'))),
+                  Expanded(child: FilledButton.icon(
+                    key: const Key('saturn-bulk-confirm-add'),
+                    onPressed: chosen.isEmpty ? null
+                        : () => Navigator.pop(sheetContext, Set.of(chosen)),
+                    icon: const Icon(Icons.library_add_check_rounded),
+                    label: const Text('Adicionar títulos'),
+                  )),
+                ]),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!mounted || destinations == null || destinations.isEmpty) {
+      return false;
+    }
+    final at = DateTime.now().millisecondsSinceEpoch;
+    late final int changes;
+    setState(() {
+      for (final work in works) {
+        savedWorks.putIfAbsent(work.id, () => work);
+      }
+      changes = SaturnBulkCollectionAdder.add(
+        workIds: works.map((work) => work.id),
+        destinationIds: destinations,
+        owner: profile,
+        definitions: _collectionOps,
+        items: _collectionItemOps,
+        favorites: _favoriteOps,
+        watchlist: currentWatchlist,
+        watchlistOps: _watchlistOps,
+        archived: _archivedFromCollection,
+        archivedOps: _archivedOps,
+        at: at,
+      );
+    });
+    _save();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(changes == 0
+            ? 'Esses títulos já estavam nas coleções escolhidas.'
+            : '${works.length} título(s) adicionados às coleções escolhidas.'),
+      ));
+    }
+    return true;
   }
 
   bool _isWatchlisted(Work w) => currentWatchlist.contains(w.id);
@@ -3397,8 +3536,7 @@ class _SaturnHomeState extends State<SaturnHome>
         onManageCollections: (work) =>
             _catalogEditionAction(work,
                 (edition) => _showCollectionPicker(edition)),
-        onBatchAction: (works, action) =>
-            _applyBulkIds(action, works.map((work) => work.id)),
+        onAddToCollections: _addExploredTitlesToCollections,
         showZeroStarFlies: (work) =>
             SaturnReviewClassification.shouldShowFlies(
                 work.kind, records['${profile}:${work.id}']) ||
@@ -6263,7 +6401,7 @@ class CatalogExplore extends StatefulWidget {
   /// Allows reusing already fetched catalog pages without a network request.
   final List<Work> initialResults;
   final bool Function(Work) isInAnyCollection;
-  final void Function(List<Work> works, String action) onBatchAction;
+  final Future<bool> Function(List<Work> works) onAddToCollections;
   final bool Function(Work)? showZeroStarFlies;
 
   const CatalogExplore({
@@ -6278,7 +6416,7 @@ class CatalogExplore extends StatefulWidget {
     required this.onToggleWatchlist,
     required this.isWatchlisted,
     required this.isInAnyCollection,
-    required this.onBatchAction,
+    required this.onAddToCollections,
     required this.onToggleCompleted,
     required this.isCompleted,
     this.isFavorite,
@@ -6298,8 +6436,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
   Timer? _searchDebounce;
   int _discoverySeed = DateTime.now().microsecondsSinceEpoch;
   final _catalog = CatalogClient();
-  bool _selectingCollected = false;
-  final Set<String> _selectedCollectedIds = <String>{};
+  bool _selectingForCollection = false;
+  final Set<String> _selectedForCollectionIds = <String>{};
   late CatalogFilter _filter = widget.requestedFilter;
   StreamingService? _streamingFilter;
   String? _bookSubject;
@@ -6385,7 +6523,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
         _hasMore = true;
         _error = null;
         _results = [];
-        _selectedCollectedIds.clear();
+        _selectedForCollectionIds.clear();
       }
     });
     try {
@@ -6437,7 +6575,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
 
   void _selectFilter(CatalogFilter next) {
     if (_filter == next) return;
-    _selectedCollectedIds.clear();
+    _selectedForCollectionIds.clear();
     setState(() {
       _filter = next;
       if (next == CatalogFilter.books) {
@@ -6659,11 +6797,10 @@ class _CatalogExploreState extends State<CatalogExplore> {
       final width = constraints.maxWidth;
       // Cards com largura adequada tanto no iPhone quanto no desktop.
       final columns = (width / 205).floor().clamp(2, 8).toInt();
-      final collectedVisible =
-          _results.where(widget.isInAnyCollection).length;
-      final selectedVisible = _results.where((work) =>
-          _selectedCollectedIds.contains(work.id) &&
-          widget.isInAnyCollection(work)).length;
+      final notYetCollected = _results.where(
+          (work) => !widget.isInAnyCollection(work)).length;
+      final selectedVisible = _results.where(
+          (work) => _selectedForCollectionIds.contains(work.id)).length;
       return CustomScrollView(
         controller: _scrollController,
         key: const PageStorageKey('saturn_catalog_grid'),
@@ -6801,15 +6938,15 @@ class _CatalogExploreState extends State<CatalogExplore> {
                     Expanded(child: Align(
                       alignment: Alignment.centerLeft,
                       child: OutlinedButton.icon(
-                        key: const Key('saturn-explore-select-collected'),
+                        key: const Key('saturn-explore-select-to-collection'),
                         onPressed: () => setState(() {
-                          _selectingCollected = !_selectingCollected;
-                          _selectedCollectedIds.clear();
+                          _selectingForCollection = !_selectingForCollection;
+                          _selectedForCollectionIds.clear();
                         }),
-                        icon: Icon(_selectingCollected
+                        icon: Icon(_selectingForCollection
                             ? Icons.close_rounded
                             : Icons.library_add_check_outlined, size: 18),
-                        label: Text(_selectingCollected
+                        label: Text(_selectingForCollection
                             ? 'Cancelar seleção' : 'Selecionar vários'),
                       ),
                     )),
@@ -6822,14 +6959,14 @@ class _CatalogExploreState extends State<CatalogExplore> {
                   Padding(
                     padding: const EdgeInsets.only(top: 2, bottom: 3),
                     child: Text(
-                      _selectingCollected
-                          ? 'Selecione títulos que já estão na coleção.'
-                          : '$collectedVisible já na coleção',
+                      _selectingForCollection
+                          ? 'Toque nos títulos para escolher a coleção de destino.'
+                          : '$notYetCollected título(s) ainda não salvos nesta página',
                       style: const TextStyle(
                         color: Color(0xFFBFA9B7), fontSize: 11),
                     ),
                   ),
-                  if (_selectingCollected)
+                  if (_selectingForCollection)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 9),
                       child: Wrap(
@@ -6841,45 +6978,25 @@ class _CatalogExploreState extends State<CatalogExplore> {
                             style: const TextStyle(
                               color: gold, fontSize: 12)),
                           TextButton(
-                            key: const Key('saturn-explore-select-all-collected'),
-                            onPressed: collectedVisible == 0
+                            key: const Key('saturn-explore-select-unsaved'),
+                            onPressed: notYetCollected == 0
                                 ? null : () => setState(() {
-                                  _selectedCollectedIds
+                                  _selectedForCollectionIds
                                     ..clear()
                                     ..addAll(_results
-                                        .where(widget.isInAnyCollection)
+                                        .where((work) =>
+                                            !widget.isInAnyCollection(work))
                                         .map((work) => work.id));
                                 }),
-                            child: const Text('Selecionar todos salvos'),
+                            child: const Text('Selecionar não salvos'),
                           ),
-                          PopupMenuButton<String>(
-                            key: const Key('saturn-explore-batch-actions'),
-                            enabled: selectedVisible > 0,
-                            tooltip: 'Ações dos títulos selecionados',
-                            onSelected: _batchSelectedCollected,
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(
-                                value: 'watched',
-                                child: Text('Marcar como visto / lido')),
-                              PopupMenuItem(
-                                value: 'watchlist',
-                                child: Text('Adicionar à Watchlist')),
-                              PopupMenuItem(
-                                value: 'removeWatchlist',
-                                child: Text('Retirar da Watchlist')),
-                              PopupMenuItem(
-                                value: 'shared',
-                                child: Text('Adicionar à Nossa Órbita')),
-                              PopupMenuItem(
-                                value: 'remove',
-                                child: Text('Remover da minha coleção')),
-                            ],
-                            child: Chip(
-                              label: const Text('Ações em massa'),
-                              avatar: const Icon(Icons.more_horiz_rounded,
-                                size: 18),
-                              backgroundColor: wine,
-                            ),
+                          FilledButton.icon(
+                            key: const Key('saturn-explore-add-to-collections'),
+                            onPressed: selectedVisible == 0
+                                ? null : _addSelectedToCollections,
+                            icon: const Icon(
+                                Icons.create_new_folder_outlined, size: 18),
+                            label: const Text('Adicionar a coleções'),
                           ),
                         ],
                       ),
@@ -6962,55 +7079,24 @@ class _CatalogExploreState extends State<CatalogExplore> {
   }
 
 
-  /// Multi-selection in Explorar is deliberately limited to titles actually
-  /// saved in either partner's collection, never arbitrary catalog results.
-  void _toggleCollectedSelection(Work work) {
-    if (!widget.isInAnyCollection(work)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Selecione apenas títulos já presentes na coleção.'),
-      ));
-      return;
+  /// Explorar may select catalog titles that have never been saved. A user
+  /// can also choose an existing title for a different named collection.
+  void _toggleForCollection(Work work) => setState(() {
+    if (!_selectedForCollectionIds.add(work.id)) {
+      _selectedForCollectionIds.remove(work.id);
     }
-    setState(() {
-      if (!_selectedCollectedIds.add(work.id)) {
-        _selectedCollectedIds.remove(work.id);
-      }
-    });
-  }
+  });
 
-  Future<void> _batchSelectedCollected(String action) async {
-    final valid = _results.where((work) =>
-        _selectedCollectedIds.contains(work.id) &&
-        widget.isInAnyCollection(work)).toList(growable: false);
-    if (valid.isEmpty) return;
-    // Preserve the old bulk archive capability, with explicit confirmation
-    // now that selection is in Explorar instead of Coleção.
-    if (action == 'remove') {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-          title: const Text('Remover da minha coleção?'),
-          content: Text(
-            '${valid.length} título(s) serão arquivados somente no '
-            'seu perfil. Suas notas e resenhas serão preservadas.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialog, false),
-              child: const Text('Cancelar')),
-            FilledButton(
-              key: const Key('saturn-explore-archive-confirm'),
-              onPressed: () => Navigator.pop(dialog, true),
-              child: const Text('Confirmar remoção')),
-          ],
-        ),
-      );
-      if (!mounted || confirmed != true) return;
-    }
-    widget.onBatchAction(valid, action);
-    if (!mounted) return;
+  Future<void> _addSelectedToCollections() async {
+    final selected = _results.where((work) =>
+        _selectedForCollectionIds.contains(work.id))
+        .toList(growable: false);
+    if (selected.isEmpty) return;
+    final added = await widget.onAddToCollections(selected);
+    if (!mounted || !added) return; // Cancel keeps the selection.
     setState(() {
-      _selectedCollectedIds.clear();
-      _selectingCollected = false;
+      _selectedForCollectionIds.clear();
+      _selectingForCollection = false;
     });
   }
 
@@ -7019,7 +7105,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
   Widget _coverCard(Work work) {
     final favorite = widget.isFavorite?.call(work) == true;
     final alreadyCollected = widget.isInAnyCollection(work);
-    final picked = _selectedCollectedIds.contains(work.id);
+    final picked = _selectedForCollectionIds.contains(work.id);
     final watchlisted = widget.isWatchlisted(work);
     final artUrl = SaturnArtwork.paletteUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl));
@@ -7064,8 +7150,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
                   child: InkWell(
                     key: Key('saturn-cinematic-cover-' + work.id),
                     onTap: () {
-                      if (_selectingCollected) {
-                        _toggleCollectedSelection(work);
+                      if (_selectingForCollection) {
+                        _toggleForCollection(work);
                       } else {
                         widget.onOpen(work);
                       }
@@ -7103,21 +7189,21 @@ class _CatalogExploreState extends State<CatalogExplore> {
                             children: [
                               if (widget.showZeroStarFlies?.call(work) ?? false)
                                 const SaturnZeroStarFlies(),
-                              if (alreadyCollected)
+                              if (alreadyCollected ||
+                                  (_selectingForCollection && picked))
                                 Positioned(
                                   top: 8, left: 8,
                                   child: Tooltip(
-                                    message: _selectingCollected
-                                        ? (picked ? 'Selecionado'
-                                            : 'Selecionar título salvo')
+                                    message: _selectingForCollection && picked
+                                        ? 'Selecionado'
                                         : 'Já está em uma coleção',
                                     child: Icon(
-                                      _selectingCollected && picked
+                                      _selectingForCollection && picked
                                           ? Icons.check_box_rounded
                                           : Icons.check_rounded,
                                       key: Key('saturn-explore-saved-check-' + work.id),
                                       size: 22,
-                                      color: _selectingCollected && picked
+                                      color: _selectingForCollection && picked
                                           ? const Color(0xFFFFD69D)
                                           : const Color(0xFFF2E8DF),
                                       shadows: const [
@@ -7220,7 +7306,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                                     ]),
                                   ),
                                 const SizedBox(height: 5),
-                                if (!_selectingCollected)
+                                if (!_selectingForCollection)
                                   Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                                   children: [
@@ -7277,16 +7363,15 @@ class _CatalogExploreState extends State<CatalogExplore> {
                                   Padding(
                                     padding: const EdgeInsets.only(top: 7),
                                     child: Text(
-                                      alreadyCollected
-                                          ? (picked
-                                              ? 'Selecionado'
-                                              : 'Toque para selecionar')
-                                          : 'Não está na coleção',
+                                      picked ? 'Selecionado'
+                                          : alreadyCollected
+                                              ? 'Já salvo · outra coleção'
+                                              : 'Toque para adicionar',
                                       maxLines: 1,
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        color: alreadyCollected
-                                            ? gold : const Color(0xFFAD94A3),
+                                        color: picked ? gold
+                                            : const Color(0xFFAD94A3),
                                         fontSize: 10,
                                       ),
                                     ),
