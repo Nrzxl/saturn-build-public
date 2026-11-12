@@ -224,7 +224,9 @@ void main() {
               'popularity': 100 - i,
             },
         ],
-      }), 200);
+      }), 200, headers: const {
+        'content-type': 'application/json; charset=utf-8',
+      });
     });
     final catalog = TmdbCatalogData(client);
     final localized = await catalog.query(
