@@ -6,10 +6,12 @@ import 'package:flutter/material.dart';
 /// There are deliberately no category words or decorative badges.
 class SaturnMetallicHalo extends StatefulWidget {
   const SaturnMetallicHalo({super.key, required this.color,
-    this.partnerColor, required this.child});
+    this.partnerColor, this.intenseBronze = false, required this.child});
   final Color? color;
   /// Second partner's real metallic tier. Left half is mine, right is hers.
   final Color? partnerColor;
+  /// Stronger warm bronze glow only for two explicit zero-star reviews.
+  final bool intenseBronze;
   final Widget child;
 
   @override
@@ -57,6 +59,7 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
   Widget build(BuildContext context) {
     final metal = widget.color ?? widget.partnerColor;
     if (metal == null) return widget.child;
+    final intense = widget.intenseBronze;
     final paired = widget.color != null && widget.partnerColor != null;
     final same = paired && widget.color == widget.partnerColor;
     final second = widget.partnerColor ?? metal;
@@ -71,7 +74,7 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
       child: AnimatedContainer(
         duration: duration,
         curve: Curves.easeInOutCubic,
-        padding: const EdgeInsets.all(2.4),
+        padding: EdgeInsets.all(intense ? 3.4 : 2.4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(17),
           gradient: paired
@@ -81,12 +84,12 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
                   end: moved ? Alignment.topRight : Alignment.bottomRight,
                   stops: const [0, .30, .48, .52, .70, 1],
                   colors: [
-                    metal.withValues(alpha: same ? 0.99 : 0.94),
+                    metal.withValues(alpha: intense ? 1 : same ? 0.99 : 0.94),
                     metal.withValues(alpha: 0.83),
                     glint.withValues(alpha: same ? 1 : 0.86),
                     partnerGlint.withValues(alpha: same ? 1 : 0.86),
                     second.withValues(alpha: 0.83),
-                    second.withValues(alpha: same ? 0.99 : 0.94),
+                    second.withValues(alpha: intense ? 1 : same ? 0.99 : 0.94),
                   ],
                 )
               : LinearGradient(
@@ -103,10 +106,14 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
                 ),
           boxShadow: [
             BoxShadow(
-              color: metal.withValues(alpha: same
-                  ? (moved ? 0.75 : 0.53) : moved ? 0.31 : 0.18),
-              blurRadius: same ? (moved ? 30 : 22) : moved ? 21 : 14,
-              spreadRadius: same ? (moved ? 2.8 : 1.7)
+              color: metal.withValues(alpha: intense
+                  ? (moved ? 0.92 : 0.74)
+                  : same ? (moved ? 0.75 : 0.53)
+                  : moved ? 0.31 : 0.18),
+              blurRadius: intense ? (moved ? 36 : 29)
+                  : same ? (moved ? 30 : 22) : moved ? 21 : 14,
+              spreadRadius: intense ? (moved ? 4.0 : 2.7)
+                  : same ? (moved ? 2.8 : 1.7)
                   : moved ? 1.1 : 0.4,
             ),
           ],
@@ -132,7 +139,8 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
                           Colors.transparent,
                           glint.withValues(alpha: 0.06),
                           Colors.transparent,
-                          second.withValues(alpha: same ? 0.18 : 0.085),
+                          second.withValues(alpha: intense ? 0.25
+                              : same ? 0.18 : 0.085),
                         ],
                       ),
                     ),
