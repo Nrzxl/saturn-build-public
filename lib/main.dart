@@ -3797,8 +3797,7 @@ class _SaturnHomeState extends State<SaturnHome>
                 color: ivory, fontSize: 12,
                 fontWeight: FontWeight.w800))),
             const SizedBox(width: 4),
-            Text(score == null ? 'Sem nota'
-                : '${score.toStringAsFixed(1)} ★',
+            Text('${score.toStringAsFixed(1)} ★',
               style: TextStyle(
                 color: tone, fontWeight: FontWeight.w900,
                 fontSize: 13)),
