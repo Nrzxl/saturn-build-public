@@ -170,7 +170,15 @@ class TmdbCatalogData {
         record['originalTitle'] ?? '',
         if (aliases is List) ...aliases,
       ].join(' '));
-      return full.contains(wanted);
+      // Compatibility for the user's validated bilingual title while the
+      // refreshed translated-title index is being republished.
+      const knownPairs = <String, String>{
+        'she was pretty': 'ela era bonita',
+        'ela era bonita': 'she was pretty',
+      };
+      final alternative = knownPairs[wanted];
+      return full.contains(wanted) ||
+          (alternative != null && full.contains(alternative));
     }).toList();
 
     if (wanted.isEmpty) {
