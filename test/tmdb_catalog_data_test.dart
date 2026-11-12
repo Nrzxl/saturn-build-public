@@ -249,6 +249,81 @@ void main() {
     expect(a.first['runtimeMinutes'], 121);
   });
 
+  test('When raw GitHub fails, real TMDB ratings use the public CDN mirror',
+      () async {
+    final calls = <String>[];
+    final client = MockClient((request) async {
+      calls.add(request.url.host);
+      if (request.url.host == 'raw.githubusercontent.com') {
+        return http.Response('Temporarily unavailable', 503);
+      }
+      if (request.url.host == 'cdn.jsdelivr.net') {
+        return http.Response(jsonEncode({
+          'schema': 1, 'country': 'BR',
+          'results': [{
+            ...title(id: 'tmdb:movie:300', name: 'Filme verificado'),
+            'tmdbVoteAverage': 8.6, 'tmdbVoteCount': 923,
+            'genreIds': [35],
+            'runtimeMinutes': 109,
+          }],
+        }), 200, headers: const {
+          'content-type': 'application/json; charset=utf-8',
+        });
+      }
+      return http.Response('Not found', 404);
+    });
+    final catalog = CatalogClient(client: client, enableTmdb: true);
+    addTearDown(catalog.close);
+    final first = await catalog.discover(CatalogFilter.movies,
+        genreId: 35);
+    expect(first, hasLength(1));
+    final movie = Work.fromCatalog(first.single);
+    expect(movie.tmdbScore, 8.6);
+    expect(movie.runtimeMinutes, 109);
+    final roundtrip = Work.fromJson(movie.toJson());
+    expect(roundtrip.tmdbScore, 8.6);
+    expect(roundtrip.runtimeMinutes, 109);
+    await catalog.discover(CatalogFilter.movies, genreId: 35);
+    expect(calls.where((host) =>
+        host == 'raw.githubusercontent.com').length, 1);
+    expect(calls.where((host) =>
+        host == 'cdn.jsdelivr.net').length, 1);
+  });
+
+  test('Real TVmaze genres survive TMDB outages without invented results',
+      () async {
+    final client = MockClient((request) async {
+      if (request.url.host == 'api.tvmaze.com') {
+        return http.Response(jsonEncode([{
+          'id': 501,
+          'name': 'Drama verdadeiro',
+          'type': 'Scripted',
+          'genres': ['Drama'],
+          'premiered': '2024-03-10',
+          'url': 'https://www.tvmaze.com/shows/501/drama',
+        }, {
+          'id': 502,
+          'name': 'Comédia verdadeira',
+          'type': 'Scripted',
+          'genres': ['Comedy'],
+          'premiered': '2024-03-12',
+        }]), 200);
+      }
+      return http.Response('No TMDB feed', 404);
+    });
+    final catalog = CatalogClient(client: client, enableTmdb: true);
+    addTearDown(catalog.close);
+    final dramas = await catalog.discover(CatalogFilter.series,
+        genreId: 18);
+    expect(dramas, hasLength(1));
+    expect(dramas.single.title, 'Drama verdadeiro');
+    expect(dramas.single.genreIds, contains(18));
+    final comedies = await catalog.discover(CatalogFilter.series,
+        genreId: 35);
+    expect(comedies, hasLength(1));
+    expect(comedies.single.title, 'Comédia verdadeira');
+  });
+
   test('Non-BR or malformed snapshot does not assert any provider',
       () async {
     final client = MockClient((request) async =>
