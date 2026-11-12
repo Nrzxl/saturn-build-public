@@ -9,10 +9,13 @@ class TmdbCatalogData {
   static const String baseUrl =
       'https://raw.githubusercontent.com/Nrzxl/saturn-downloads/main/catalog/v1';
   static const groups = ['movies', 'series', 'dramas', 'anime'];
+  static const mirrorUrl =
+      'https://cdn.jsdelivr.net/gh/Nrzxl/saturn-downloads@main/catalog/v1';
 
   final http.Client client;
   final String base;
   final Map<String, Future<List<Map<String, dynamic>>>> _cache = {};
+  final Map<String, Future<List<Map<String, dynamic>>>> _ordered = {};
   Future<Map<String, String>>? _backdropFallback;
 
   TmdbCatalogData(this.client, {this.base = baseUrl});
@@ -67,37 +70,62 @@ class TmdbCatalogData {
     if (!groups.contains(group)) return [];
     try {
       final entries = await _cache.putIfAbsent(group, () async {
-      final response = await client.get(
-        Uri.parse('$base/$group.json'),
-        headers: const {'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200) return [];
-      final parsed = jsonDecode(utf8.decode(response.bodyBytes));
-      if (parsed is! Map ||
-          parsed['schema'] != 1 ||
-          parsed['country'] != 'BR' ||
-          parsed['results'] is! List) {
-        return [];
-      }
-      final results = parsed['results'] as List;
-      return [
-        for (final record in results)
-          if (record is Map && record['id'] is String &&
-              (record['id'] as String).startsWith('tmdb:'))
-            {
-              ...Map<String, dynamic>.from(record),
-              'generatedAt': (parsed['generatedAt'] ?? '').toString(),
-            },
-      ];
+        final sources = base == baseUrl ? [base, mirrorUrl] : [base];
+        for (final source in sources) {
+          try {
+            final response = await client.get(
+              Uri.parse('$' + '{source}/$' + '{group}.json'),
+              headers: const {'Accept': 'application/json'},
+            ).timeout(const Duration(seconds: 8));
+            if (response.statusCode != 200) continue;
+            final parsed = jsonDecode(utf8.decode(response.bodyBytes));
+            if (parsed is! Map || parsed['schema'] != 1 ||
+                parsed['country'] != 'BR' || parsed['results'] is! List) {
+              continue;
+            }
+            return <Map<String, dynamic>>[
+              for (final record in parsed['results'] as List)
+                if (record is Map && record['id'] is String &&
+                    (record['id'] as String).startsWith('tmdb:'))
+                  {
+                    ...Map<String, dynamic>.from(record),
+                    'generatedAt': (parsed['generatedAt'] ?? '').toString(),
+                  },
+            ];
+          } catch (_) {
+            // A failed primary static CDN must not disable genre filters,
+            // ratings and discovery when the public mirror is reachable.
+          }
+        }
+        return <Map<String, dynamic>>[];
       });
-      // A missing/empty feed can become available after its first publish.
-      // Do not permanently cache a 404 in an already-open application.
       if (entries.isEmpty) _cache.remove(group);
       return entries;
     } catch (_) {
       _cache.remove(group);
       rethrow;
     }
+  }
+
+  /// All thousands of titles are normalized and popularity-sorted only once
+  /// per category set, instead of on every keystroke or infinite-scroll page.
+  Future<List<Map<String, dynamic>>> _orderedFor(
+      String filter, List<String> categories) async {
+    final result = await _ordered.putIfAbsent(filter, () async {
+      final lists = await Future.wait(categories.map(load));
+      final unique = <String, Map<String, dynamic>>{};
+      for (final list in lists) {
+        for (final row in list) {
+          unique.putIfAbsent(row['id'] as String, () => row);
+        }
+      }
+      final ordered = unique.values.toList(growable: false);
+      ordered.sort((a, b) => ((b['popularity'] as num?) ?? 0)
+          .compareTo((a['popularity'] as num?) ?? 0));
+      return ordered;
+    });
+    if (result.isEmpty) _ordered.remove(filter);
+    return result;
   }
 
   /// Direct exact-ID lookup: a saved title may be on page 100 of discovery.
@@ -139,17 +167,9 @@ class TmdbCatalogData {
     };
     if (categories.isEmpty) return [];
 
-    final lists = await Future.wait(
-      categories.map((category) => load(category)),
-    );
-    final unique = <String, Map<String, dynamic>>{};
-    for (final list in lists) {
-      for (final record in list) {
-        unique.putIfAbsent(record['id'] as String, () => record);
-      }
-    }
+    final indexed = await _orderedFor(filter, categories);
     final wanted = _normal(search);
-    final selected = unique.values.where((record) {
+    final selected = indexed.where((record) {
       if (streaming != null && streaming.isNotEmpty) {
         final providers = record['streamingProviders'];
         if (providers is! Map || !providers.containsKey(streaming)) {
@@ -181,10 +201,7 @@ class TmdbCatalogData {
           (alternative != null && full.contains(alternative));
     }).toList();
 
-    if (wanted.isEmpty) {
-      selected.sort((a, b) => ((b['popularity'] as num?) ?? 0)
-          .compareTo((a['popularity'] as num?) ?? 0));
-    } else {
+    if (wanted.isNotEmpty) {
       selected.sort((a, b) {
         final ax = _normal((a['title'] ?? '').toString());
         final bx = _normal((b['title'] ?? '').toString());
