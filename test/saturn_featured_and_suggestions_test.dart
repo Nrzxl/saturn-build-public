@@ -67,8 +67,8 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
     expect(tester.widget<Text>(label).data, second.title);
-    expect(find.text('Descobrir histórias'), findsOneWidget);
-    expect(find.text('Ver detalhes'), findsOneWidget);
+    expect(find.text('Descobrir histórias'), findsNothing);
+    expect(find.text('Ver detalhes'), findsNothing);
   });
 
   testWidgets('Sugestão de outra pessoa só altera Watchlist quando aceita',
