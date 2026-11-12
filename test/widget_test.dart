@@ -288,7 +288,7 @@ void main() {
     await tester.tap(find.text('Nós dois'));
     await tester.pumpAndSettle();
     expect(find.text('Duas histórias. Um universo.'), findsOneWidget);
-    expect(find.text('vividas pelos dois'), findsOneWidget);
+    expect(find.text('vividas pelos dois'), findsNothing);
     expect(find.text('com memórias'), findsOneWidget);
     final sharedScroll = find.descendant(
       of: find.byKey(const PageStorageKey('saturn_shared_orbit')),
@@ -392,7 +392,7 @@ void main() {
     await tester.pumpWidget(const SaturnApp());
     await tester.pumpAndSettle();
     expect(find.text('EVERY STORY HAS ITS ORBIT'), findsOneWidget);
-    expect(find.text('Descobrir histórias'), findsOneWidget);
+    expect(find.text('Descobrir histórias'), findsNothing);
     expect(find.text('Minha Watchlist'), findsOneWidget);
   });
 
