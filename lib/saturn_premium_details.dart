@@ -367,6 +367,10 @@ class SaturnCoupleReview extends StatelessWidget {
         children: [
           LayoutBuilder(builder: (context, constraints) {
             final wide = constraints.maxWidth >= 530;
+            // An unscored partner must not leave an empty review panel.
+            // No saved record, note, or independent profile is changed.
+            final partnerRated =
+                SaturnReviewClassification.stars(other) != null;
             final mine = _review(
               key: const Key('saturn-couple-review-self'),
               heading: 'SUA NOTA',
@@ -383,6 +387,7 @@ class SaturnCoupleReview extends StatelessWidget {
               icon: Icons.nightlight_round,
               mine: false,
             );
+            if (!partnerRated) return mine;
             return wide
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
