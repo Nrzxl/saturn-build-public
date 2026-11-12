@@ -6239,6 +6239,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
     var category = _filter;
     var streaming = _streamingFilter;
     var bookSubject = _bookSubject;
+    var genre = _genreId;
     const labels = ['Tudo', 'Filmes', 'Séries', 'Doramas', 'Animes', 'Livros'];
     await showModalBottomSheet<void>(
       context: context,
@@ -6283,6 +6284,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                             category = CatalogFilter.values[i];
                             if (category == CatalogFilter.books) {
                               streaming = null;
+                              genre = null;
                             } else {
                               bookSubject = null;
                             }
@@ -6331,10 +6333,31 @@ class _CatalogExploreState extends State<CatalogExplore> {
                               () => streaming = service),
                           ),
                       ]),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 19),
+                      const Text('GÊNERO · TMDB', style: TextStyle(
+                        color: gold, fontSize: 11, letterSpacing: 1.6)),
+                      const SizedBox(height: 8),
+                      Wrap(spacing: 7, runSpacing: 7, children: [
+                        ChoiceChip(
+                          key: const Key('saturn-genre-all'),
+                          label: const Text('Todos os gêneros'),
+                          selected: genre == null,
+                          selectedColor: wine,
+                          onSelected: (_) => redraw(() => genre = null),
+                        ),
+                        for (final entry in _movieGenres.entries)
+                          ChoiceChip(
+                            key: Key('saturn-genre-${entry.key}'),
+                            label: Text(entry.value),
+                            selected: genre == entry.key,
+                            selectedColor: wine,
+                            onSelected: (_) => redraw(() => genre = entry.key),
+                          ),
+                      ]),
+                      const SizedBox(height: 7),
                       const Text(
-                        'Os gêneros aparecem diretamente nos cards '
-                        'de filmes, séries, doramas e animes.',
+                        'Filtra os títulos por gênero real do TMDB; '
+                        'os gêneros também aparecem dentro dos cards.',
                         style: TextStyle(
                           fontSize: 11, color: Color(0xFFB9A9B0))),
                     ],
@@ -6348,6 +6371,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                     category = CatalogFilter.all;
                     streaming = null;
                     bookSubject = null;
+                    genre = null;
                   }),
                   child: const Text('Limpar filtros'),
                 ),
@@ -6358,7 +6382,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
                       _filter = category;
                       _streamingFilter = streaming;
                       _bookSubject = bookSubject;
-                      _genreId = null;
+                      _genreId = category == CatalogFilter.books
+                          ? null : genre;
                     });
                     Navigator.pop(ctx);
                     _search();
@@ -6519,7 +6544,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
                     Expanded(child: OutlinedButton.icon(
                       onPressed: _openFilters,
                       icon: const Icon(Icons.tune_rounded),
-                      label: const Text('Filtros: tipos e streaming'),
+                      label: const Text('Filtros: tipos, gêneros e streaming'),
                     )),
                   ]),
                   if (_filter != CatalogFilter.all ||
