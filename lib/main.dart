@@ -4377,9 +4377,14 @@ class _SaturnHomeState extends State<SaturnHome>
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
       savedWorks.putIfAbsent(work.id, () => work);
-      _ritualOps[SaturnOrbitRituals.seriesPrefix + number.toString()] = {
+      final key = SaturnOrbitRituals.seriesPrefix + number.toString();
+      final previous = _ritualOps[key];
+      final old = previous is Map ? previous : const {};
+      _ritualOps[key] = {
         'workId': work.id,
         'chosenBy': chosenBy,
+        'createdBy': old['createdBy'] is int ? old['createdBy'] : profile,
+        'createdAt': old['createdAt'] is num ? old['createdAt'] : stamp,
         'finished': false,
         'queued': isQueued,
         'updatedAt': stamp,
@@ -4401,8 +4406,11 @@ class _SaturnHomeState extends State<SaturnHome>
     final upcoming = SaturnOrbitRituals.queuedSeries(_ritualOps);
     final stamp = DateTime.now().millisecondsSinceEpoch;
     setState(() {
-      _ritualOps[SaturnOrbitRituals.seriesPrefix +
-          current.number.toString()] = {
+      final currentKey =
+          SaturnOrbitRituals.seriesPrefix + current.number.toString();
+      final currentRaw = _ritualOps[currentKey];
+      _ritualOps[currentKey] = {
+        if (currentRaw is Map) ...currentRaw,
         'workId': current.workId,
         'chosenBy': current.chosenBy,
         'finished': true,
@@ -4412,7 +4420,9 @@ class _SaturnHomeState extends State<SaturnHome>
       if (upcoming.isNotEmpty) {
         final next = upcoming.first;
         final key = SaturnOrbitRituals.seriesPrefix + next.number.toString();
+        final queuedRaw = _ritualOps[key];
         _ritualOps[key] = {
+          if (queuedRaw is Map) ...queuedRaw,
           'workId': next.workId,
           'chosenBy': next.chosenBy,
           'finished': false,
