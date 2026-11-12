@@ -71,10 +71,12 @@ void main() {
     expect(railWidget.childrenDelegate.estimatedChildCount, 17);
     final firstHeart = find.byKey(
       Key('saturn-recommend-favorite-${films.first.id}'));
-    final firstCollection = find.byKey(
-      Key('saturn-recommend-collections-${films.first.id}'));
+    final firstCompleted = find.byKey(
+      Key('saturn-home-completed-${films.first.id}'));
     expect(firstHeart, findsOneWidget);
-    expect(firstCollection, findsOneWidget);
+    expect(firstCompleted, findsOneWidget);
+    expect(tester.widget<IconButton>(firstCompleted).tooltip,
+      'Marcar como visto');
     final posterStack = find.ancestor(
       of: firstHeart, matching: find.byType(Stack)).first;
     expect(find.descendant(of: posterStack,
@@ -88,8 +90,11 @@ void main() {
     expect(tester.widget<ListView>(books).scrollDirection, Axis.horizontal);
     expect(find.byKey(
         Key('saturn-recommend-favorite-${book.id}')), findsOneWidget);
-    expect(find.byKey(
-        Key('saturn-recommend-collections-${book.id}')), findsOneWidget);
+    final bookCompleted = find.byKey(
+        Key('saturn-home-completed-${book.id}'));
+    expect(bookCompleted, findsOneWidget);
+    expect(tester.widget<IconButton>(bookCompleted).tooltip,
+        'Marcar como lido');
     expect(find.text('Livros • Minha estante'), findsOneWidget);
   });
 
