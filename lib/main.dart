@@ -6674,8 +6674,8 @@ class _CatalogExploreState extends State<CatalogExplore> {
   /// gradient instead of two separate layers with a visible horizontal seam.
   Widget _coverCard(Work work) {
     final favorite = widget.isFavorite?.call(work) == true;
-    final artUrl = SaturnArtwork.bestUrl(
-      SaturnBookCover.resolve(work.id, work.posterUrl), devicePixels: 540);
+    final artUrl = SaturnArtwork.paletteUrl(
+      SaturnBookCover.resolve(work.id, work.posterUrl));
     const actionSize = BoxConstraints(minWidth: 31, minHeight: 32);
     return FutureBuilder<Color>(
       future: SaturnArtwork.toneFor(artUrl),
