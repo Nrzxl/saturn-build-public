@@ -146,6 +146,53 @@ class CatalogGenerationTests(unittest.TestCase):
         })
         self.assertEqual(MODULE.TITLES["tmdb:movie:111"]["imdbId"], "")
 
+    def test_verifies_localized_aliases_duration_and_tv_seasons(self):
+        MODULE.save_result("movie", {
+            "id": 900, "title": "O Filme", "original_title": "The Movie",
+        })
+        MODULE.save_result("tv", {
+            "id": 901, "name": "Ela Era Bonita",
+            "original_name": "그녀는 예뻤다", "genre_ids": [18],
+            "original_language": "ko",
+        })
+
+        def fake_get(path, params=None):
+            self.assertEqual(params["language"], "pt-BR")
+            if path == "/movie/900":
+                return {
+                    "runtime": 117,
+                    "alternative_titles": {
+                        "titles": [{"title": "The Movie"}],
+                    },
+                    "translations": {"translations": []},
+                }
+            if path == "/tv/901":
+                return {
+                    "number_of_seasons": 1,
+                    "alternative_titles": {
+                        "results": [{"title": "She Was Pretty"}],
+                    },
+                    "translations": {"translations": [
+                        {"iso_639_1": "en", "data": {
+                            "name": "She Was Pretty",
+                        }},
+                    ]},
+                }
+            raise AssertionError(path)
+
+        with mock.patch.object(MODULE, "get", fake_get):
+            MODULE.enrich_title_metadata("tmdb:movie:900")
+            MODULE.enrich_title_metadata("tmdb:tv:901")
+
+        movie = MODULE.TITLES["tmdb:movie:900"]
+        drama = MODULE.TITLES["tmdb:tv:901"]
+        self.assertEqual(movie["runtimeMinutes"], 117)
+        self.assertIsNone(movie["seasonCount"])
+        self.assertEqual(drama["seasonCount"], 1)
+        self.assertIsNone(drama["runtimeMinutes"])
+        self.assertIn("She Was Pretty", drama["aliases"])
+        self.assertEqual(drama["aliases"].count("She Was Pretty"), 1)
+
     def test_uses_brazilian_subscription_only_not_rental(self):
         def fake_get(path, params=None):
             if path.startswith("/watch/providers/"):
@@ -194,6 +241,7 @@ class CatalogGenerationTests(unittest.TestCase):
                  mock.patch.object(MODULE, "OUT", pathlib.Path(folder)), \
                  mock.patch.object(MODULE, "MAX_PAGES", 1), \
                  mock.patch.object(MODULE, "MAX_DETAILS", 1), \
+                 mock.patch.object(MODULE, "MAX_METADATA_LOOKUPS", 0), \
                  mock.patch.object(MODULE, "MAX_TRAILERS", 0), \
                  mock.patch.object(MODULE, "MAX_PANORAMA_LOOKUPS", 0), \
                  mock.patch.object(MODULE, "MAX_IMDB_LOOKUPS", 0):
