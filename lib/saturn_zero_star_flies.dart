@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 /// Decorative and pointer-transparent. There is no animation on unrated art
 /// or when the visitor has reduced-motion enabled.
 class SaturnZeroStarFlies extends StatefulWidget {
-  const SaturnZeroStarFlies({super.key});
+  const SaturnZeroStarFlies({super.key, this.dense = false});
+
+  /// When both partners give a film zero, more flies join the swarm.
+  final bool dense;
 
   @override
   State<SaturnZeroStarFlies> createState() => _SaturnZeroStarFliesState();
@@ -44,7 +47,7 @@ class _SaturnZeroStarFliesState extends State<SaturnZeroStarFlies>
       child: ExcludeSemantics(
         child: RepaintBoundary(
           child: CustomPaint(
-            painter: _SaturnFliesPainter(_flight),
+            painter: _SaturnFliesPainter(_flight, dense: widget.dense),
             size: Size.infinite,
             isComplex: false,
             willChange: true,
@@ -56,8 +59,10 @@ class _SaturnZeroStarFliesState extends State<SaturnZeroStarFlies>
 }
 
 class _SaturnFliesPainter extends CustomPainter {
-  _SaturnFliesPainter(this.flight) : super(repaint: flight);
+  _SaturnFliesPainter(this.flight, {required this.dense})
+      : super(repaint: flight);
   final Animation<double> flight;
+  final bool dense;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -99,9 +104,16 @@ class _SaturnFliesPainter extends CustomPainter {
     insect(.30, .19, 0, 1);
     insect(.69, .36, 2.2, .82);
     insect(.46, .12, 4.4, .65);
+    if (dense) {
+      insect(.13, .47, 1.1, .78);
+      insect(.81, .19, 3.3, .73);
+      insect(.61, .68, 5.1, .89);
+      insect(.25, .75, 2.5, .65);
+      insect(.87, .59, 4.7, .77);
+    }
   }
 
   @override
   bool shouldRepaint(covariant _SaturnFliesPainter oldDelegate) =>
-      oldDelegate.flight != flight;
+      oldDelegate.flight != flight || oldDelegate.dense != dense;
 }
