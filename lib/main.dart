@@ -2552,43 +2552,52 @@ class _SaturnHomeState extends State<SaturnHome>
                             width: double.infinity,
                             height: double.infinity),
                           Positioned(
-                            left: 3, top: 3,
-                            child: IconButton.filledTonal(
+                            left: 2, top: 2,
+                            child: IconButton(
                               key: Key('saturn-recommend-favorite-' + work.id),
                               tooltip: _isFavorite(work)
                                   ? 'Retirar dos Favoritos' : 'Favoritar',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 40, minHeight: 40),
+                              iconSize: 24,
                               onPressed: () => _catalogEditionAction(
                                   work, _toggleFavorite),
                               icon: Icon(_isFavorite(work)
                                   ? Icons.favorite_rounded
                                   : Icons.favorite_border_rounded,
-                                color: const Color(0xFFF2B0C4), size: 17),
+                                color: _isFavorite(work)
+                                    ? const Color(0xFFFFC2D5)
+                                    : const Color(0xFFF9E6EF),
+                                shadows: const [
+                                  Shadow(color: Colors.black,
+                                    blurRadius: 8, offset: Offset(0, 1.5)),
+                                  Shadow(color: Color(0xD9000000),
+                                    blurRadius: 3),
+                                ]),
                             ),
                           ),
                           Positioned(
-                            right: 3, bottom: 3,
-                            child: IconButton.filledTonal(
+                            right: 2, top: 2,
+                            child: IconButton(
                               key: Key('saturn-recommend-collections-' + work.id),
                               tooltip: 'Adicionar a coleção',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 40, minHeight: 40),
+                              iconSize: 23,
                               onPressed: () => _catalogEditionAction(
                                   work, (edition) =>
                                       _showCollectionPicker(edition)),
                               icon: const Icon(
-                                  Icons.create_new_folder_outlined,
-                                  size: 17),
-                            ),
-                          ),
-                          Positioned(
-                            right: 3, top: 3,
-                            child: IconButton.filledTonal(
-                              tooltip: work.kind == 'Livro'
-                                  ? 'Quero ler' : 'Watchlist',
-                              onPressed: () => _toggleWatchlist(work),
-                              icon: Icon(
-                                _isWatchlisted(work)
-                                    ? Icons.bookmark_added
-                                    : Icons.bookmark_add_outlined,
-                                size: 17),
+                                Icons.create_new_folder_outlined,
+                                color: Color(0xFFFFE7B5),
+                                shadows: [
+                                  Shadow(color: Colors.black,
+                                    blurRadius: 8, offset: Offset(0, 1.5)),
+                                  Shadow(color: Color(0xD9000000),
+                                    blurRadius: 3),
+                                ]),
                             ),
                           ),
                         ]),
