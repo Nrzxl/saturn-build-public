@@ -27,6 +27,8 @@ class CatalogEntry {
   final Map<String, String> externalRatings;
   final double? tmdbScore;
   final int? tmdbVoteCount;
+  final int? runtimeMinutes;
+  final int? seasonCount;
   final String watchUrl;
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
@@ -54,6 +56,8 @@ class CatalogEntry {
     this.externalRatings = const {},
     this.tmdbScore,
     this.tmdbVoteCount,
+    this.runtimeMinutes,
+    this.seasonCount,
     this.watchUrl = '',
     this.trailerYoutubeId = '',
     this.nativeTrailerUrl = '',
@@ -107,6 +111,10 @@ class CatalogClient {
       tmdbVoteCount: row['tmdbVoteCount'] is num
           ? (row['tmdbVoteCount'] as num).toInt()
           : null,
+      runtimeMinutes: row['runtimeMinutes'] is num
+          ? (row['runtimeMinutes'] as num).toInt() : null,
+      seasonCount: row['seasonCount'] is num
+          ? (row['seasonCount'] as num).toInt() : null,
     );
   }
 
@@ -286,6 +294,7 @@ class CatalogClient {
     required int page,
     String? streaming,
     int? genreId,
+    int rotationSeed = 0,
   }) async {
     if (!_enableTmdb || filter == CatalogFilter.books) return [];
     final rows = await _tmdb.query(
@@ -294,6 +303,7 @@ class CatalogClient {
       page: page,
       streaming: streaming,
       genreId: genreId,
+      rotationSeed: rotationSeed,
     );
     return [
       for (final row in rows)
@@ -332,6 +342,10 @@ class CatalogClient {
               : null,
           tmdbVoteCount: row['tmdbVoteCount'] is num
               ? (row['tmdbVoteCount'] as num).toInt() : null,
+          runtimeMinutes: row['runtimeMinutes'] is num
+              ? (row['runtimeMinutes'] as num).toInt() : null,
+          seasonCount: row['seasonCount'] is num
+              ? (row['seasonCount'] as num).toInt() : null,
           watchUrl: (row['watchUrl'] ?? '').toString(),
           trailerYoutubeId: (row['trailerYoutubeId'] ?? '').toString(),
           nativeTrailerUrl: (row['nativeTrailerUrl'] ?? '').toString(),
@@ -361,7 +375,7 @@ class CatalogClient {
         filter: filter, query: query, page: p,
         streaming: streaming, genreId: genreId);
       if (found.isNotEmpty || streaming != null || genreId != null) {
-        if (filter == CatalogFilter.all && streaming == null) {
+        if (filter == CatalogFilter.all && streaming == null && genreId == null) {
           try {
             final books = await _books(query, page: p,
                 subject: bookSubject);
@@ -436,14 +450,16 @@ class CatalogClient {
     String? streaming,
     String? bookSubject,
     int? genreId,
+    int rotationSeed = 0,
   }) async {
     final p = page.clamp(1, 500).toInt();
     try {
       final found = await _snapshot(
         filter: filter, query: '', page: p,
-        streaming: streaming, genreId: genreId);
+        streaming: streaming, genreId: genreId,
+        rotationSeed: rotationSeed);
       if (found.isNotEmpty || streaming != null || genreId != null) {
-        if (filter == CatalogFilter.all && streaming == null) {
+        if (filter == CatalogFilter.all && streaming == null && genreId == null) {
           try {
             return _unique([
               ...found,
