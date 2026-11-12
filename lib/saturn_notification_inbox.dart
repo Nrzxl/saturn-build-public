@@ -87,8 +87,9 @@ class SaturnNotificationInbox {
         // New records distinguish the person who actually registered the
         // choice from the chooser of an old show being imported into SATURN.
         if (row['chosenBy'] != other ||
-            (row['createdBy'] is int && row['createdBy'] != other) ||
-            row['finished'] == true) continue;
+            (row['createdBy'] is int && row['createdBy'] != other)) {
+          continue;
+        }
         final at = _stamp(row['createdAt'] ?? row['updatedAt']);
         if (at <= 0) continue;
         final id = 'series:${entry.key}';
