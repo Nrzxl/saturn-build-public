@@ -33,6 +33,9 @@ MAX_PANORAMA_LOOKUPS = max(0, min(900,
 # IMDb IDs are verified from TMDB external_ids (not guessed from names).
 MAX_IMDB_LOOKUPS = max(0, min(500,
     int(os.environ.get("SATURN_IMDB_LOOKUPS", "250"))))
+# Extra detail lookup adds verified duration, season count and alternate titles.
+MAX_METADATA_LOOKUPS = max(0, min(2400,
+    int(os.environ.get("SATURN_METADATA_LOOKUPS", "1200"))))
 # Public snapshots must not redistribute licensed scores without approval.
 OMDB_PUBLICATION_ALLOWED = os.environ.get("SATURN_CRITIC_PUBLICATION_ALLOWED") == "true"
 OMDB_API_KEY = (os.environ.get("SATURN_OMDB_API_KEY", "").strip()
@@ -155,6 +158,9 @@ def save_result(media: str, record: dict) -> str | None:
         "trailerYoutubeId": "",
         "trailerYoutubeIds": [],
         "originalLanguage": (record.get("original_language") or "").lower(),
+        "aliases": [],
+        "runtimeMinutes": None,
+        "seasonCount": None,
         "externalRatings": {},
         "ratingsUpdatedAt": "",
         "availabilityChecked": False,
@@ -240,6 +246,58 @@ def enrich_single(ident: str, provider_map: dict[str, dict[str, int]]) -> None:
         for service, known_id in ids.items():
             if pid == known_id:
                 item["streamingProviders"][service] = pname
+
+
+def enrich_title_metadata(ident: str) -> None:
+    """Read genuine TMDB runtime/seasons plus localized alternate titles.
+
+    Never infer TV seasons or movie duration from the media type or genre.
+    """
+    _, media, sid = ident.split(":")
+    detail = get(f"/{media}/{sid}", {
+        "language": "pt-BR",
+        "append_to_response": "alternative_titles,translations",
+    })
+    item = TITLES[ident]
+    if media == "movie":
+        duration = detail.get("runtime")
+        if isinstance(duration, int) and 0 < duration <= 800:
+            item["runtimeMinutes"] = duration
+    else:
+        seasons = detail.get("number_of_seasons")
+        if isinstance(seasons, int) and 0 < seasons <= 150:
+            item["seasonCount"] = seasons
+    # TV's English broadcast title often differs from Korean/Portuguese names.
+    candidates = [
+        detail.get("title") or detail.get("name"),
+        detail.get("original_title") or detail.get("original_name"),
+    ]
+    alt = detail.get("alternative_titles") or {}
+    for row in (alt.get("titles") or alt.get("results") or []):
+        if isinstance(row, dict):
+            candidates.append(row.get("title") or row.get("name"))
+    translations = detail.get("translations") or {}
+    for row in translations.get("translations") or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("iso_639_1") not in {"en", "pt", "es", "ko", "ja"}:
+            continue
+        data = row.get("data") or {}
+        if isinstance(data, dict):
+            candidates.append(data.get("title") or data.get("name"))
+    aliases = []
+    known = {item["title"].casefold(), item["originalTitle"].casefold()}
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        candidate = candidate.strip()
+        folded = candidate.casefold()
+        if 1 < len(candidate) <= 160 and folded not in known:
+            aliases.append(candidate)
+            known.add(folded)
+        if len(aliases) >= 24:
+            break
+    item["aliases"] = aliases
 
 
 def best_panorama(payload: dict) -> str:
@@ -372,6 +430,14 @@ def build() -> None:
     crawl_discover("tv", "high-rated series",
                    {"vote_count.gte": 100, "sort_by": "vote_average.desc"},
                    min(MAX_PAGES, 20))
+    # Genre slices reveal many older/less popular films and shows that
+    # do not appear on the first pages of the popularity feed.
+    for genre in [28, 12, 16, 35, 18, 10749, 878, 27, 9648, 99]:
+        crawl_discover("movie", f"film-genre-{genre}",
+                       {"with_genres": genre}, min(MAX_PAGES, 9))
+    for genre in [10759, 16, 35, 80, 18, 10751, 10765, 10766, 99]:
+        crawl_discover("tv", f"tv-genre-{genre}",
+                       {"with_genres": genre}, min(MAX_PAGES, 9))
     for language in ["ko", "ja", "zh", "th"]:
         crawl_discover(
             "tv", f"dramas-{language}", {"with_original_language": language},
@@ -382,6 +448,21 @@ def build() -> None:
         {"with_original_language": "ja", "with_genres": 16},
         min(MAX_PAGES, 30),
     )
+    localization_seeds = set()
+    # Make the user's verified example discoverable even when its original
+    # broadcast year places it outside top popularity pages.
+    for search_term in ("She Was Pretty", "Ela Era Bonita"):
+        try:
+            response = get("/search/tv", {"query": search_term,
+                       "language": "pt-BR", "include_adult": "false"})
+            for record in response.get("results") or []:
+                if isinstance(record, dict):
+                    ident = save_result("tv", record)
+                    if ident:
+                        localization_seeds.add(ident)
+        except Exception as exc:
+            print(f"Localized discovery seed unavailable: {type(exc).__name__}",
+                  file=sys.stderr)
     for media in ["movie", "tv"]:
         for service, provider_id in provider_map[media].items():
             crawl_discover(
@@ -417,6 +498,17 @@ def build() -> None:
                   file=sys.stderr)
         if (i + 1) % 100 == 0:
             print(f"Watch provider details: {i + 1}")
+
+    enriched_titles = 0
+    for ident in dict.fromkeys([
+            *sorted(localization_seeds), *prioritized[:MAX_METADATA_LOOKUPS]]):
+        try:
+            enrich_title_metadata(ident)
+            enriched_titles += 1
+        except Exception as exc:
+            print(f"TMDB title metadata unavailable for {ident}: "
+                  f"{type(exc).__name__}", file=sys.stderr)
+    print(f"Title metadata enriched: {enriched_titles}")
 
     verified_imdb_count = 0
     for ident in prioritized[:MAX_IMDB_LOOKUPS]:
@@ -531,6 +623,7 @@ def build() -> None:
         "source": "TMDB / JustWatch", "counts": stats,
         "requests": TOTAL_CALLS, "checked": min(MAX_DETAILS, len(prioritized)),
         "trailerLookups": min(MAX_TRAILERS, len(prioritized)),
+        "metadataLookups": min(MAX_METADATA_LOOKUPS, len(prioritized)),
     }))
 
 
