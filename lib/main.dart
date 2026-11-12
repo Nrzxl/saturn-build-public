@@ -15,6 +15,8 @@ import 'streaming_preferences.dart';
 import 'streaming_links.dart';
 import 'saturn_star_rating.dart';
 import 'saturn_review_tiers.dart';
+import 'saturn_personal_score.dart';
+import 'saturn_catalog_labels.dart';
 import 'saturn_metallic_halo.dart';
 import 'saturn_zero_star_flies.dart';
 import 'saturn_smart_collections.dart';
@@ -2770,56 +2772,35 @@ class _SaturnHomeState extends State<SaturnHome>
                 ),
                 if (inOrbit && !compact)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 3, 6, 5),
-                    child: Row(children: [
-                      for (var person = 0; person < 2; person++) ...[
-                        if (person > 0) const SizedBox(width: 3),
-                        Expanded(child: Builder(builder: (context) {
-                          final score = SaturnReviewClassification.stars(
-                            records['${person}:${work.id}']);
-                          final shade = SaturnReviewClassification.fromRating(
-                            records['${person}:${work.id}'])?.color;
-                          return Container(
+                    padding: const EdgeInsets.fromLTRB(8, 3, 8, 5),
+                    child: Wrap(spacing: 5, runSpacing: 4, children: [
+                      for (var person = 0; person < 2; person++)
+                        if (SaturnReviewClassification.stars(
+                            records['${person}:${work.id}']) != null)
+                          SaturnPersonalScore(
                             key: Key('saturn-library-person-${person}-${work.id}'),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 5),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(7),
-                              color: (shade ?? const Color(0xFF615061))
-                                  .withValues(alpha: .18),
-                              border: Border.all(
-                                color: (shade ?? const Color(0xFF736075))
-                                    .withValues(alpha: .72)),
-                            ),
-                            child: Text(
-                              '${person == profile ? 'Você' : profiles[person]} '
-                              '${score == null ? '—' : '${score.toStringAsFixed(1)} ★'}',
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: shade ?? const Color(0xFFE1CBD4),
-                                fontWeight: FontWeight.bold, fontSize: 10),
-                            ),
-                          );
-                        })),
-                      ],
+                            name: person == profile ? 'Você' : profiles[person],
+                            record: records['${person}:${work.id}'],
+                          ),
                     ]),
+                  )
+                else if (stars != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 5),
+                    child: SaturnPersonalScore(
+                      key: Key('saturn-library-person-active-${work.id}'),
+                      name: 'Você', record: personal,
+                    ),
                   )
                 else
                   Padding(
                     padding: const EdgeInsets.fromLTRB(8, 1, 8, 4),
                     child: Text(
-                      stars == null
-                          ? (work.year > 0
-                              ? work.kind + ' · ' + work.year.toString()
-                              : work.kind)
-                          : 'Você · ' + stars.toStringAsFixed(1) + ' ★',
+                      work.year > 0
+                          ? '${work.kind} · ${work.year}' : work.kind,
                       maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: actionMetal ?? const Color(0xFFCEB9C6),
-                        fontSize: 10,
-                        fontWeight: stars == null
-                            ? FontWeight.w400 : FontWeight.w700),
+                      style: const TextStyle(
+                        color: Color(0xFFCEB9C6), fontSize: 10),
                     ),
                   ),
                 if (tier != null)
@@ -3792,6 +3773,8 @@ class _SaturnHomeState extends State<SaturnHome>
       SaturnCoupleInsights insights) {
     final record = insights.profile(person, work.id);
     final score = SaturnReviewClassification.stars(record);
+    // Unrated profiles do not render an empty score or a placeholder chip.
+    if (score == null) return const SizedBox.shrink();
     final tier = SaturnReviewClassification.fromRating(record);
     final tone = tier?.color ?? const Color(0xFFBFA9B8);
     final label = person == profile ? 'Você · $name' : name;
