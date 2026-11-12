@@ -410,7 +410,7 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
     await tester.tap(find.text('Explorar'));
     await tester.pumpAndSettle();
-    expect(find.text('Filtros: tipos e streaming'), findsOneWidget);
+    expect(find.text('Filtros: tipos, gêneros e streaming'), findsOneWidget);
   });
 
   testWidgets('Obra salva abre ficha com capa e streamings', (tester) async {
@@ -666,13 +666,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Explorar'));
     await tester.pumpAndSettle();
-    expect(find.text('Filtros: tipos e streaming'), findsOneWidget);
-    await tester.tap(find.text('Filtros: tipos e streaming'));
+    expect(find.text('Filtros: tipos, gêneros e streaming'), findsOneWidget);
+    await tester.tap(find.text('Filtros: tipos, gêneros e streaming'));
     await tester.pumpAndSettle();
     expect(find.text('TIPO DE HISTÓRIA'), findsOneWidget);
     expect(find.text('STREAMING NO BRASIL'), findsOneWidget);
-    expect(find.text('GÊNERO'), findsNothing);
-    expect(find.textContaining('Os gêneros aparecem diretamente nos cards'), findsOneWidget);
+    expect(find.text('GÊNERO · TMDB'), findsOneWidget);
+    expect(find.byKey(const Key('saturn-genre-all')), findsOneWidget);
+    expect(find.byKey(const Key('saturn-genre-18')), findsOneWidget);
     await tester.tap(find.text('Livros').last);
     await tester.pumpAndSettle();
     expect(find.text('GÊNERO LITERÁRIO'), findsOneWidget);
