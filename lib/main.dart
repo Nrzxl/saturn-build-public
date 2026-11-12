@@ -385,6 +385,28 @@ class _SaturnHomeState extends State<SaturnHome>
                         ? 'Ativando notificações...'
                         : 'Ativar notificações no dispositivo'),
                     ),
+                    TextButton.icon(
+                      key: const Key('saturn-disable-web-push'),
+                      onPressed: _registeringPush ? null : () async {
+                        final cloud = _cloud;
+                        if (cloud == null || !cloud.connected) return;
+                        setState(() => _registeringPush = true);
+                        if (ctx.mounted) redraw(() {});
+                        try {
+                          await SaturnWebPush.disable(cloud);
+                          if (mounted) setState(() => _pushMessage =
+                              'Notificações de dispositivo desativadas.');
+                        } catch (_) {
+                          if (mounted) setState(() => _pushMessage =
+                              'Não foi possível cancelar a inscrição. Tente novamente.');
+                        } finally {
+                          if (mounted) setState(() => _registeringPush = false);
+                          if (ctx.mounted) redraw(() {});
+                        }
+                      },
+                      icon: const Icon(Icons.notifications_off_outlined, size: 17),
+                      label: const Text('Desativar neste aparelho'),
+                    ),
                     if (_pushMessage.isNotEmpty)
                       Text(_pushMessage, textAlign: TextAlign.center,
                         style: const TextStyle(
