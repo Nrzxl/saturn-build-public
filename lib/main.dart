@@ -17,6 +17,7 @@ import 'saturn_star_rating.dart';
 import 'saturn_review_tiers.dart';
 import 'saturn_personal_score.dart';
 import 'saturn_catalog_labels.dart';
+import 'saturn_technical_metadata.dart';
 import 'saturn_metallic_halo.dart';
 import 'saturn_zero_star_flies.dart';
 import 'saturn_smart_collections.dart';
@@ -521,6 +522,26 @@ class _SaturnHomeState extends State<SaturnHome>
   Set<String> get currentWatchlist =>
       watchlists.putIfAbsent(profile, () => <String>{});
   final CatalogClient _homeCatalog = CatalogClient();
+  final SaturnTechnicalMetadata _technicalMetadata = SaturnTechnicalMetadata();
+
+  // One verified compact index feeds the entire UI, including legacy saved
+  // titles. No TMDB request is performed when painting individual cards.
+  String? _technicalLabel(Work work) {
+    final duration = work.runtimeMinutes != null &&
+            work.runtimeMinutes! > 0 && work.runtimeMinutes! <= 800
+        ? work.runtimeMinutes : _technicalMetadata.runtimeFor(work.id);
+    final seasons = work.seasonCount != null &&
+            work.seasonCount! > 0 && work.seasonCount! <= 150
+        ? work.seasonCount : _technicalMetadata.seasonsFor(work.id);
+    return SaturnCatalogLabels.technical(
+      kind: work.kind, runtimeMinutes: duration, seasonCount: seasons);
+  }
+
+  void _loadTechnicalMetadata() {
+    unawaited(_technicalMetadata.hydrate(onChanged: () {
+      if (mounted) setState(() {});
+    }));
+  }
   Timer? _featuredTimer;
   int _featuredIndex = 0;
   double _featuredDragDistance = 0;
@@ -604,7 +625,10 @@ class _SaturnHomeState extends State<SaturnHome>
         },
       );
     }
-    _load().then((_) => _tryResumeOrbit());
+    _load().then((_) {
+      _loadTechnicalMetadata();
+      return _tryResumeOrbit();
+    });
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _loadHomeRecommendations(),
     );
@@ -622,6 +646,7 @@ class _SaturnHomeState extends State<SaturnHome>
     _cloud?.dispose();
     _featuredTimer?.cancel();
     _homeCatalog.close();
+    _technicalMetadata.close();
     super.dispose();
   }
 
@@ -3040,7 +3065,12 @@ class _SaturnHomeState extends State<SaturnHome>
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
-                          work.year > 0 ? '${work.kind} · ${work.year}' : work.kind,
+                          [
+                            work.kind,
+                            if (work.year > 0) work.year.toString(),
+                            if (_technicalLabel(work) != null)
+                              _technicalLabel(work)!,
+                          ].join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -3060,6 +3090,7 @@ class _SaturnHomeState extends State<SaturnHome>
   /// Only a personal rating plus an actual written review earns a halo.
   Widget _rankedPosterCard(Work work, {bool compact = false}) {
     final personal = entry(work);
+    final technical = _technicalLabel(work);
     final tier = SaturnReviewClassification.of(personal);
     final stars = SaturnReviewClassification.stars(personal);
     final comment = (personal['notes'] ?? '').toString().trim();
@@ -3215,11 +3246,37 @@ class _SaturnHomeState extends State<SaturnHome>
                   Padding(
                     padding: const EdgeInsets.fromLTRB(8, 1, 8, 4),
                     child: Text(
-                      work.year > 0
-                          ? '${work.kind} · ${work.year}' : work.kind,
+                      [
+                        work.kind,
+                        if (work.year > 0) work.year.toString(),
+                        if (technical != null) technical,
+                      ].join(' · '),
                       maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFFCEB9C6), fontSize: 10),
+                    ),
+                  ),
+                if (technical != null &&
+                    (stars != null || (inOrbit && !compact)))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 3),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(work.kind == 'Filme'
+                            ? Icons.schedule_rounded
+                            : Icons.live_tv_rounded,
+                          size: 11, color: const Color(0xFFD8BEA1)),
+                        const SizedBox(width: 4),
+                        Flexible(child: Text(
+                          technical,
+                          key: Key('saturn-ranked-technical-' + work.id),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFE3C9AF), fontSize: 10),
+                        )),
+                      ],
                     ),
                   ),
                 if (tier != null)
@@ -3527,6 +3584,7 @@ class _SaturnHomeState extends State<SaturnHome>
             _catalogEditionAction(work, _toggleWatchlist),
         isWatchlisted: _isWatchlisted,
         isInAnyCollection: _isInAnyCollection,
+        technicalLabel: _technicalLabel,
         onToggleCompleted: (work) =>
             _catalogEditionAction(work, _toggleCompleted),
         isCompleted: _isDone,
@@ -6401,6 +6459,7 @@ class CatalogExplore extends StatefulWidget {
   /// Allows reusing already fetched catalog pages without a network request.
   final List<Work> initialResults;
   final bool Function(Work) isInAnyCollection;
+  final String? Function(Work)? technicalLabel;
   final Future<bool> Function(List<Work> works) onAddToCollections;
   final bool Function(Work)? showZeroStarFlies;
 
@@ -6416,6 +6475,7 @@ class CatalogExplore extends StatefulWidget {
     required this.onToggleWatchlist,
     required this.isWatchlisted,
     required this.isInAnyCollection,
+    this.technicalLabel,
     required this.onAddToCollections,
     required this.onToggleCompleted,
     required this.isCompleted,
@@ -7110,11 +7170,12 @@ class _CatalogExploreState extends State<CatalogExplore> {
     final artUrl = SaturnArtwork.paletteUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl));
     final genreLine = SaturnCatalogLabels.genreLine(work.genreIds);
-    final technical = SaturnCatalogLabels.technical(
-      kind: work.kind,
-      runtimeMinutes: work.runtimeMinutes,
-      seasonCount: work.seasonCount,
-    );
+    final technical = widget.technicalLabel?.call(work) ??
+        SaturnCatalogLabels.technical(
+          kind: work.kind,
+          runtimeMinutes: work.runtimeMinutes,
+          seasonCount: work.seasonCount,
+        );
     final hasTmdbScore = work.id.startsWith('tmdb:') &&
         work.tmdbScore != null && work.tmdbScore!.isFinite &&
         work.tmdbScore! >= 0 && work.tmdbScore! <= 10;
