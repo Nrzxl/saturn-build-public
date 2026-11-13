@@ -33,13 +33,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('DA SUA WATCHLIST · PARA VOCÊ'), findsOneWidget);
     final label = find.byKey(const Key('saturn-featured-title'));
-    expect(tester.widget<Text>(label).data, first.title);
+    expect(tester.widget<Text>(label.last).data, first.title);
     expect(find.byKey(Key('saturn-hero-art-${first.id}')), findsOneWidget);
     expect(find.text('1/2'), findsNothing);
     // Timed rotation must crossfade the artwork without input.
     await tester.pump(const Duration(seconds: 8));
     await tester.pump();
-    expect(tester.widget<Text>(label).data, second.title);
+    expect(tester.widget<Text>(label.last).data, second.title);
     expect(find.byKey(Key('saturn-hero-art-${second.id}')), findsOneWidget);
     final swiper = find.byKey(const Key('saturn-feature-swipe'));
     expect(swiper, findsOneWidget);
@@ -48,25 +48,25 @@ void main() {
     // User-requested direction: drag LEFT to go back, RIGHT to advance.
     await tester.drag(swiper, const Offset(-150, 0));
     await tester.pump();
-    expect(tester.widget<Text>(label).data, first.title);
+    expect(tester.widget<Text>(label.last).data, first.title);
     await tester.drag(swiper, const Offset(150, 0));
     await tester.pump();
-    expect(tester.widget<Text>(label).data, second.title);
+    expect(tester.widget<Text>(label.last).data, second.title);
     // Minor accidental movements must not trigger another slide.
     await tester.drag(swiper, const Offset(13, 0));
     await tester.pump();
-    expect(tester.widget<Text>(label).data, second.title);
+    expect(tester.widget<Text>(label.last).data, second.title);
     // A horizontal mouse drag works on desktop, not only touch.
     await tester.drag(swiper, const Offset(-140, 0),
         kind: PointerDeviceKind.mouse);
     await tester.pump();
-    expect(tester.widget<Text>(label).data, first.title);
+    expect(tester.widget<Text>(label.last).data, first.title);
     // Arrow keys remain an accessible alternative to the hidden buttons.
     Focus.of(tester.element(swiper)).requestFocus();
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
-    expect(tester.widget<Text>(label).data, second.title);
+    expect(tester.widget<Text>(label.last).data, second.title);
     expect(find.text('Descobrir histórias'), findsNothing);
     expect(find.text('Ver detalhes'), findsNothing);
   });
