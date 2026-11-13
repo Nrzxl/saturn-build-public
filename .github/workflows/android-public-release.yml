@@ -57,6 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter create --platforms=android --project-name saturn_app .
+          python3 scripts/prepare_android_brand.py
           python3 -m unittest discover -s scripts -p 'test_*.py'
           flutter pub get
           flutter analyze lib
