@@ -140,11 +140,11 @@ void main() {
     expect(find.byKey(const Key('saturn-feature-next')), findsNothing);
     for (var i = 0; i < 9; i++) {
       await tester.drag(swipe, const Offset(135, 0));
-      await tester.pump();
+      await tester.pumpAndSettle();
     }
     expect(find.text('10/11'), findsNothing);
     expect(tester.widget<Text>(
-      find.byKey(const Key('saturn-featured-title'))).data, 'Filme 10');
+      find.byKey(const Key('saturn-featured-title')).last).data, 'Filme 10');
   });
 
 }
