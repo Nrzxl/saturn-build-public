@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:saturn_app/saturn_card_couple_scores.dart';
+import 'package:saturn_app/saturn_personal_score.dart';
 
 void main() {
   const coraline = 'tmdb:movie:14836';
@@ -31,9 +32,24 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const Key('saturn-library-person-1-$coraline')),
         findsOneWidget);
+    // Restore the approved The Office styling: two bordered gold badges
+    // side by side even in a narrow poster; never vertically stacked.
+    final horizontal = find.byKey(
+        const Key('saturn-horizontal-scores-$coraline'));
+    expect(horizontal, findsOneWidget);
+    expect(find.descendant(
+        of: horizontal, matching: find.byType(SaturnPersonalScore)),
+        findsNWidgets(2));
+    final row = tester.widget<Row>(horizontal);
+    expect(row.mainAxisSize, MainAxisSize.min);
     expect(find.text('Você 5.0 ★'), findsOneWidget);
     expect(find.text('Ela 5.0 ★'), findsOneWidget);
     expect(find.textContaining('5.0 ★'), findsNWidgets(2));
+    for (final chip in tester.widgetList<SaturnPersonalScore>(
+        find.descendant(
+          of: horizontal, matching: find.byType(SaturnPersonalScore)))) {
+      expect(chip.record, isNotNull);
+    }
     expect(tester.takeException(), isNull);
   });
 
@@ -87,5 +103,38 @@ void main() {
     )));
     expect(find.textContaining('★'), findsNothing);
     expect(find.textContaining('Sem nota'), findsNothing);
+  });
+
+  testWidgets('Badge border and star follow gold, silver and bronze tiers',
+      (tester) async {
+    for (final row in [
+      (rating: 10.0, color: const Color(0xFFE3BF70)),
+      (rating: 6.0, color: const Color(0xFFBDC8D4)),
+      (rating: 2.0, color: const Color(0xFFC38A62)),
+    ]) {
+      await tester.pumpWidget(MaterialApp(home: Scaffold(
+        body: SizedBox(width: 140, height: 34,
+          child: SaturnCardCoupleScores(
+            workId: coraline, viewerProfile: 0,
+            profileNames: const ['Eu', 'Ela'],
+            records: {
+              '0:$coraline': {'rating': row.rating},
+              '1:$coraline': {'rating': row.rating},
+            },
+          ),
+        ),
+      )));
+      final badge = find.byKey(Key('saturn-library-person-0-$coraline'));
+      expect(badge, findsOneWidget);
+      final label = tester.widget<Text>(
+        find.descendant(of: badge, matching: find.byType(Text)));
+      expect(label.style!.color, row.color);
+      final box = tester.widget<Container>(
+        find.descendant(of: badge, matching: find.byType(Container)).first);
+      final decoration = box.decoration! as BoxDecoration;
+      expect(decoration.border!.top.color,
+          row.color.withValues(alpha: .68));
+      expect(tester.takeException(), isNull);
+    }
   });
 }
