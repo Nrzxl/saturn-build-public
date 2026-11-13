@@ -662,6 +662,7 @@ class _SaturnHomeState extends State<SaturnHome>
   Timer? _featuredTimer;
   int _featuredIndex = 0;
   int _featuredLoadTicket = 0;
+  int _requestedFeaturedIndex = 0;
   Work? _visibleFeatured;
   final Map<String, String> _stagedHeroBackdrops = {};
   double _featuredDragDistance = 0;
@@ -2904,8 +2905,9 @@ class _SaturnHomeState extends State<SaturnHome>
   void _queueFeatured(int direction) {
     final slides = _featuredTitles();
     if (!mounted || slides.length < 2) return;
-    final nextIndex = (_featuredIndex + direction + slides.length) %
+    final nextIndex = (_requestedFeaturedIndex + direction + slides.length) %
         slides.length;
+    _requestedFeaturedIndex = nextIndex;
     final next = slides[nextIndex];
     final ticket = ++_featuredLoadTicket;
     unawaited(() async {
@@ -2923,11 +2925,14 @@ class _SaturnHomeState extends State<SaturnHome>
               devicePixels: 1200);
       if (photo.startsWith('https://')) {
         try {
-          await precacheImage(NetworkImage(photo), context)
-              .timeout(const Duration(seconds: 6));
+          await precacheImage(NetworkImage(photo), context,
+              onError: (error, stack) {
+                // Missing images are deliberately handled by our gradient
+                // fallback without surfacing an unhandled framework error.
+              }).timeout(const Duration(seconds: 6));
         } catch (_) {
-          // No flash of an empty card on offline / missing images.
-          return;
+          // A timed-out image still leaves the old frame up during the
+          // bounded wait, then crossfades gracefully to the fallback.
         }
       }
       if (!mounted || ticket != _featuredLoadTicket) return;
