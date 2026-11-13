@@ -15,7 +15,7 @@ import 'streaming_preferences.dart';
 import 'streaming_links.dart';
 import 'saturn_star_rating.dart';
 import 'saturn_review_tiers.dart';
-import 'saturn_personal_score.dart';
+import 'saturn_card_couple_scores.dart';
 import 'saturn_catalog_labels.dart';
 import 'saturn_technical_metadata.dart';
 import 'saturn_metallic_halo.dart';
@@ -3288,12 +3288,11 @@ class _SaturnHomeState extends State<SaturnHome>
     final personal = entry(work);
     final technical = _technicalLabel(work);
     final tier = SaturnReviewClassification.of(personal);
-    final stars = SaturnReviewClassification.stars(personal);
-    final sharedScoreProfiles = <int>[
-      for (var person = 0; person < 2; person++)
-        if (SaturnReviewClassification.stars(
-            records['${person}:${work.id}']) != null) person,
-    ];
+    // Both authored ratings belong to this catalogue entry even before it
+    // enters Nossa Órbita; never hide the other profile for that reason.
+    final hasPersonalRatings = [0, 1].any((person) =>
+        SaturnReviewClassification.stars(
+            records['${person}:${work.id}']) != null);
     final comment = (personal['notes'] ?? '').toString().trim();
     final inOrbit = shared.contains(work.id);
     final firstTier = inOrbit
@@ -3443,39 +3442,23 @@ class _SaturnHomeState extends State<SaturnHome>
                     padding: const EdgeInsets.fromLTRB(8, 2, 8, 3),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: inOrbit && !compact && sharedScoreProfiles.isNotEmpty
-                          ? FittedBox(fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Row(mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  for (final person in sharedScoreProfiles)
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 5),
-                                      child: SaturnPersonalScore(
-                                        key: Key('saturn-library-person-'
-                                            '${person}-${work.id}'),
-                                        name: person == profile
-                                            ? 'Você' : profiles[person],
-                                        record: records['${person}:${work.id}'],
-                                      ),
-                                    ),
-                                ],
-                              ),
+                      child: hasPersonalRatings
+                          ? SaturnCardCoupleScores(
+                              key: Key('saturn-couple-scores-' + work.id),
+                              workId: work.id,
+                              records: records,
+                              profileNames: profiles,
+                              viewerProfile: profile,
                             )
-                          : stars != null
-                              ? SaturnPersonalScore(
-                                  key: Key('saturn-library-person-active-'
-                                      + work.id),
-                                  name: 'Você', record: personal)
-                              : Text(
-                                  [
-                                    work.kind,
-                                    if (work.year > 0) work.year.toString(),
-                                  ].join(' · '),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFFCEB9C6), fontSize: 10)),
+                          : Text(
+                              [
+                                work.kind,
+                                if (work.year > 0) work.year.toString(),
+                              ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFFCEB9C6), fontSize: 10)),
                     ),
                   ),
                 ),
