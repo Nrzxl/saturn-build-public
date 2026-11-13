@@ -7,8 +7,9 @@ import 'saturn_review_tiers.dart';
 /// rating is not restricted to sharedOps / Nossa Órbita membership: both
 /// people can rate the same film before adding it to a shared collection.
 ///
-/// Narrow poster cards use two readable rows rather than shrinking both
-/// full-size pills into illegible text. No rating is invented or written.
+/// All poster sizes use the original SATURN horizontal, outlined score
+/// pills. Scale the paired badges together on narrow cards without stacking
+/// them. Ratings are read from their own profile; nothing is invented or saved.
 class SaturnCardCoupleScores extends StatelessWidget {
   const SaturnCardCoupleScores({
     super.key,
@@ -41,64 +42,24 @@ class SaturnCardCoupleScores extends StatelessWidget {
             ? profileNames[person].trim()
             : 'Outro perfil');
 
-    return LayoutBuilder(builder: (context, constraints) {
-      if (rated.length > 1 && constraints.maxWidth < 190) {
-        // Two 14px lines fit the library's 34px score slot (which also has
-        // vertical padding). Keep one Text per profile for accessibility.
-        // Limit very long names rather than clipping the numeric score.
-        String compactName(int person) {
-          final first = label(person).split(' ').first;
-          return first.length > 10 ? '${first.substring(0, 9)}…' : first;
-        }
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final person in rated)
-              SizedBox(
-                height: 14,
-                child: Row(
-                  key: Key('saturn-library-person-$person-$workId'),
-                  children: [
-                    Flexible(child: Text(
-                      '${compactName(person)} '
-                      '${SaturnReviewClassification.stars(
-                          records['$person:$workId'])!.toStringAsFixed(1)} ★',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: SaturnReviewClassification.fromRating(
-                              records['$person:$workId'])?.color ??
-                            const Color(0xFFCEB9C6),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    )),
-                  ],
-                ),
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(
+        key: Key('saturn-horizontal-scores-$workId'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final person in rated)
+            Padding(
+              padding: const EdgeInsets.only(right: 5),
+              child: SaturnPersonalScore(
+                key: Key('saturn-library-person-$person-$workId'),
+                name: label(person),
+                record: records['$person:$workId'],
               ),
-          ],
-        );
-      }
-
-      return FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final person in rated)
-              Padding(
-                padding: const EdgeInsets.only(right: 5),
-                child: SaturnPersonalScore(
-                  key: Key('saturn-library-person-$person-$workId'),
-                  name: label(person),
-                  record: records['$person:$workId'],
-                ),
-              ),
-          ],
-        ),
-      );
-    });
+            ),
+        ],
+      ),
+    );
   }
 }
