@@ -35,3 +35,32 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_generate_tmdb_catalog.py'
       - name: Compilar PWA
         run: flutter build web --release --base-href /saturn-build-public/
+
+  android:
+    name: Testar e compilar Android com ícone e notificações
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Código revisado
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Flutter estável
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Gerar identidade Android SATURN
+        run: |
+          flutter create --platforms=android --org com.nrzxl --project-name saturn_app .
+          python3 scripts/prepare_android_brand.py
+      - name: Validar Dart e integrar Android
+        run: |
+          flutter pub get
+          flutter analyze lib --no-fatal-infos
+          flutter test --reporter expanded
+      - name: Compilar APK debug sem publicar uma release
+        run: flutter build apk --debug
