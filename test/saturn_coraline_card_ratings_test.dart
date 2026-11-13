@@ -104,4 +104,37 @@ void main() {
     expect(find.textContaining('★'), findsNothing);
     expect(find.textContaining('Sem nota'), findsNothing);
   });
+
+  testWidgets('Badge border and star follow gold, silver and bronze tiers',
+      (tester) async {
+    for (final row in [
+      (rating: 10.0, color: const Color(0xFFE3BF70)),
+      (rating: 6.0, color: const Color(0xFFBDC8D4)),
+      (rating: 2.0, color: const Color(0xFFC38A62)),
+    ]) {
+      await tester.pumpWidget(MaterialApp(home: Scaffold(
+        body: SizedBox(width: 140, height: 34,
+          child: SaturnCardCoupleScores(
+            workId: coraline, viewerProfile: 0,
+            profileNames: const ['Eu', 'Ela'],
+            records: {
+              '0:$coraline': {'rating': row.rating},
+              '1:$coraline': {'rating': row.rating},
+            },
+          ),
+        ),
+      )));
+      final badge = find.byKey(Key('saturn-library-person-0-$coraline'));
+      expect(badge, findsOneWidget);
+      final label = tester.widget<Text>(
+        find.descendant(of: badge, matching: find.byType(Text)));
+      expect(label.style!.color, row.color);
+      final box = tester.widget<Container>(
+        find.descendant(of: badge, matching: find.byType(Container)).first);
+      final decoration = box.decoration! as BoxDecoration;
+      expect(decoration.border!.top.color,
+          row.color.withValues(alpha: .68));
+      expect(tester.takeException(), isNull);
+    }
+  });
 }
