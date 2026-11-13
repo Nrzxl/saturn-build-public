@@ -40,6 +40,7 @@ import 'saturn_orbit_rituals.dart';
 import 'saturn_notification_inbox.dart';
 import 'saturn_notification_card.dart';
 import 'saturn_web_push.dart';
+import 'saturn_android_notice.dart';
 import 'saturn_couple_suggestions.dart';
 import 'saturn_year_recap.dart';
 import 'update_center.dart';
@@ -364,6 +365,73 @@ class _SaturnHomeState extends State<SaturnHome>
               ]),
             ),
             const Divider(height: 1),
+            if (SaturnAndroidNotice.supported)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const Key('saturn-enable-android-notifications'),
+                      onPressed: _registeringPush ? null : () async {
+                        if (_cloud?.connected != true) {
+                          setState(() => _pushMessage =
+                              'Conecte a Nossa Órbita para ativar.');
+                          if (ctx.mounted) redraw(() {});
+                          return;
+                        }
+                        setState(() {
+                          _registeringPush = true;
+                          _pushMessage = '';
+                        });
+                        if (ctx.mounted) redraw(() {});
+                        try {
+                          final enabled = await SaturnAndroidNotice.enable(
+                              entries, profile: profile);
+                          if (mounted) setState(() => _pushMessage = enabled
+                              ? 'Avisos do Android ativados para novidades '
+                                  'sincronizadas com o APK aberto.'
+                              : 'Permissão de notificações não concedida.');
+                        } catch (_) {
+                          if (mounted) setState(() => _pushMessage =
+                              'Não foi possível ativar avisos do Android.');
+                        } finally {
+                          if (mounted) setState(
+                              () => _registeringPush = false);
+                          if (ctx.mounted) redraw(() {});
+                        }
+                      },
+                      icon: const Icon(Icons.notifications_active_outlined),
+                      label: Text(_registeringPush
+                          ? 'Ativando notificações...'
+                          : 'Ativar notificações Android'),
+                    ),
+                    TextButton.icon(
+                      key: const Key('saturn-disable-android-notifications'),
+                      onPressed: _registeringPush ? null : () async {
+                        await SaturnAndroidNotice.disable();
+                        if (mounted) setState(() => _pushMessage =
+                            'Avisos Android desativados neste aparelho.');
+                        if (ctx.mounted) redraw(() {});
+                      },
+                      icon: const Icon(Icons.notifications_off_outlined,
+                          size: 17),
+                      label: const Text('Desativar avisos Android'),
+                    ),
+                    const Text(
+                      'Os avisos nativos acompanham a sincronização enquanto '
+                      'o APK estiver aberto. Para receber mesmo fechado, '
+                      'será necessário configurar Firebase Cloud Messaging.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFFDCC6D0), fontSize: 10),
+                    ),
+                    if (_pushMessage.isNotEmpty)
+                      Text(_pushMessage, textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFDCC6D0), fontSize: 11)),
+                  ],
+                ),
+              ),
             if (SaturnWebPush.support != 'unsupported')
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
@@ -593,6 +661,9 @@ class _SaturnHomeState extends State<SaturnHome>
   }
   Timer? _featuredTimer;
   int _featuredIndex = 0;
+  int _featuredLoadTicket = 0;
+  Work? _visibleFeatured;
+  final Map<String, String> _stagedHeroBackdrops = {};
   double _featuredDragDistance = 0;
   static const double _featuredSwipeThreshold = 58;
   DateTime _featuredPausedUntil = DateTime.fromMillisecondsSinceEpoch(0);
@@ -654,9 +725,7 @@ class _SaturnHomeState extends State<SaturnHome>
       if (!mounted || !_foreground || tab != 0 ||
           DateTime.now().isBefore(_featuredPausedUntil)) return;
       final slides = _featuredTitles();
-      if (slides.length > 1) {
-        setState(() => _featuredIndex = (_featuredIndex + 1) % slides.length);
-      }
+      if (slides.length > 1) _queueFeatured(1);
     });
     if (_saturnCloudReady) {
       _cloud = SaturnOrbitCloud(
@@ -1009,6 +1078,12 @@ class _SaturnHomeState extends State<SaturnHome>
       await _save();
     } finally {
       _cloudApplying = false;
+    }
+    // Only a validated, attached cloud session can produce Android notices.
+    // Local migration or first-login hydration never posts a historical flood.
+    if (_cloud?.connected == true && SaturnAndroidNotice.supported) {
+      unawaited(SaturnAndroidNotice.onCloudSync(
+          _notificationItems(), profile: profile));
     }
     // Run only if an imported record still has TVmaze artwork. The cloud's
     // verified TMDB ID has already been reconciled, so reviews are safe.
@@ -2824,17 +2899,57 @@ class _SaturnHomeState extends State<SaturnHome>
     return slides;
   }
 
-  void _moveFeatured(int direction) {
+  /// Keep the old panorama AND title on screen until the next artwork is
+  /// decoded. One state change starts both fades on exactly the same frame.
+  void _queueFeatured(int direction) {
     final slides = _featuredTitles();
-    if (slides.length < 2) return;
+    if (!mounted || slides.length < 2) return;
+    final nextIndex = (_featuredIndex + direction + slides.length) %
+        slides.length;
+    final next = slides[nextIndex];
+    final ticket = ++_featuredLoadTicket;
+    unawaited(() async {
+      String backdrop = '';
+      try {
+        backdrop = await _homeCatalog.verifiedBackdropFor(
+          workId: next.id, cachedBackdrop: next.backdropUrl) ?? '';
+      } catch (_) {}
+      if (!mounted || ticket != _featuredLoadTicket) return;
+      final photo = backdrop.isNotEmpty
+          ? SaturnArtwork.bestUrl(backdrop,
+              devicePixels: 1400, panorama: true)
+          : SaturnArtwork.bestUrl(
+              SaturnBookCover.resolve(next.id, next.posterUrl),
+              devicePixels: 1200);
+      if (photo.startsWith('https://')) {
+        try {
+          await precacheImage(NetworkImage(photo), context)
+              .timeout(const Duration(seconds: 6));
+        } catch (_) {
+          // No flash of an empty card on offline / missing images.
+          return;
+        }
+      }
+      if (!mounted || ticket != _featuredLoadTicket) return;
+      setState(() {
+        _stagedHeroBackdrops[next.id] = backdrop;
+        if (_stagedHeroBackdrops.length > 60) {
+          _stagedHeroBackdrops.remove(_stagedHeroBackdrops.keys.first);
+        }
+        _featuredIndex = nextIndex;
+        _visibleFeatured = next;
+      });
+      // Keep the existing rolling discovery without jumping the current hero.
+      if (direction > 0 && nextIndex >= slides.length - 4 &&
+          !loadingRecommendations) {
+        _loadHomeRecommendations(refreshMovies: true);
+      }
+    }());
+  }
+
+  void _moveFeatured(int direction) {
     _featuredPausedUntil = DateTime.now().add(const Duration(seconds: 20));
-    setState(() => _featuredIndex =
-        (_featuredIndex + direction + slides.length) % slides.length);
-    // New pages extend the carousel instead of resetting it to eight films.
-    if (direction > 0 && _featuredIndex >= slides.length - 4 &&
-        !loadingRecommendations) {
-      _loadHomeRecommendations(refreshMovies: true);
-    }
+    _queueFeatured(direction);
   }
 
   /// A rightward swipe advances, a leftward swipe returns. Ignore short
@@ -2867,8 +2982,8 @@ class _SaturnHomeState extends State<SaturnHome>
   /// Uses real catalog covers; accessible by touch, mouse and keyboard.
   Widget _cinematicHero(int ownCount) {
     final slides = _featuredTitles();
-    final Work? featured = slides.isEmpty
-        ? null : slides[_featuredIndex % slides.length];
+    final Work? featured = _visibleFeatured ??
+        (slides.isEmpty ? null : slides[_featuredIndex % slides.length]);
     final fromWatchlist = featured != null &&
         currentWatchlist.contains(featured.id);
     return Padding(
@@ -2931,8 +3046,20 @@ class _SaturnHomeState extends State<SaturnHome>
                             )),
                     ),
                   ),
-                  // Cena de ponta a ponta, sem pôster sobreposto à imagem.
-                  Padding(
+                  // The whole copy crossfades with the already preloaded panorama.
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 760),
+                    reverseDuration: const Duration(milliseconds: 570),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder: (current, previous) => Stack(
+                      fit: StackFit.expand,
+                      children: [...previous, if (current != null) current],
+                    ),
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: Padding(
+                    key: ValueKey('saturn-hero-panel-${featured?.id ?? 'empty'}'),
                     padding: EdgeInsets.symmetric(
                       horizontal: spacious ? 35 : 22,
                       vertical: spacious ? 29 : 23,
@@ -2994,6 +3121,7 @@ class _SaturnHomeState extends State<SaturnHome>
                         const SizedBox(height: 18),
 
                       ],
+                    ),
                     ),
                   ),
                 ],
@@ -5663,14 +5791,19 @@ class _SaturnHomeState extends State<SaturnHome>
   /// luminous, blurred rendering of the actual cover for books/old titles.
   /// No blank dark hero when a valid poster exists but a panorama does not.
   Widget _cinematicArtworkBackground(Work work) {
+    // The hero's already-resolved backdrop stays pinned during the transition.
+    final staged = _stagedHeroBackdrops[work.id];
     final poster = SaturnArtwork.bestUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl),
       devicePixels: 1200,
     );
     return FutureBuilder<String?>(
-      future: _homeCatalog.verifiedBackdropFor(
-        workId: work.id, cachedBackdrop: work.backdropUrl),
-      initialData: work.backdropUrl.isNotEmpty ? work.backdropUrl : null,
+      future: staged != null
+          ? Future<String?>.value(staged.isEmpty ? null : staged)
+          : _homeCatalog.verifiedBackdropFor(
+              workId: work.id, cachedBackdrop: work.backdropUrl),
+      initialData: staged ?? (work.backdropUrl.isNotEmpty
+          ? work.backdropUrl : null),
       builder: (context, snapshot) {
         final backdrop = snapshot.data ?? '';
         final hasBackdrop =
@@ -5840,6 +5973,13 @@ class _SaturnHomeState extends State<SaturnHome>
     final pageFuture = w.kind == 'Livro' && (w.pageCount ?? 0) <= 0
         ? _homeCatalog.verifiedPageCountFor(w.id)
         : Future<int?>.value(w.pageCount);
+    // Fetch TVmaze season and average episode length by ID only after
+    // opening a detail sheet. Trigger a second header build when it arrives.
+    final factsFuture = w.id.startsWith('tvmaze:')
+        ? _technicalMetadata.hydrateTvmaze(w.id, onChanged: () {
+            if (mounted) setState(() {});
+          }).then<int?>((_) => null)
+        : pageFuture;
     final current = entry(w);
     String status = current['status'] ?? 'Quero conhecer';
     double rating = (current['rating'] as num?)?.toDouble() ?? 0;
@@ -5866,7 +6006,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   const Icon(Icons.auto_awesome_rounded, color: gold, size: 18),
                   const SizedBox(width: 8),
                   Expanded(child: FutureBuilder<int?>(
-                    future: pageFuture,
+                    future: factsFuture,
                     builder: (context, snapshot) => Text(
                       _cinematicFactsHeading(w,
                           exactPageCount: snapshot.data),
