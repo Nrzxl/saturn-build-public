@@ -142,8 +142,14 @@ class SaturnLegacyTvmazeBridge {
       if (oldWork != null) {
         if (!saved.containsKey(newId) && oldWork is Map) {
           saved[newId] = <String, dynamic>{
-            ..._map(oldWork), 'id': newId,
-            // Retain old TVmaze art until the verified TMDB row is loaded.
+            ..._map(oldWork),
+            'id': newId,
+            // The original TVmaze summary was typically English. Show a
+            // short curated Portuguese synopsis immediately, even offline;
+            // later exact-ID TMDB hydration replaces both art and summary.
+            'description': portugueseSynopses[oldId] ??
+                _map(oldWork)['description'] ?? '',
+            // Retain old art until the verified TMDB row is loaded.
           };
         }
         modified = true;

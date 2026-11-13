@@ -98,6 +98,7 @@ void main() {
     expect(saved[newOffice]['posterUrl'], contains('image.tmdb.org'));
     expect(saved.containsKey(oldAlice), isFalse);
     expect(saved[newAlice]['id'], newAlice);
+    expect(saved[newAlice]['description'], contains('Tóquio'));
 
     final records = migrated['records'] as Map;
     expect(records.keys.any((key) => key.toString().contains('tvmaze:')),

@@ -493,7 +493,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
-    final card = find.byKey(Key('saturn-ranked-card-' + office.id));
+    const upgradedId = 'tmdb:tv:2316';
+    final card = find.byKey(Key('saturn-ranked-card-' + upgradedId));
     await tester.ensureVisible(card);
     await tester.tap(card);
     await tester.pumpAndSettle();
@@ -507,11 +508,17 @@ void main() {
     expect(find.text('Pesquisar em meus serviços'), findsOneWidget);
     // Flutter VM tests use a cover fallback: the iframe is instantiated
     // only by the browser/mobile player runtime, never by the test runner.
-    expect(find.byKey(Key('saturn-trailer-' + office.id)), findsNothing);
+    expect(find.byKey(Key('saturn-trailer-' + upgradedId)),
+        findsNothing);
     expect(find.text('A MELHOR SÉRIE DE TODAS!'), findsWidgets);
     final prefs = await SharedPreferences.getInstance();
     final existing = jsonDecode(prefs.getString('records')!) as Map;
-    expect((existing['0:' + office.id] as Map)['rating'], 10);
+    expect((existing['0:' + upgradedId] as Map)['rating'], 10);
+    expect((existing['1:' + upgradedId] as Map)['rating'], 9);
+    expect(existing.containsKey('0:' + office.id), isFalse);
+    final catalog = jsonDecode(prefs.getString('catalog_saved')!) as Map;
+    expect(catalog.containsKey(office.id), isFalse);
+    expect(catalog.containsKey(upgradedId), isTrue);
   });
 
   testWidgets('Livro em Quero ler vira Lido sem apagar resenha', (tester) async {
