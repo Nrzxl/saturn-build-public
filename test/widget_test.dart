@@ -499,8 +499,12 @@ void main() {
     await tester.tap(card);
     await tester.pumpAndSettle();
     expect(find.text('The Office'), findsWidgets);
+    // A sinopse PT-BR curada tem menos de 220 caracteres e, por isso,
+    // não precisa do controle de expansão reservado a textos longos.
+    expect(find.textContaining('A rotina de uma empresa de papel'),
+        findsWidgets);
     expect(find.byKey(const Key('saturn-story-synopsis-toggle')),
-        findsOneWidget);
+        findsNothing);
     expect(find.text('Metacritic · crítica'), findsNothing);
     expect(find.text('Nenhuma assinatura confirmada para este título.'),
         findsOneWidget);
