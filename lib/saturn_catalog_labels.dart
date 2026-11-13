@@ -37,9 +37,20 @@ class SaturnCatalogLabels {
         runtimeMinutes > 0 && runtimeMinutes <= 800) {
       return '${runtimeMinutes} min';
     }
-    if ((kind == 'Série' || kind == 'Dorama' || kind == 'Anime') &&
-        seasonCount != null && seasonCount > 0 && seasonCount < 200) {
-      return '${seasonCount} ${seasonCount == 1 ? "temporada" : "temporadas"}';
+    if (kind == 'Série' || kind == 'Dorama' || kind == 'Anime') {
+      final seasons = seasonCount != null &&
+              seasonCount > 0 && seasonCount < 200
+          ? '${seasonCount} ${seasonCount == 1 ? "temporada" : "temporadas"}'
+          : '';
+      final episode = runtimeMinutes != null &&
+              runtimeMinutes > 0 && runtimeMinutes <= 300
+          ? '${runtimeMinutes} min/ep.'
+          : '';
+      if (seasons.isNotEmpty && episode.isNotEmpty) {
+        return '$seasons · $episode';
+      }
+      if (seasons.isNotEmpty) return seasons;
+      if (episode.isNotEmpty) return episode;
     }
     if (kind == 'Livro' && pageCount != null &&
         pageCount > 0 && pageCount <= 10000) {
