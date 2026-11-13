@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:saturn_app/saturn_card_couple_scores.dart';
+import 'package:saturn_app/saturn_personal_score.dart';
 
 void main() {
   const coraline = 'tmdb:movie:14836';
@@ -31,9 +32,24 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const Key('saturn-library-person-1-$coraline')),
         findsOneWidget);
+    // Restore the approved The Office styling: two bordered gold badges
+    // side by side even in a narrow poster; never vertically stacked.
+    final horizontal = find.byKey(
+        const Key('saturn-horizontal-scores-$coraline'));
+    expect(horizontal, findsOneWidget);
+    expect(find.descendant(
+        of: horizontal, matching: find.byType(SaturnPersonalScore)),
+        findsNWidgets(2));
+    final row = tester.widget<Row>(horizontal);
+    expect(row.mainAxisSize, MainAxisSize.min);
     expect(find.text('Você 5.0 ★'), findsOneWidget);
     expect(find.text('Ela 5.0 ★'), findsOneWidget);
     expect(find.textContaining('5.0 ★'), findsNWidgets(2));
+    for (final chip in tester.widgetList<SaturnPersonalScore>(
+        find.descendant(
+          of: horizontal, matching: find.byType(SaturnPersonalScore)))) {
+      expect(chip.record, isNotNull);
+    }
     expect(tester.takeException(), isNull);
   });
 
