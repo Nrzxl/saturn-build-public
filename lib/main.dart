@@ -3171,6 +3171,7 @@ class _SaturnHomeState extends State<SaturnHome>
           color: metalColor,
           partnerColor: partnerMetalColor,
           intenseBronze: bothZero,
+          uniformInset: true,
           child: Material(
           borderRadius: BorderRadius.circular(15),
           color: const Color(0xFF251C2A),

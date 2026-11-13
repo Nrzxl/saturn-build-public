@@ -279,7 +279,11 @@ void main() {
     addTearDown(catalog.close);
 
     final results = await catalog.search('bers', CatalogFilter.books);
-    expect(queries, ['Berserk', 'Berserk']);
+    // A book query may retry its lean Open Library projection when needed;
+    // all requests must use the full romanized manga title.
+    expect(queries, isNotEmpty);
+    expect(queries.toSet(), {'Berserk'});
+    expect(queries.length, inInclusiveRange(2, 3));
     expect(results.any((x) => x.id == 'openlibrary:/works/OL101W' &&
         x.title == 'Berserk'), isTrue);
     expect(results.any((x) => x.id == 'googlebooks:berserkPT1' &&

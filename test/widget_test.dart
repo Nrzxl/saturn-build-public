@@ -589,13 +589,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Coleção'));
     await tester.pumpAndSettle();
+    // Verify the filter while it is visible, before the sliver scrolls it
+    // offstage. Moving down the gallery must not make it part of the card.
+    expect(find.byKey(const Key('saturn-collection-filter-menu')),
+      findsOneWidget);
     await scrollPersonal(tester,
       find.byKey(Key('saturn-ranked-card-' + film.id)));
     expect(find.text('Filme da Minha Coleção'), findsOneWidget);
-    // Multi-selection has moved to Explorar; the collection retains filters.
     expect(find.text('Selecionar vários'), findsNothing);
-    expect(find.byKey(const Key('saturn-collection-filter-menu')),
-      findsOneWidget);
 
     final prefs = await SharedPreferences.getInstance();
     final saved = jsonDecode(prefs.getString('records')!) as Map;

@@ -6,12 +6,16 @@ import 'package:flutter/material.dart';
 /// There are deliberately no category words or decorative badges.
 class SaturnMetallicHalo extends StatefulWidget {
   const SaturnMetallicHalo({super.key, required this.color,
-    this.partnerColor, this.intenseBronze = false, required this.child});
+    this.partnerColor, this.intenseBronze = false,
+    this.uniformInset = false, required this.child});
   final Color? color;
   /// Second partner's real metallic tier. Left half is mine, right is hers.
   final Color? partnerColor;
   /// Stronger warm bronze glow only for two explicit zero-star reviews.
   final bool intenseBronze;
+  /// Reserve the same 3.4px inset for every library card, even if it
+  /// has no halo or its glowing tier changes after a personal review.
+  final bool uniformInset;
   final Widget child;
 
   @override
@@ -58,7 +62,12 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
   @override
   Widget build(BuildContext context) {
     final metal = widget.color ?? widget.partnerColor;
-    if (metal == null) return widget.child;
+    if (metal == null) {
+      return widget.uniformInset
+          ? Padding(padding: const EdgeInsets.all(3.4),
+              child: widget.child)
+          : widget.child;
+    }
     final intense = widget.intenseBronze;
     final paired = widget.color != null && widget.partnerColor != null;
     final same = paired && widget.color == widget.partnerColor;
@@ -74,7 +83,8 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
       child: AnimatedContainer(
         duration: duration,
         curve: Curves.easeInOutCubic,
-        padding: EdgeInsets.all(intense ? 3.4 : 2.4),
+        padding: EdgeInsets.all(
+          widget.uniformInset ? 3.4 : intense ? 3.4 : 2.4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(17),
           gradient: paired
