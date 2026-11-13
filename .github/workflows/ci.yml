@@ -31,6 +31,8 @@ jobs:
           cache: true
       - name: Preparar projeto Flutter
         run: flutter create --platforms=android,web --org com.nrzxl --project-name saturn_app .
+      - name: Instalar identidade Android SATURN
+        run: python3 scripts/prepare_android_brand.py
       - name: Verificar sintaxe da assinatura local (sem executá-la)
         shell: pwsh
         run: |
