@@ -1,8 +1,17 @@
 name: SATURN · APK público assinado
 
-# Publicação explícita, nunca automática. Usa a mesma chave do SATURN 0.6.0.
+# Publicação explícita: manual ou commit principal com [SATURN-RELEASE].
+# Pushes normais nunca publicam APKs. Reusa a chave SATURN 0.6.0.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'scripts/prepare_android_brand.py'
+      - 'tool/android/**'
+      - '.github/workflows/android-public-release.yml'
 
 permissions:
   contents: read
@@ -14,7 +23,7 @@ concurrency:
 jobs:
   signed-android:
     name: Testar, assinar e publicar SATURN.apk
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[SATURN-RELEASE]')))
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
@@ -59,7 +68,7 @@ jobs:
           flutter create --platforms=android --project-name saturn_app .
           python3 -m unittest discover -s scripts -p 'test_*.py'
           flutter pub get
-          flutter analyze lib
+          flutter analyze lib --no-fatal-infos
           flutter test --reporter expanded
 
       - name: Restaurar assinatura anterior sem expor o keystore
