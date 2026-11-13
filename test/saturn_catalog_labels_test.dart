@@ -22,5 +22,14 @@ void main() {
     expect(SaturnCatalogLabels.technical(kind: 'Anime'), isNull);
     expect(SaturnCatalogLabels.technical(kind: 'Filme',
         runtimeMinutes: 0), isNull);
+    expect(SaturnCatalogLabels.technical(kind: 'Livro',
+        pageCount: 216), '216 páginas');
+    expect(SaturnCatalogLabels.technical(kind: 'Livro',
+        pageCount: 1), '1 página');
+    expect(SaturnCatalogLabels.technical(kind: 'Livro'), isNull);
+    expect(SaturnCatalogLabels.technical(kind: 'Livro',
+        pageCount: 0), isNull);
+    expect(SaturnCatalogLabels.technical(kind: 'Filme',
+        pageCount: 300), isNull);
   });
 }

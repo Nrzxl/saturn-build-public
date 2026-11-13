@@ -80,6 +80,7 @@ class Work {
   final int? tmdbVoteCount;
   final int? runtimeMinutes;
   final int? seasonCount;
+  final int? pageCount;
   final String watchUrl;
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
@@ -99,7 +100,7 @@ class Work {
        this.imdbId = '',
        this.genreIds = const [], this.externalRatings = const {},
        this.tmdbScore, this.tmdbVoteCount,
-       this.runtimeMinutes, this.seasonCount,
+       this.runtimeMinutes, this.seasonCount, this.pageCount,
        this.availabilityUpdatedAt = '',
        this.availabilityChecked = false});
 
@@ -117,6 +118,7 @@ class Work {
         tmdbVoteCount: entry.tmdbVoteCount,
         runtimeMinutes: entry.runtimeMinutes,
         seasonCount: entry.seasonCount,
+        pageCount: entry.pageCount,
         watchUrl: entry.watchUrl,
         trailerYoutubeId: entry.trailerYoutubeId,
         nativeTrailerUrl: entry.nativeTrailerUrl,
@@ -161,6 +163,8 @@ class Work {
             ? (data['runtimeMinutes'] as num).toInt() : null,
         seasonCount: data['seasonCount'] is num
             ? (data['seasonCount'] as num).toInt() : null,
+        pageCount: data['pageCount'] is num
+            ? (data['pageCount'] as num).toInt() : null,
         watchProviders: data['watchProviders'] is List
             ? (data['watchProviders'] as List).map(
                 (value) => value.toString()).toList(growable: false)
@@ -190,6 +194,7 @@ class Work {
         'tmdbVoteCount': tmdbVoteCount,
         'runtimeMinutes': runtimeMinutes,
         'seasonCount': seasonCount,
+        'pageCount': pageCount,
         'watchProviders': watchProviders,
         'watchUrl': watchUrl,
         'trailerYoutubeId': trailerYoutubeId,
@@ -534,7 +539,8 @@ class _SaturnHomeState extends State<SaturnHome>
             work.seasonCount! > 0 && work.seasonCount! <= 150
         ? work.seasonCount : _technicalMetadata.seasonsFor(work.id);
     return SaturnCatalogLabels.technical(
-      kind: work.kind, runtimeMinutes: duration, seasonCount: seasons);
+      kind: work.kind, runtimeMinutes: duration, seasonCount: seasons,
+      pageCount: work.pageCount);
   }
 
   void _loadTechnicalMetadata() {
@@ -3174,11 +3180,15 @@ class _SaturnHomeState extends State<SaturnHome>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: Stack(fit: StackFit.expand, children: [
+                AspectRatio(
+                  key: Key('saturn-ranked-cover-area-' + work.id),
+                  aspectRatio: 2 / 3,
+                  child: Stack(fit: StackFit.expand, children: [
                   PosterThumbnail(
                     work: work,
                     width: double.infinity,
                     height: double.infinity,
+                    fit: BoxFit.contain,
                   ),
                   if (zeroStarMovie)
                     Positioned.fill(child: SaturnZeroStarFlies(
@@ -3878,6 +3888,12 @@ class _SaturnHomeState extends State<SaturnHome>
       SliverLayoutBuilder(builder: (context, constraints) {
         final columns = (constraints.crossAxisExtent / 182)
             .floor().clamp(2, 6).toInt();
+        final cellWidth =
+            (constraints.crossAxisExtent - (columns - 1) * 2) / columns;
+        // Stable full 2:3 cover independent of review text/action heights.
+        final coverWidth = (cellWidth - 14).clamp(90.0, 400.0);
+        final cellHeight = (coverWidth * 1.5 + 205)
+            .clamp(415.0, 820.0).toDouble();
         return SliverGrid(
           key: Key('saturn-ranked-gallery-' + visible.first.id),
           delegate: SliverChildBuilderDelegate(
@@ -3886,7 +3902,7 @@ class _SaturnHomeState extends State<SaturnHome>
           ),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            mainAxisExtent: 337,
+            mainAxisExtent: cellHeight,
             mainAxisSpacing: 2,
             crossAxisSpacing: 2,
           ),
@@ -5693,6 +5709,20 @@ class _SaturnHomeState extends State<SaturnHome>
     });
   }
 
+  String _cinematicFactsHeading(Work work, {int? exactPageCount}) {
+    final fact = work.kind == 'Livro'
+        ? SaturnCatalogLabels.technical(
+            kind: 'Livro', pageCount: exactPageCount ?? work.pageCount)
+        : _technicalLabel(work);
+    if (fact != null) return fact.toUpperCase();
+    if (work.kind == 'Filme') return 'DURAÇÃO NÃO INFORMADA';
+    if (const {'Série', 'Anime', 'Dorama'}.contains(work.kind)) {
+      return 'TEMPORADAS NÃO INFORMADAS';
+    }
+    if (work.kind == 'Livro') return 'PÁGINAS NÃO INFORMADAS';
+    return 'INFORMAÇÃO NÃO DISPONÍVEL';
+  }
+
   Future<void> _details(Work w) async {
     _featuredPausedUntil = DateTime.now().add(
         const Duration(minutes: 2));
@@ -5704,6 +5734,11 @@ class _SaturnHomeState extends State<SaturnHome>
             workId: w.id, title: w.title, kind: w.kind, year: w.year,
             savedYoutubeId: w.trailerYoutubeId)
         : Future<List<String>>.value(const <String>[]);
+    // Only a legacy edition without pagination triggers an extra request,
+    // and only after opening its cinematic sheet.
+    final pageFuture = w.kind == 'Livro' && (w.pageCount ?? 0) <= 0
+        ? _homeCatalog.verifiedPageCountFor(w.id)
+        : Future<int?>.value(w.pageCount);
     final current = entry(w);
     String status = current['status'] ?? 'Quero conhecer';
     double rating = (current['rating'] as num?)?.toDouble() ?? 0;
@@ -5729,9 +5764,19 @@ class _SaturnHomeState extends State<SaturnHome>
                 Row(children: [
                   const Icon(Icons.auto_awesome_rounded, color: gold, size: 18),
                   const SizedBox(width: 8),
-                  const Expanded(child: Text('FICHA DA HISTÓRIA',
-                    style: TextStyle(color: gold, letterSpacing: 1.7,
-                      fontSize: 11, fontWeight: FontWeight.bold))),
+                  Expanded(child: FutureBuilder<int?>(
+                    future: pageFuture,
+                    builder: (context, snapshot) => Text(
+                      _cinematicFactsHeading(w,
+                          exactPageCount: snapshot.data),
+                      key: Key('saturn-detail-facts-' + w.id),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: gold,
+                        letterSpacing: 1.2, fontSize: 11,
+                        fontWeight: FontWeight.bold),
+                    ),
+                  )),
                   IconButton(
                     tooltip: 'Fechar detalhes',
                     onPressed: () => Navigator.pop(ctx),

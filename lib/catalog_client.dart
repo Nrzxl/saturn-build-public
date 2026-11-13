@@ -29,6 +29,7 @@ class CatalogEntry {
   final int? tmdbVoteCount;
   final int? runtimeMinutes;
   final int? seasonCount;
+  final int? pageCount;
   final String watchUrl;
   final String trailerYoutubeId;
   final String nativeTrailerUrl;
@@ -58,6 +59,7 @@ class CatalogEntry {
     this.tmdbVoteCount,
     this.runtimeMinutes,
     this.seasonCount,
+    this.pageCount,
     this.watchUrl = '',
     this.trailerYoutubeId = '',
     this.nativeTrailerUrl = '',
@@ -116,6 +118,36 @@ class CatalogClient {
       seasonCount: row['seasonCount'] is num
           ? (row['seasonCount'] as num).toInt() : null,
     );
+  }
+
+  final Map<String, Future<int?>> _bookPageLookupCache = {};
+
+  /// Only fetch the exact edition's real page count when a legacy title
+  /// detail is opened; no per-card request or speculative page count.
+  Future<int?> verifiedPageCountFor(String workId) {
+    final open = RegExp(r'^openlibrary:/books/(OL[0-9]+M)$')
+        .firstMatch(workId);
+    final google = RegExp(r'^googlebooks:([A-Za-z0-9_-]+)$')
+        .firstMatch(workId);
+    if (open == null && google == null) return Future.value(null);
+    return _bookPageLookupCache.putIfAbsent(workId, () async {
+      try {
+        final uri = open != null
+          ? Uri.https('openlibrary.org', '/books/${open.group(1)!}.json')
+          : Uri.https('www.googleapis.com',
+              '/books/v1/volumes/${google!.group(1)!}',
+              {'fields': 'volumeInfo(pageCount)'});
+        final info = await _get(uri).timeout(const Duration(seconds: 7));
+        if (info is! Map) return null;
+        final raw = open != null ? info['number_of_pages']
+            : info['volumeInfo'] is Map
+                ? (info['volumeInfo'] as Map)['pageCount'] : null;
+        return raw is num && raw > 0 && raw <= 10000
+            ? raw.toInt() : null;
+      } catch (_) {
+        return null;
+      }
+    });
   }
 
   final Map<String, Future<String?>> _trailerLookupCache = {};
@@ -359,6 +391,18 @@ class CatalogClient {
   }
 
   /// Busca por título. Suporta páginas novas onde a fonte oferece paginação.
+  /// Verified manga alias: "bers" / "berse" / "berser" match Berserk,
+  /// even when a source stores the work title as ベルセルク.
+  static String canonicalBookTitleQuery(String input) {
+    final query = input.trim();
+    final folded = query.toLowerCase();
+    if ((folded.length >= 4 && 'berserk'.startsWith(folded)) ||
+        folded == 'beruseruku' || query == 'ベルセルク') {
+      return 'Berserk';
+    }
+    return query;
+  }
+
   Future<List<CatalogEntry>> search(
     String input,
     CatalogFilter filter, {
@@ -369,6 +413,8 @@ class CatalogClient {
   }) async {
     final query = input.trim();
     if (query.length < 2) return [];
+    final bookQuery = canonicalBookTitleQuery(query);
+    final expandedManga = bookQuery != query;
     final p = page.clamp(1, 500).toInt();
     try {
       final found = await _snapshot(
@@ -377,9 +423,12 @@ class CatalogClient {
       if (found.isNotEmpty || streaming != null) {
         if (filter == CatalogFilter.all && streaming == null && genreId == null) {
           try {
-            final books = await _books(query, page: p,
-                subject: bookSubject);
-            return _unique([...found, ...books]);
+            final groups = await Future.wait([
+              _books(bookQuery, page: p, subject: bookSubject),
+              if (expandedManga)
+                _googleBooks(query: bookQuery, page: p),
+            ]);
+            return _unique([...found, ...groups.expand((v) => v)]);
           } catch (_) {
             return found;
           }
@@ -425,11 +474,15 @@ class CatalogClient {
       // previously selected discovery subject (e.g. Agatha Christie while
       // Literatura brasileira was active).
       requests.add(safe('livros',
-          () => _books(query, page: p)));
+          () => _books(bookQuery, page: p)));
+      if (expandedManga && filter == CatalogFilter.all) {
+        requests.add(safe('mangás brasileiros',
+            () => _googleBooks(query: bookQuery, page: p)));
+      }
       // Broaden PT-BR edition coverage without harvesting a full catalog.
       if (filter == CatalogFilter.books) {
         requests.add(safe('livros nacionais e em português',
-          () => _googleBooks(query: query, page: p)));
+          () => _googleBooks(query: bookQuery, page: p)));
       }
     }
 
@@ -926,6 +979,10 @@ class CatalogClient {
         posterUrl: cover,
         creator: creator,
         provider: 'Google Livros · português',
+        pageCount: volume['pageCount'] is num &&
+                (volume['pageCount'] as num) > 0 &&
+                (volume['pageCount'] as num) <= 10000
+            ? (volume['pageCount'] as num).toInt() : null,
         detailUrl: link.startsWith('https://')
             ? link : 'https://books.google.com/books?id=' + id,
       ));
@@ -1018,6 +1075,10 @@ class CatalogClient {
       ),
       creator: publisher,
       provider: 'Open Library · edição',
+      pageCount: row['number_of_pages'] is num &&
+              (row['number_of_pages'] as num) > 0 &&
+              (row['number_of_pages'] as num) <= 10000
+          ? (row['number_of_pages'] as num).toInt() : null,
       detailUrl: 'https://openlibrary.org' + key,
     );
   }
@@ -1162,7 +1223,7 @@ class CatalogClient {
       'fields': 'key,title,author_name,cover_i,first_publish_year,'
           'isbn,edition_count,language,editions,editions.key,'
           'editions.title,editions.language,editions.cover_i,'
-          'editions.isbn_13,editions.isbn_10',
+          'editions.number_of_pages,editions.isbn_13,editions.isbn_10',
       }));
     } catch (_) {
       // Some OL work queries time out while expanding all editions.
@@ -1196,7 +1257,13 @@ class CatalogClient {
           ? authors.first.toString() : '';
       final edition = _portugueseEdition(item);
       final editionTitle = (edition?['title'] ?? '').toString().trim();
-      final title = editionTitle.isNotEmpty ? editionTitle : workTitle;
+      // Open Library sometimes indexes Berserk under ベルセルク; use
+      // its documented Latin title only for this exact mangaka and work.
+      final isBerserk = canonicalBookTitleQuery(clean) == 'Berserk' &&
+          author.toLowerCase().contains('miura') &&
+          workTitle.contains('ベルセルク');
+      final title = editionTitle.isNotEmpty ? editionTitle
+          : isBerserk ? 'Berserk' : workTitle;
       String firstIsbn(Object? raw) {
         if (raw is! List) return '';
         for (final candidate in raw) {
@@ -1237,6 +1304,12 @@ class CatalogClient {
         creator: author,
         provider: edition == null
             ? 'Open Library' : 'Open Library · português',
+        // Edition-only pagination: a work-level median is not the pages
+        // of the user's actual book.
+        pageCount: edition?['number_of_pages'] is num &&
+                (edition!['number_of_pages'] as num) > 0 &&
+                (edition['number_of_pages'] as num) <= 10000
+            ? (edition['number_of_pages'] as num).toInt() : null,
         detailUrl: 'https://openlibrary.org' + key,
       ));
     }

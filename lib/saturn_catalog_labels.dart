@@ -31,6 +31,7 @@ class SaturnCatalogLabels {
     required String kind,
     int? runtimeMinutes,
     int? seasonCount,
+    int? pageCount,
   }) {
     if (kind == 'Filme' && runtimeMinutes != null &&
         runtimeMinutes > 0 && runtimeMinutes <= 800) {
@@ -39,6 +40,10 @@ class SaturnCatalogLabels {
     if ((kind == 'Série' || kind == 'Dorama' || kind == 'Anime') &&
         seasonCount != null && seasonCount > 0 && seasonCount < 200) {
       return '${seasonCount} ${seasonCount == 1 ? "temporada" : "temporadas"}';
+    }
+    if (kind == 'Livro' && pageCount != null &&
+        pageCount > 0 && pageCount <= 10000) {
+      return '${pageCount} ${pageCount == 1 ? "página" : "páginas"}';
     }
     return null;
   }

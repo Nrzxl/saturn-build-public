@@ -240,4 +240,83 @@ void main() {
     expect(CatalogClient.bookSubjects.values,
       containsAll(['manga', 'romance', 'science_fiction', 'fiction']));
   });
+  test('Berserk prefix finds both Japanese-indexed work and PT volume',
+      () async {
+    expect(CatalogClient.canonicalBookTitleQuery('bers'), 'Berserk');
+    expect(CatalogClient.canonicalBookTitleQuery('berse'), 'Berserk');
+    expect(CatalogClient.canonicalBookTitleQuery('berser'), 'Berserk');
+    expect(CatalogClient.canonicalBookTitleQuery('ベルセルク'), 'Berserk');
+    expect(CatalogClient.canonicalBookTitleQuery('biology'), 'biology');
+
+    final queries = <String>[];
+    final catalog = CatalogClient(client: MockClient((request) async {
+      if (request.url.host == 'openlibrary.org' &&
+          request.url.path == '/search.json') {
+        queries.add(request.url.queryParameters['q'] ?? '');
+        return http.Response(jsonEncode({'docs': [{
+          'key': '/works/OL101W',
+          'title': 'ベルセルク',
+          'author_name': ['Kentaro Miura'],
+          'first_publish_year': 1989,
+        }]}), 200);
+      }
+      if (request.url.host == 'www.googleapis.com' &&
+          request.url.path == '/books/v1/volumes') {
+        queries.add(request.url.queryParameters['q'] ?? '');
+        return http.Response(jsonEncode({'items': [{
+          'id': 'berserkPT1',
+          'volumeInfo': {
+            'title': 'Berserk - Volume 1',
+            'authors': ['Kentaro Miura'],
+            'language': 'pt',
+            'pageCount': 216,
+            'publishedDate': '2020',
+          }
+        }]}), 200);
+      }
+      throw StateError('Unexpected URL: ${request.url}');
+    }), enableTmdb: false);
+    addTearDown(catalog.close);
+
+    final results = await catalog.search('bers', CatalogFilter.books);
+    expect(queries, ['Berserk', 'Berserk']);
+    expect(results.any((x) => x.id == 'openlibrary:/works/OL101W' &&
+        x.title == 'Berserk'), isTrue);
+    expect(results.any((x) => x.id == 'googlebooks:berserkPT1' &&
+        x.pageCount == 216), isTrue);
+  });
+
+  test('Page count resolves exact edition only, with cached on-demand calls',
+      () async {
+    var openCalls = 0, googleCalls = 0;
+    final catalog = CatalogClient(client: MockClient((request) async {
+      if (request.url.host == 'openlibrary.org' &&
+          request.url.path == '/books/OL999M.json') {
+        openCalls++;
+        return http.Response(jsonEncode({'number_of_pages': 352}), 200);
+      }
+      if (request.url.host == 'www.googleapis.com' &&
+          request.url.path == '/books/v1/volumes/truePT') {
+        googleCalls++;
+        expect(request.url.queryParameters['fields'],
+            'volumeInfo(pageCount)');
+        return http.Response(jsonEncode({
+          'volumeInfo': {'pageCount': 120}
+        }), 200);
+      }
+      throw StateError('Unexpected request: ${request.url}');
+    }), enableTmdb: false);
+    addTearDown(catalog.close);
+    expect(await catalog.verifiedPageCountFor('openlibrary:/works/OL101W'),
+        isNull);
+    expect(await catalog.verifiedPageCountFor('openlibrary:/books/OL999M'),
+        352);
+    expect(await catalog.verifiedPageCountFor('openlibrary:/books/OL999M'),
+        352);
+    expect(await catalog.verifiedPageCountFor('googlebooks:truePT'), 120);
+    expect(openCalls, 1);
+    expect(googleCalls, 1);
+  });
+
+
 }
