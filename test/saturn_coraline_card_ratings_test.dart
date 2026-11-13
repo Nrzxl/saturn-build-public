@@ -41,7 +41,15 @@ void main() {
         of: horizontal, matching: find.byType(SaturnPersonalScore)),
         findsNWidgets(2));
     final row = tester.widget<Row>(horizontal);
-    expect(row.mainAxisSize, MainAxisSize.min);
+    expect(row.mainAxisSize, MainAxisSize.max);
+    final leftSize = tester.getSize(
+        find.byKey(const Key('saturn-library-person-0-$coraline')));
+    final rightSize = tester.getSize(
+        find.byKey(const Key('saturn-library-person-1-$coraline')));
+    // 138px score row = two equally sized outlined pills + a 5px gap.
+    expect(leftSize.width, closeTo(rightSize.width, .1));
+    expect(leftSize.width * 2 + 5,
+        closeTo(tester.getSize(horizontal).width, .1));
     expect(find.text('Você 5.0 ★'), findsOneWidget);
     expect(find.text('Ela 5.0 ★'), findsOneWidget);
     expect(find.textContaining('5.0 ★'), findsNWidgets(2));

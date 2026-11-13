@@ -42,24 +42,36 @@ class SaturnCardCoupleScores extends StatelessWidget {
             ? profileNames[person].trim()
             : 'Outro perfil');
 
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
-      child: Row(
-        key: Key('saturn-horizontal-scores-$workId'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final person in rated)
-            Padding(
-              padding: const EdgeInsets.only(right: 5),
-              child: SaturnPersonalScore(
-                key: Key('saturn-library-person-$person-$workId'),
-                name: label(person),
-                record: records['$person:$workId'],
-              ),
+    // Keep a single score naturally sized. When both people rated the work,
+    // divide the entire score slot into two identical pills instead of
+    // leaving an empty tail after the shorter name.
+    if (rated.length == 1) {
+      final person = rated.single;
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: SaturnPersonalScore(
+          key: Key('saturn-library-person-$person-$workId'),
+          name: label(person),
+          record: records['$person:$workId'],
+        ),
+      );
+    }
+
+    return Row(
+      key: Key('saturn-horizontal-scores-$workId'),
+      children: [
+        for (var index = 0; index < rated.length; index++) ...[
+          if (index > 0) const SizedBox(width: 5),
+          Expanded(
+            child: SaturnPersonalScore(
+              key: Key('saturn-library-person-${rated[index]}-$workId'),
+              name: label(rated[index]),
+              record: records['${rated[index]}:$workId'],
+              fillWidth: true,
             ),
+          ),
         ],
-      ),
+      ],
     );
   }
 }

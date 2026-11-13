@@ -2985,12 +2985,10 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   /// Uses real catalog covers; accessible by touch, mouse and keyboard.
-  Widget _cinematicHero(int ownCount) {
+  Widget _cinematicHero() {
     final slides = _featuredTitles();
     final Work? featured = _visibleFeatured ??
         (slides.isEmpty ? null : slides[_featuredIndex % slides.length]);
-    final fromWatchlist = featured != null &&
-        currentWatchlist.contains(featured.id);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
       child: LayoutBuilder(
@@ -3083,15 +3081,6 @@ class _SaturnHomeState extends State<SaturnHome>
                           )),
                         ]),
                         const Spacer(),
-                        Text(
-                          featured != null
-                              ? fromWatchlist ? 'DA SUA WATCHLIST · PARA VOCÊ' : 'EM DESTAQUE · DESCUBRA'
-                              : 'NOSSO UNIVERSO DE HISTÓRIAS',
-                          style: const TextStyle(
-                            fontSize: 10, color: gold,
-                            fontWeight: FontWeight.bold, letterSpacing: 2),
-                        ),
-                        const SizedBox(height: 8),
                         ConstrainedBox(
                           constraints: BoxConstraints(maxWidth:
                             featured == null ? constraints.maxWidth
@@ -3114,17 +3103,7 @@ class _SaturnHomeState extends State<SaturnHome>
                             ),
                           ),
                         ),
-                        const SizedBox(height: 9),
-                        Text(
-                          'Bem-vinda, ${profiles[profile]} • '
-                          '$ownCount na coleção • ${shared.length} na nossa órbita',
-                          maxLines: 2,
-                          style: const TextStyle(
-                            color: Color(0xFFE0CED6),
-                            fontSize: 12, height: 1.35),
-                        ),
-                        const SizedBox(height: 18),
-
+                        const SizedBox(height: 14),
                       ],
                     ),
                     ),
@@ -3605,13 +3584,9 @@ class _SaturnHomeState extends State<SaturnHome>
       !_isArchived(work) && work.kind == 'Livro' &&
       (currentWatchlist.contains(work.id) ||
           entry(work)['status'] != null)).toList(growable: false);
-    final ownCount = allWorks.where(
-      (work) => !_isArchived(work) &&
-          entry(work)['status'] != null,
-    ).length;
     return ListView(
       children: [
-        _cinematicHero(ownCount),
+        _cinematicHero(),
         _heading('Minha Watchlist'),
         _collectionSelectionToolbar(
           watchlistTitles,
