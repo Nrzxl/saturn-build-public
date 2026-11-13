@@ -76,61 +76,10 @@ class SaturnTechnicalMetadata {
     return m != null && m[1] > 0 ? m[1] : null;
   }
 
-  /// Retrieve the real average episode duration and aired seasons by TVmaze
-  /// ID, excluding season zero (specials). No guesses from title or year.
-  /// Opened sheets trigger only two short requests, then persist the cache.
+  /// Retrieve genuine TVmaze seasons and average episode duration.
+  /// Only runs when the user opens a title, never per painted card.
   Future<void> hydrateTvmaze(String id, {void Function()? onChanged}) {
-    final match = RegExp(r'^tvmaze:([1-9][0-9]{0,8})  /// usable if GitHub/CDN is unreachable. Network retry is throttled.
-  Future<void> hydrate({void Function()? onChanged}) async {
-    if (_busy) return;
-    _busy = true;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final stored = prefs.getString(_cacheKey);
-      if (stored != null && stored.isNotEmpty) {
-        final cached = parse(stored);
-        if (cached.isNotEmpty) {
-          _facts
-            ..clear()
-            ..addAll(cached);
-          onChanged?.call();
-        }
-      }
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final last = prefs.getInt(_updatedKey) ?? 0;
-      if (last > 0 && now >= last && now - last < _refreshMs) return;
-      try {
-        final response = await _client.get(Uri.parse(url),
-          headers: const {'Accept': 'application/json'})
-          .timeout(const Duration(seconds: 7));
-        if (response.statusCode != 200 || response.bodyBytes.length > 900000) {
-          throw StateError('Technical metadata not available');
-        }
-        final raw = utf8.decode(response.bodyBytes);
-        final next = parse(raw);
-        if (next.isEmpty) throw StateError('Empty technical snapshot');
-        _facts
-          ..clear()
-          ..addAll(next);
-        await prefs.setString(_cacheKey, raw);
-        await prefs.setInt(_updatedKey, now);
-        onChanged?.call();
-      } catch (_) {
-        // On error retry at a bounded interval, not per visible poster.
-        await prefs.setInt(_updatedKey, now - _refreshMs + _retryMs);
-      }
-    } catch (_) {
-      // Metadata is supplementary. Personal collections must always work.
-    } finally {
-      _busy = false;
-    }
-  }
-
-  void close() {
-    if (_ownsClient) _client.close();
-  }
-}
-).firstMatch(id);
+    final match = RegExp(r'^tvmaze:([1-9][0-9]{0,8})$').firstMatch(id);
     if (match == null || _tvmazeFacts.containsKey(id) ||
         _tvmazeAttempted.contains(id)) return Future<void>.value();
     return _tvmazePending.putIfAbsent(id, () async {
