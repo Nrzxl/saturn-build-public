@@ -81,6 +81,34 @@ void main() {
     final delegate = grid.gridDelegate
         as SliverGridDelegateWithFixedCrossAxisCount;
     expect(delegate.mainAxisExtent!, greaterThan(337));
+    // The old card reserved 205 px after the artwork, leaving a large
+    // empty strip beneath the controls. The new footer uses only the
+    // exact fixed slots and ends immediately after the button row.
+    expect(delegate.mainAxisExtent!, lessThan(sizeA.height + 190));
+
+    final actionsA = find.byKey(Key('saturn-ranked-actions-${reviewed.id}'));
+    final actionsB = find.byKey(Key('saturn-ranked-actions-${plain.id}'));
+    final cardA = find.byKey(Key('saturn-ranked-card-${reviewed.id}'));
+    final cardB = find.byKey(Key('saturn-ranked-card-${plain.id}'));
+    expect(tester.getTopLeft(actionsA).dy,
+        closeTo(tester.getTopLeft(actionsB).dy, 0.01));
+    expect(tester.getBottomRight(cardA).dy -
+        tester.getBottomRight(actionsA).dy, lessThan(25));
+    expect(tester.getBottomRight(cardB).dy -
+        tester.getBottomRight(actionsB).dy, lessThan(25));
+
+    for (final work in [reviewed, plain]) {
+      expect(tester.getSize(find.byKey(
+          Key('saturn-ranked-title-slot-${work.id}'))).height, 36);
+      expect(tester.getSize(find.byKey(
+          Key('saturn-ranked-score-slot-${work.id}'))).height, 34);
+      expect(tester.getSize(find.byKey(
+          Key('saturn-ranked-technical-slot-${work.id}'))).height, 17);
+      expect(tester.getSize(find.byKey(
+          Key('saturn-ranked-review-slot-${work.id}'))).height, 29);
+      expect(tester.getSize(find.byKey(
+          Key('saturn-ranked-actions-${work.id}'))).height, 40);
+    }
     expect(find.byKey(Key('saturn-ranked-completed-${reviewed.id}')),
         findsOneWidget);
     expect(find.byKey(Key('saturn-ranked-completed-${plain.id}')),

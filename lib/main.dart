@@ -3099,6 +3099,11 @@ class _SaturnHomeState extends State<SaturnHome>
     final technical = _technicalLabel(work);
     final tier = SaturnReviewClassification.of(personal);
     final stars = SaturnReviewClassification.stars(personal);
+    final sharedScoreProfiles = <int>[
+      for (var person = 0; person < 2; person++)
+        if (SaturnReviewClassification.stars(
+            records['${person}:${work.id}']) != null) person,
+    ];
     final comment = (personal['notes'] ?? '').toString().trim();
     final inOrbit = shared.contains(work.id);
     final firstTier = inOrbit
@@ -3224,85 +3229,115 @@ class _SaturnHomeState extends State<SaturnHome>
                       ),
                     ),
                 ])),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 7, 8, 2),
-                  child: Text(work.title,
-                    maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: ivory, fontSize: 12.5,
-                      fontWeight: FontWeight.w700, height: 1.12)),
+                // A compact, predictable footer. Every slot has the same
+                // height regardless of the title or the person's review.
+                SizedBox(
+                  key: Key('saturn-ranked-title-slot-' + work.id),
+                  height: 36,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 7, 8, 0),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Text(work.title, maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: ivory,
+                          fontSize: 12.5, fontWeight: FontWeight.w700,
+                          height: 1.12)),
+                    ),
+                  ),
                 ),
-                if (inOrbit && !compact)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 3, 8, 5),
-                    child: Wrap(spacing: 5, runSpacing: 4, children: [
-                      for (var person = 0; person < 2; person++)
-                        if (SaturnReviewClassification.stars(
-                            records['${person}:${work.id}']) != null)
-                          SaturnPersonalScore(
-                            key: Key('saturn-library-person-${person}-${work.id}'),
-                            name: person == profile ? 'Você' : profiles[person],
-                            record: records['${person}:${work.id}'],
-                          ),
-                    ]),
-                  )
-                else if (stars != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 5),
-                    child: SaturnPersonalScore(
-                      key: Key('saturn-library-person-active-${work.id}'),
-                      name: 'Você', record: personal,
-                    ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 1, 8, 4),
-                    child: Text(
-                      [
-                        work.kind,
-                        if (work.year > 0) work.year.toString(),
-                        if (technical != null) technical,
-                      ].join(' · '),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFCEB9C6), fontSize: 10),
-                    ),
-                  ),
-                if (technical != null &&
-                    (stars != null || (inOrbit && !compact)))
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 3),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(work.kind == 'Filme'
-                            ? Icons.schedule_rounded
-                            : Icons.live_tv_rounded,
-                          size: 11, color: const Color(0xFFD8BEA1)),
-                        const SizedBox(width: 4),
-                        Flexible(child: Text(
-                          technical,
-                          key: Key('saturn-ranked-technical-' + work.id),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFE3C9AF), fontSize: 10),
-                        )),
-                      ],
+                SizedBox(
+                  key: Key('saturn-ranked-score-slot-' + work.id),
+                  height: 34,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 3),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: inOrbit && !compact && sharedScoreProfiles.isNotEmpty
+                          ? FittedBox(fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final person in sharedScoreProfiles)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 5),
+                                      child: SaturnPersonalScore(
+                                        key: Key('saturn-library-person-'
+                                            '${person}-${work.id}'),
+                                        name: person == profile
+                                            ? 'Você' : profiles[person],
+                                        record: records['${person}:${work.id}'],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            )
+                          : stars != null
+                              ? SaturnPersonalScore(
+                                  key: Key('saturn-library-person-active-'
+                                      + work.id),
+                                  name: 'Você', record: personal)
+                              : Text(
+                                  [
+                                    work.kind,
+                                    if (work.year > 0) work.year.toString(),
+                                  ].join(' · '),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFFCEB9C6), fontSize: 10)),
                     ),
                   ),
-                if (tier != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
-                    child: Text('“$comment”',
-                      maxLines: compact ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFDECBD4),
-                        fontSize: 10.5, height: 1.15)),
+                ),
+                SizedBox(
+                  key: Key('saturn-ranked-technical-slot-' + work.id),
+                  height: 17,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: technical == null
+                          ? const SizedBox.shrink()
+                          : Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(work.kind == 'Filme'
+                                  ? Icons.schedule_rounded
+                                  : work.kind == 'Livro'
+                                      ? Icons.menu_book_outlined
+                                      : Icons.live_tv_rounded,
+                                size: 11, color: const Color(0xFFD8BEA1)),
+                              const SizedBox(width: 4),
+                              Flexible(child: Text(
+                                technical,
+                                key: Key('saturn-ranked-technical-' + work.id),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFFE3C9AF), fontSize: 10),
+                              )),
+                            ]),
+                    ),
                   ),
+                ),
+                SizedBox(
+                  key: Key('saturn-ranked-review-slot-' + work.id),
+                  height: 29,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: tier == null ? const SizedBox.shrink()
+                          : Text('“$comment”', maxLines: compact ? 1 : 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFFDECBD4),
+                                fontSize: 10.5, height: 1.15)),
+                    ),
+                  ),
+                ),
                 if (!compact && !_selectingWorks)
-                  SizedBox(height: 42, child: Row(children: [
+                  SizedBox(
+                    key: Key('saturn-ranked-actions-' + work.id),
+                    height: 40, child: Row(children: [
                     libraryAction(
                       key: Key('saturn-ranked-collections-' + work.id),
                       tooltip: 'Adicionar às coleções',
@@ -3325,7 +3360,10 @@ class _SaturnHomeState extends State<SaturnHome>
                           ? Icons.check_circle_rounded
                           : Icons.check_circle_outline_rounded,
                       onPressed: () => _toggleCompleted(work)),
-                  ])),
+                  ]))
+                else
+                  const SizedBox(height: 40),
+                const SizedBox(height: 4),
               ],
             ),
           ),
@@ -3892,10 +3930,14 @@ class _SaturnHomeState extends State<SaturnHome>
             .floor().clamp(2, 6).toInt();
         final cellWidth =
             (constraints.crossAxisExtent - (columns - 1) * 2) / columns;
-        // Stable full 2:3 cover independent of review text/action heights.
-        final coverWidth = (cellWidth - 14).clamp(90.0, 400.0);
-        final cellHeight = (coverWidth * 1.5 + 205)
-            .clamp(415.0, 820.0).toDouble();
+        // 2:3 image plus compact fixed-height content: title (2 lines),
+        // stars, technical facts (1 line), review (2 lines) and actions.
+        // Borders, halo and margins are included; no wasted bottom area.
+        const chromeWidth = 14.0 + 2.0 + 6.8;
+        const footerHeight = 36.0 + 34.0 + 17.0 + 29.0 + 40.0 + 4.0;
+        final coverWidth = (cellWidth - chromeWidth).clamp(80.0, 500.0);
+        final cellHeight = (coverWidth * 1.5 +
+            footerHeight + chromeWidth + 2.0).clamp(310.0, 860.0).toDouble();
         return SliverGrid(
           key: Key('saturn-ranked-gallery-' + visible.first.id),
           delegate: SliverChildBuilderDelegate(
