@@ -894,6 +894,12 @@ class CatalogClient {
             image is Map ? (image['original'] ?? image['medium'] ?? '').toString() : '',
         creator: network is Map ? (network['name'] ?? '').toString() : '',
         provider: 'TVmaze',
+        // TVmaze reports average episode length, never a feature-film length.
+        runtimeMinutes: (raw['averageRuntime'] ?? raw['runtime']) is num &&
+                (raw['averageRuntime'] ?? raw['runtime']) > 0 &&
+                (raw['averageRuntime'] ?? raw['runtime']) <= 300
+            ? ((raw['averageRuntime'] ?? raw['runtime']) as num).round()
+            : null,
         imdbId: raw['externals'] is Map
             ? ((raw['externals'] as Map)['imdb'] ?? '').toString() : '',
         genreIds: _genreIdsFromNames(raw['genres']),
