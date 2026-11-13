@@ -47,7 +47,7 @@ class SaturnCardCoupleScores extends StatelessWidget {
         // vertical padding). Keep one Text per profile for accessibility.
         // Limit very long names rather than clipping the numeric score.
         String compactName(int person) {
-          final first = label(person).split(RegExp(r'\\s+')).first;
+          final first = label(person).split(' ').first;
           return first.length > 10 ? '${first.substring(0, 9)}…' : first;
         }
         return Column(
