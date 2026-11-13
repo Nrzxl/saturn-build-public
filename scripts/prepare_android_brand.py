@@ -9,7 +9,6 @@ No API keys or external icon resources are needed.
 from __future__ import annotations
 
 from pathlib import Path
-import shutil
 import xml.etree.ElementTree as ET
 
 from create_pwa_icons import draw
@@ -65,9 +64,25 @@ def main() -> None:
     tree.write(manifest, encoding="utf-8", xml_declaration=True)
 
     native = ROOT / "tool/android/SaturnMainActivity.kt"
-    target = ROOT / "android/app/src/main/kotlin/com/example/saturn_app/MainActivity.kt"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(native, target)
+    kotlin_root = ROOT / "android/app/src/main/kotlin"
+    # flutter create --org may emit com.example or com.nrzxl. Replace the
+    # generated launcher in place so AndroidManifest resolves one activity.
+    candidates = list(kotlin_root.rglob("MainActivity.kt"))
+    if len(candidates) != 1:
+        raise SystemExit("Expected exactly one generated Android MainActivity")
+    target = candidates[0]
+    original = target.read_text(encoding="utf-8")
+    package_line = next(
+        (line.strip() for line in original.splitlines()
+         if line.strip().startswith("package ")), "")
+    if not package_line:
+        raise SystemExit("Generated Flutter MainActivity has no package")
+    template = native.read_text(encoding="utf-8")
+    if "package com.example.saturn_app" not in template:
+        raise SystemExit("Native SATURN template has unexpected package")
+    target.write_text(
+        template.replace("package com.example.saturn_app", package_line, 1),
+        encoding="utf-8")
     print("SATURN installed: identical PWA/APK icon and native notice channel")
 
 
