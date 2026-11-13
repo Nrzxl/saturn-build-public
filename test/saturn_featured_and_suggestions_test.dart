@@ -31,7 +31,16 @@ void main() {
     });
     await tester.pumpWidget(const SaturnApp());
     await tester.pumpAndSettle();
-    expect(find.text('DA SUA WATCHLIST · PARA VOCÊ'), findsOneWidget);
+    final hero = find.byKey(const Key('saturn-feature-swipe'));
+    expect(find.descendant(of: hero,
+        matching: find.text('DA SUA WATCHLIST · PARA VOCÊ')), findsNothing);
+    expect(find.descendant(of: hero,
+        matching: find.text('EM DESTAQUE · DESCUBRA')), findsNothing);
+    expect(find.descendant(of: hero,
+        matching: find.textContaining('Bem-vinda')), findsNothing);
+    expect(find.descendant(of: hero,
+        matching: find.textContaining('na coleção')), findsNothing);
+    expect(find.text('EVERY STORY HAS ITS ORBIT'), findsOneWidget);
     final label = find.byKey(const Key('saturn-featured-title'));
     expect(tester.widget<Text>(label.last).data, first.title);
     expect(find.byKey(Key('saturn-hero-art-${first.id}')), findsOneWidget);
