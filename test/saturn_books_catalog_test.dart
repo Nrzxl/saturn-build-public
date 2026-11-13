@@ -325,4 +325,50 @@ void main() {
   });
 
 
+  test('Unified Explore keeps Brazilian manga when Open Library is offline',
+      () async {
+    var googleCalls = 0;
+    final catalog = CatalogClient(
+      client: MockClient((request) async {
+        if (request.url.path.startsWith('/Nrzxl/saturn-downloads/') &&
+            request.url.path.endsWith('.json')) {
+          final movie = request.url.path.endsWith('/movies.json');
+          return http.Response(jsonEncode({
+            'schema': 1, 'country': 'BR', 'results': [
+              if (movie) {
+                'id': 'tmdb:movie:999',
+                'title': 'Berserker - movie',
+                'kind': 'Filme',
+                'year': 2024,
+                'posterUrl': '',
+              },
+            ],
+          }), 200);
+        }
+        if (request.url.host == 'openlibrary.org') {
+          return http.Response('temporarily unavailable', 503);
+        }
+        if (request.url.host == 'www.googleapis.com') {
+          googleCalls++;
+          expect(request.url.queryParameters['q'], 'Berserk');
+          return http.Response(jsonEncode({'items': [{
+            'id': 'PTberserk2',
+            'volumeInfo': {
+              'title': 'Berserk - Volume 2',
+              'authors': ['Kentaro Miura'],
+              'language': 'pt',
+              'pageCount': 224,
+            },
+          }]}), 200);
+        }
+        throw StateError('Unexpected: ${request.url}');
+      }), enableTmdb: true);
+    addTearDown(catalog.close);
+    final result = await catalog.search('bers', CatalogFilter.all);
+    expect(result.any((w) => w.id == 'tmdb:movie:999'), isTrue);
+    expect(result.any((w) => w.id == 'googlebooks:PTberserk2' &&
+        w.pageCount == 224), isTrue);
+    expect(googleCalls, 1);
+  });
+
 }

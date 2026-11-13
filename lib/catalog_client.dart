@@ -423,10 +423,21 @@ class CatalogClient {
       if (found.isNotEmpty || streaming != null) {
         if (filter == CatalogFilter.all && streaming == null && genreId == null) {
           try {
+            // One unavailable book provider must not hide a real manga
+            // returned by the other provider or the already-loaded TMDB feed.
+            Future<List<CatalogEntry>> independent(
+                Future<List<CatalogEntry>> request) async {
+              try {
+                return await request;
+              } catch (_) {
+                return <CatalogEntry>[];
+              }
+            }
             final groups = await Future.wait([
-              _books(bookQuery, page: p, subject: bookSubject),
+              independent(_books(bookQuery, page: p,
+                  subject: bookSubject)),
               if (expandedManga)
-                _googleBooks(query: bookQuery, page: p),
+                independent(_googleBooks(query: bookQuery, page: p)),
             ]);
             return _unique([...found, ...groups.expand((v) => v)]);
           } catch (_) {
