@@ -31,9 +31,9 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const Key('saturn-library-person-1-$coraline')),
         findsOneWidget);
-    expect(find.text('Você'), findsOneWidget);
-    expect(find.text('Ela'), findsOneWidget);
-    expect(find.text('5.0 ★'), findsNWidgets(2));
+    expect(find.text('Você 5.0 ★'), findsOneWidget);
+    expect(find.text('Ela 5.0 ★'), findsOneWidget);
+    expect(find.textContaining('5.0 ★'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 
