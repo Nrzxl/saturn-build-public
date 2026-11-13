@@ -3162,7 +3162,8 @@ class _SaturnHomeState extends State<SaturnHome>
             color: tier == null
                 ? const Color(0x554C3547)
                 : Colors.transparent,
-            width: tier == null ? 1 : 0,
+            // Keep the same actual poster bounds for reviewed/unreviewed.
+            width: 1,
           ),
         ),
         child: SaturnMetallicHalo(

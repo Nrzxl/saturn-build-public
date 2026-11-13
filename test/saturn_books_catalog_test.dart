@@ -258,7 +258,9 @@ void main() {
           'title': 'ベルセルク',
           'author_name': ['Kentaro Miura'],
           'first_publish_year': 1989,
-        }]}), 200);
+        }]}), 200, headers: const {
+          'content-type': 'application/json; charset=utf-8',
+        });
       }
       if (request.url.host == 'www.googleapis.com' &&
           request.url.path == '/books/v1/volumes') {
