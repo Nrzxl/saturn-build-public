@@ -43,19 +43,27 @@ class SaturnCardCoupleScores extends StatelessWidget {
 
     return LayoutBuilder(builder: (context, constraints) {
       if (rated.length > 1 && constraints.maxWidth < 190) {
+        // Two 14px lines fit the library's 34px score slot (which also has
+        // vertical padding). Keep one Text per profile for accessibility.
+        // Limit very long names rather than clipping the numeric score.
+        String compactName(int person) {
+          final first = label(person).split(RegExp(r'\\s+')).first;
+          return first.length > 10 ? '${first.substring(0, 9)}…' : first;
+        }
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final person in rated)
               SizedBox(
-                height: 15,
+                height: 14,
                 child: Row(
                   key: Key('saturn-library-person-$person-$workId'),
-                  mainAxisSize: MainAxisSize.max,
                   children: [
                     Flexible(child: Text(
-                      label(person),
+                      '${compactName(person)} '
+                      '${SaturnReviewClassification.stars(
+                          records['$person:$workId'])!.toStringAsFixed(1)} ★',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -63,21 +71,9 @@ class SaturnCardCoupleScores extends StatelessWidget {
                               records['$person:$workId'])?.color ??
                             const Color(0xFFCEB9C6),
                         fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    )),
-                    const SizedBox(width: 5),
-                    Text(
-                      '${SaturnReviewClassification.stars(
-                          records['$person:$workId'])!.toStringAsFixed(1)} ★',
-                      style: TextStyle(
-                        color: SaturnReviewClassification.fromRating(
-                              records['$person:$workId'])?.color ??
-                            const Color(0xFFCEB9C6),
-                        fontSize: 10.5,
                         fontWeight: FontWeight.w800,
                       ),
-                    ),
+                    )),
                   ],
                 ),
               ),
