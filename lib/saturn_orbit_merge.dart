@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'saturn_legacy_tvmaze_bridge.dart';
 
 /// Pure, deterministic two-device merge. Each changed item carries its own
 /// timestamp. Deleted watchlist/favorite entries use explicit tombstones.
@@ -80,10 +81,35 @@ class SaturnOrbitMerge {
     };
   }
 
+  static Map<String, dynamic> _mergeCatalog(
+      Object? localRaw, Object? remoteRaw) {
+    final local = _map(localRaw);
+    final remote = _map(remoteRaw);
+    final result = _unionObjects(local, remote);
+    // A stale offline TVmaze row canonicalized to a TMDB id must never
+    // overwrite the newer Portuguese synopsis and official TMDB artwork.
+    for (final id in {...local.keys, ...remote.keys}) {
+      final a = local[id];
+      final b = remote[id];
+      if (a is! Map || b is! Map) continue;
+      if (a['provider'] == 'TMDB' && b['provider'] != 'TMDB') {
+        result[id] = a;
+      } else if (b['provider'] == 'TMDB' &&
+          a['provider'] != 'TMDB') {
+        result[id] = b;
+      }
+    }
+    return result;
+  }
+
   static Map<String, dynamic> merge(
     Map<String, dynamic> local,
     Map<String, dynamic> remote,
   ) {
+    // Apply the exact-ID migration to BOTH documents before reconciling
+    // timestamps. Older offline builds cannot resurrect TVmaze duplicates.
+    local = SaturnLegacyTvmazeBridge.upgrade(local);
+    remote = SaturnLegacyTvmazeBridge.upgrade(remote);
     final localLinks = _map(local['customTitleLinks']);
     final remoteLinks = _map(remote['customTitleLinks']);
     final links = <String, dynamic>{};
@@ -121,7 +147,7 @@ class SaturnOrbitMerge {
       'collectionItemOps': _mergeStamped(
         local['collectionItemOps'], remote['collectionItemOps'],
       ),
-      'catalogSaved': _unionObjects(
+      'catalogSaved': _mergeCatalog(
         local['catalogSaved'], remote['catalogSaved'],
       ),
       'customTitleLinks': links,

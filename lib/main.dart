@@ -28,6 +28,7 @@ import 'saturn_trailer.dart';
 import 'saturn_native_trailer.dart';
 import 'saturn_orbit_cloud.dart';
 import 'saturn_orbit_merge.dart';
+import 'saturn_legacy_tvmaze_bridge.dart';
 import 'saturn_orbit_sync_sheet.dart';
 import 'saturn_premium_details.dart';
 import 'saturn_story_synopsis.dart';
@@ -528,6 +529,48 @@ class _SaturnHomeState extends State<SaturnHome>
       watchlists.putIfAbsent(profile, () => <String>{});
   final CatalogClient _homeCatalog = CatalogClient();
   final SaturnTechnicalMetadata _technicalMetadata = SaturnTechnicalMetadata();
+  bool _upgradingLegacyPictures = false;
+
+  /// The ID migration works instantly offline. When a verified TMDB row is
+  /// present in SATURN's Portuguese snapshot, upgrade poster, backdrop,
+  /// synopsis and provider asynchronously, without touching either person's
+  /// records or holding the first frame hostage.
+  void _upgradeLegacyTmdbPictures() {
+    if (_upgradingLegacyPictures || !mounted) return;
+    final pending = savedWorks.values.where((work) =>
+        work.id.startsWith('tmdb:tv:') &&
+        work.provider == 'TVmaze' &&
+        SaturnLegacyTvmazeBridge.exactIds.containsValue(work.id))
+        .toList(growable: false);
+    if (pending.isEmpty) return;
+    _upgradingLegacyPictures = true;
+    unawaited(() async {
+      try {
+        var updated = false;
+        for (final previous in pending) {
+          CatalogEntry? verified;
+          try {
+            verified = await _homeCatalog.onlineRatingsById(previous.id);
+          } catch (_) {
+            continue;
+          }
+          if (!mounted || verified == null ||
+              verified.year != previous.year ||
+              verified.description.trim().isEmpty) continue;
+          // Avoid overriding later edits or a concurrent cloud update.
+          final current = savedWorks[previous.id];
+          if (current == null || current.provider != 'TVmaze') continue;
+          setState(() {
+            savedWorks[previous.id] = Work.fromCatalog(verified!);
+          });
+          updated = true;
+        }
+        if (updated && mounted) await _save();
+      } finally {
+        _upgradingLegacyPictures = false;
+      }
+    }());
+  }
 
   // One verified compact index feeds the entire UI, including legacy saved
   // titles. No TMDB request is performed when painting individual cards.
@@ -631,9 +674,10 @@ class _SaturnHomeState extends State<SaturnHome>
         },
       );
     }
-    _load().then((_) {
+    _load().then((_) async {
       _loadTechnicalMetadata();
-      return _tryResumeOrbit();
+      await _tryResumeOrbit();
+      _upgradeLegacyTmdbPictures();
     });
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _loadHomeRecommendations(),
@@ -856,6 +900,16 @@ class _SaturnHomeState extends State<SaturnHome>
     } catch (_) {
       // Não destruir dados existentes caso o armazenamento local esteja corrompido.
     }
+    if (!mounted) return;
+    final local = _orbitDocument();
+    final canonical = SaturnLegacyTvmazeBridge.upgrade(local);
+    if (SaturnOrbitMerge.canonical(local) !=
+        SaturnOrbitMerge.canonical(canonical)) {
+      // Local-first migration also protects PWA/iOS installs that are offline
+      // when the cloud migration lands. _applyOrbitDocument persists all
+      // personal records and collection references without resetting them.
+      await _applyOrbitDocument(canonical);
+    }
   }
 
   Future<void> _save() async {
@@ -956,6 +1010,9 @@ class _SaturnHomeState extends State<SaturnHome>
     } finally {
       _cloudApplying = false;
     }
+    // Run only if an imported record still has TVmaze artwork. The cloud's
+    // verified TMDB ID has already been reconciled, so reviews are safe.
+    _upgradeLegacyTmdbPictures();
   }
 
   Future<void> _tryResumeOrbit() async {

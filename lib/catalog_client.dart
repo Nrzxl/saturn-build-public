@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'streaming_links.dart';
 import 'tmdb_catalog_data.dart';
+import 'saturn_legacy_tvmaze_bridge.dart';
 import 'saturn_book_cover.dart';
 
 /// Catálogos sem credenciais embutidas no APK.
@@ -810,7 +811,8 @@ class CatalogClient {
     for (final item in data) {
       if (item is Map && item['show'] is Map) shows.add(item['show']);
     }
-    return _mapShows(shows, dramasOnly: dramasOnly);
+    return _preferKnownTmdbShows(
+        _mapShows(shows, dramasOnly: dramasOnly));
   }
 
   Future<List<CatalogEntry>> _discoverShows(int page) async {
@@ -818,9 +820,9 @@ class CatalogClient {
       Uri.https('api.tvmaze.com', '/shows', {'page': '${page - 1}'}),
     );
     if (data is! List) return [];
-    return _mapShows(data.where((row) =>
+    return _preferKnownTmdbShows(_mapShows(data.where((row) =>
         row is Map &&
-        (row['type'] == 'Scripted' || row['type'] == 'Animation')));
+        (row['type'] == 'Scripted' || row['type'] == 'Animation'))));
   }
 
   Future<List<CatalogEntry>> _discoverDramas(int page) async {
@@ -837,6 +839,34 @@ class CatalogClient {
       seeds.map((seed) => _shows(seed, dramasOnly: true)),
     );
     return _unique(groups.expand((group) => group));
+  }
+
+  /// Replace a previously imported TVmaze title with its verified
+  /// Brazilian TMDB version. This only runs during a user-requested
+  /// catalogue batch, reusing the snapshot loaded by discovery; no new
+  /// request is made per displayed poster or per saved review.
+  Future<List<CatalogEntry>> _preferKnownTmdbShows(
+      List<CatalogEntry> shows) async {
+    if (!_enableTmdb || shows.isEmpty) return shows;
+    final wanted = shows.where((entry) =>
+        SaturnLegacyTvmazeBridge.canonicalId(entry.id) != null).toList();
+    if (wanted.isEmpty) return shows;
+    final preferred = <String, CatalogEntry>{};
+    await Future.wait(wanted.map((entry) async {
+      try {
+        final id = SaturnLegacyTvmazeBridge.canonicalId(entry.id)!;
+        final online = await onlineRatingsById(id);
+        if (online != null && online.year == entry.year &&
+            online.description.trim().isNotEmpty) {
+          preferred[entry.id] = online;
+        }
+      } catch (_) {
+        // Network issues leave the attributed short PT-BR fallback intact.
+      }
+    }));
+    return [
+      for (final entry in shows) preferred[entry.id] ?? entry,
+    ];
   }
 
   List<CatalogEntry> _mapShows(
@@ -856,12 +886,16 @@ class CatalogClient {
         id: 'tvmaze:$id',
         title: name,
         kind: _isDorama(raw) ? 'Dorama' : 'Série',
-        description: _strip((raw['summary'] ?? '').toString()),
+        description: SaturnLegacyTvmazeBridge.portugueseSynopses[
+              'tvmaze:$id'] ??
+            _strip((raw['summary'] ?? '').toString()),
         year: _year((raw['premiered'] ?? '').toString()),
         posterUrl:
             image is Map ? (image['original'] ?? image['medium'] ?? '').toString() : '',
         creator: network is Map ? (network['name'] ?? '').toString() : '',
         provider: 'TVmaze',
+        imdbId: raw['externals'] is Map
+            ? ((raw['externals'] as Map)['imdb'] ?? '').toString() : '',
         genreIds: _genreIdsFromNames(raw['genres']),
         detailUrl: (raw['url'] ?? '').toString(),
         streamingLinks: extractOfficialTitleLinks([
