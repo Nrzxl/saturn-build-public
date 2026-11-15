@@ -18,6 +18,8 @@ class SaturnLegacyTvmazeBridge {
     'tvmaze:54771': 'tmdb:tv:96571', // Move to Heaven · 2021
     'tvmaze:4913': 'tmdb:tv:63767', // She Was Pretty · 2015
     'tvmaze:526': 'tmdb:tv:2316', // The Office (US) · 2005
+    // Verified exact identity, not merely the same display name/year:
+    'anilist:101922': 'tmdb:tv:85937', // Demon Slayer · 2019
   };
 
   /// Original, short PT-BR synopses for legacy TVmaze fallback results.
@@ -76,7 +78,8 @@ class SaturnLegacyTvmazeBridge {
   /// When both reviews differ, retain BOTH exact authored texts. Re-importing
   /// old offline data will never append an identical paragraph twice.
   static Map<String, dynamic> _review(
-      Map<String, dynamic> destination, Map<String, dynamic> legacy) {
+      Map<String, dynamic> destination, Map<String, dynamic> legacy,
+      {String source = 'TVmaze'}) {
     final result = <String, dynamic>{...destination};
     for (final item in legacy.entries) {
       if (_empty(result[item.key]) && !_empty(item.value)) {
@@ -88,7 +91,7 @@ class SaturnLegacyTvmazeBridge {
     if (oldNote.isNotEmpty && newNote.isNotEmpty &&
         oldNote != newNote && !newNote.contains(oldNote)) {
       result['notes'] =
-          '$newNote\n\nResenha anterior (TVmaze):\n$oldNote';
+          '$newNote\n\nResenha anterior ($source):\n$oldNote';
     }
     if (legacy['rating'] is num && destination['rating'] is num &&
         legacy['rating'] != destination['rating']) {
@@ -167,7 +170,8 @@ class SaturnLegacyTvmazeBridge {
           section[dest] = previous;
         } else if (current is Map && previous is Map) {
           section[dest] = isReview
-              ? _review(_map(current), _map(previous))
+              ? _review(_map(current), _map(previous),
+                  source: oldId.startsWith('anilist:') ? 'AniList' : 'TVmaze')
               : _flag(_map(current), _map(previous));
         }
       }
