@@ -15,6 +15,7 @@ import 'streaming_preferences.dart';
 import 'streaming_links.dart';
 import 'saturn_star_rating.dart';
 import 'saturn_review_tiers.dart';
+import 'saturn_library_partition.dart';
 import 'saturn_card_couple_scores.dart';
 import 'saturn_catalog_labels.dart';
 import 'saturn_technical_metadata.dart';
@@ -2826,7 +2827,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   NavigationRailDestination(
                     icon: SaturnMark(size: 24), label: Text('Nós dois')),
                   NavigationRailDestination(
-                    icon: Icon(Icons.bar_chart), label: Text('Dados')),
+                    icon: Icon(Icons.auto_stories_outlined), label: Text('Livros')),
                 ],
               ),
               const VerticalDivider(
@@ -2849,7 +2850,7 @@ class _SaturnHomeState extends State<SaturnHome>
                     TickerMode(enabled: tab == 3, child: _shared())
                   else const SizedBox.shrink(),
                   if (_recentTabs.contains(4))
-                    TickerMode(enabled: tab == 4, child: _stats())
+                    TickerMode(enabled: tab == 4, child: _books())
                   else const SizedBox.shrink(),
                 ],
               ),
@@ -2870,7 +2871,7 @@ class _SaturnHomeState extends State<SaturnHome>
           NavigationDestination(
               icon: SaturnMark(size: 24), label: 'Nós dois'),
           NavigationDestination(
-              icon: Icon(Icons.bar_chart), label: 'Dados'),
+              icon: Icon(Icons.auto_stories_outlined), label: 'Livros'),
         ],
       ),
     );
@@ -3732,15 +3733,7 @@ class _SaturnHomeState extends State<SaturnHome>
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(
-              onPressed: () => setState(() {
-                tab = 2;
-                _selectingWorks = false;
-                _selectedWorkIds.clear();
-                _recentTabs.remove(2);
-                _recentTabs.add(2);
-                if (_recentTabs.length > 2) _recentTabs.removeAt(0);
-                _collectionKind = 'Livros';
-              }),
+              onPressed: () => _navigateTab(4),
               icon: const Icon(Icons.auto_stories_outlined, size: 18),
               label: const Text('Abrir toda a estante'),
             ),
@@ -3975,8 +3968,11 @@ class _SaturnHomeState extends State<SaturnHome>
   List<Work> _filteredCollection(Iterable<Work> source, bool sharedList) {
     final selected = sharedList ? _sharedKind : _collectionKind;
     final kind = _collectionTypes[selected] ?? '';
-    return source.where((w) => kind.isEmpty || w.kind == kind)
-        .toList(growable: false);
+    // The couple's orbit still has its original book filter; only the
+    // PERSONAL collection is now films, series, doramas and anime.
+    return source.where((w) =>
+        (sharedList || !SaturnLibraryPartition.isBook(w.kind)) &&
+        (kind.isEmpty || w.kind == kind)).toList(growable: false);
   }
 
   Widget _collectionHeader(bool sharedList, int count) => Padding(
@@ -4004,7 +4000,7 @@ class _SaturnHomeState extends State<SaturnHome>
             const SizedBox(height: 5),
             Text(sharedList
                 ? 'Histórias que fazem parte da nossa trajetória'
-                : 'Seu cinema, sua estante, suas memórias',
+                : 'Seus filmes, séries, animes e doramas',
               style: const TextStyle(color: Color(0xFFDAC8D0), fontSize: 12)),
           ],
         )),
@@ -4049,6 +4045,7 @@ class _SaturnHomeState extends State<SaturnHome>
           },
           itemBuilder: (context) => [
             for (final kind in _collectionTypes.keys)
+              if (sharedList || kind != 'Livros')
               PopupMenuItem<String>(
                 key: Key('saturn-' + scope + '-filter-' + kind),
                 value: kind,
@@ -4155,11 +4152,13 @@ class _SaturnHomeState extends State<SaturnHome>
 
   Widget _smartCollectionCard(String id, String name, IconData icon,
       {Map<String, dynamic>? custom, bool all = false}) {
-    final ids = all
+    final ids = (all
         ? allWorks.where((w) => !_isArchived(w) &&
             (entry(w)['status'] != null ||
              _isWatchlisted(w) || _isFavorite(w))).map((w) => w.id).toList()
-        : _smartCollectionIds(id);
+        : _smartCollectionIds(id)).where(
+            (workId) => savedWorks[workId]?.kind != 'Livro')
+            .toList(growable: false);
     final coverWorkId = (custom?['coverWorkId'] ?? '').toString();
     final customCoverUrl = (custom?['coverUrl'] ?? '').toString();
     Work? cover;
@@ -4300,14 +4299,23 @@ class _SaturnHomeState extends State<SaturnHome>
     ]);
   }
 
-  Widget _collection() {
+  // One source of truth for both personal tabs. Splitting books changes
+  // only what is VISIBLE; existing status, ratings, favorites, editions,
+  // watchlists and smart-collection links remain untouched.
+  List<Work> _personalLibraryWorks() {
     final personalCollections = _personalCollections;
-    final all = allWorks.where((w) => !_isArchived(w) &&
+    return allWorks.where((w) => !_isArchived(w) &&
         (entry(w)['status'] != null || currentWatchlist.contains(w.id) ||
          _isFavorite(w) ||
          personalCollections.any((collection) =>
            SaturnSmartCollections.contains(_collectionItemOps,
-             collection['id'].toString(), w.id)))).toList();
+             collection['id'].toString(), w.id)))).toList(growable: false);
+  }
+
+  Widget _collection() {
+    final personalCollections = _personalCollections;
+    final all = SaturnLibraryPartition.collection(
+        _personalLibraryWorks(), (Work work) => work.kind);
     final available = {'all', for (final type in _automaticCollections) type.$1,
         for (final row in personalCollections) row['id'].toString()};
     final active = available.contains(_selectedSmartCollection)
@@ -5764,39 +5772,95 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
-  Widget _stats() {
-    final rated = allWorks.where((w) =>
-        !_isArchived(w) && entry(w)['rating'] != null).toList();
-    final average = rated.isEmpty
-        ? 0.0
-        : rated
-                .map((w) => (entry(w)['rating'] as num).toDouble())
-                .reduce((a, b) => a + b) /
-            rated.length;
-    return ListView(
-      children: [
-        _heading('Seu ano no Saturno'),
-        _stat(
-            'Obras registradas',
-            allWorks
-                .where((w) => !_isArchived(w) && entry(w)['status'] != null)
-                .length
-                .toString()),
-        _stat('Avaliações', rated.length.toString()),
-        _stat('Média de estrelas', '${(average / 2).toStringAsFixed(1)} ★'),
-        _stat('Na lista do casal', shared.length.toString()),
+  /// A dedicated bookshelf, separate from personal movie/series collection.
+  /// Both tabs render the same existing ranked cover cards and record keys;
+  /// no book is migrated or duplicated in Supabase.
+  Widget _books() {
+    final books = SaturnLibraryPartition.books(
+        _personalLibraryWorks(), (Work work) => work.kind);
+    return CustomScrollView(
+      key: const PageStorageKey('saturn_personal_bookshelf'),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+            child: Container(
+              key: const Key('saturn-books-hero'),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(23),
+                border: Border.all(color: const Color(0x665E4553)),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [Color(0xFF49233A), Color(0xFF241A2A), night],
+                ),
+              ),
+              child: Row(children: [
+                const Icon(Icons.auto_stories_rounded, color: gold, size: 32),
+                const SizedBox(width: 13),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Minha estante', style: TextStyle(
+                        color: ivory, fontFamily: 'serif',
+                        fontSize: 25, fontWeight: FontWeight.bold,
+                      )),
+                      SizedBox(height: 5),
+                      Text('Para ler, lendo e já lidos', style: TextStyle(
+                        color: Color(0xFFDAC8D0), fontSize: 12,
+                      )),
+                    ],
+                  ),
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color(0xAA241723),
+                    borderRadius: BorderRadius.all(Radius.circular(14)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                    child: Text('${books.length}', style: const TextStyle(
+                      color: gold, fontSize: 23,
+                      fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const Key('saturn-books-explore'),
+                onPressed: () => _openCatalogFilter(CatalogFilter.books),
+                icon: const Icon(Icons.search_rounded, size: 18),
+                label: const Text('Explorar livros'),
+              ),
+            ),
+          ),
+        ),
+        ..._collectionGallerySlivers(books),
+        if (books.isEmpty)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'Sua estante está vazia. Encontre livros em Explorar '
+                'e salve-os para começar a ler.',
+                key: Key('saturn-books-empty'),
+                style: TextStyle(
+                  color: Color(0xFFD1BBC3), fontSize: 13),
+              ),
+            ),
+          ),
       ],
     );
   }
-
-  Widget _stat(String label, String value) => Card(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-        child: ListTile(
-          title: Text(label),
-          trailing: Text(value,
-              style: const TextStyle(color: gold, fontSize: 24)),
-        ),
-      );
 
   /// Independent HD panoramic artwork when present, or a deliberately
   /// luminous, blurred rendering of the actual cover for books/old titles.
