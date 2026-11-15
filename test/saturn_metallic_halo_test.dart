@@ -42,6 +42,34 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+
+  testWidgets('Diamond shimmer stays confined to selected partner half',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(
+      body: Center(child: SizedBox(width: 150, height: 230,
+        child: SaturnMetallicHalo(
+          color: Color(0xFFBCEBFF),
+          partnerColor: Color(0xFFE3BF70),
+          diamond: true, partnerDiamond: false,
+          child: Text('Diamante só no meu perfil')),
+      )),
+    )));
+    final glow = tester.widget<SaturnMetallicHalo>(
+        find.byType(SaturnMetallicHalo));
+    expect(glow.diamond, isTrue);
+    expect(glow.partnerDiamond, isFalse);
+    final shell = tester.widget<AnimatedContainer>(
+        find.byType(AnimatedContainer).first);
+    final decoration = shell.decoration! as BoxDecoration;
+    final split = decoration.gradient! as LinearGradient;
+    expect(split.colors.length, 6);
+    expect(split.colors.first, isNot(split.colors.last));
+    await tester.pump(const Duration(milliseconds: 4300));
+    await tester.pump(const Duration(milliseconds: 1700));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('Shared halo combines two real tiers and glows on a match',
       (tester) async {
     const gold = Color(0xFFE3BF70);
