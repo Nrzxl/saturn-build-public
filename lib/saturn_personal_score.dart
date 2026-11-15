@@ -8,6 +8,7 @@ class SaturnPersonalScore extends StatelessWidget {
     super.key, required this.name, required this.record,
     this.compact = true,
     this.fillWidth = false,
+    this.favorite = false,
   });
 
   final String name;
@@ -17,15 +18,19 @@ class SaturnPersonalScore extends StatelessWidget {
   /// Used by the paired rating row: stretch both outlined pills to identical
   /// widths, while scaling long names inside the border without clipping.
   final bool fillWidth;
+  final bool favorite;
 
   @override
   Widget build(BuildContext context) {
     final score = SaturnReviewClassification.stars(record);
     if (score == null) return const SizedBox.shrink();
-    final metal = SaturnReviewClassification.fromRating(record)?.color ??
+    final tier = SaturnReviewClassification.fromRating(record,
+        favorite: favorite);
+    final diamond = tier == SaturnReviewTier.diamante;
+    final metal = tier?.color ??
         const Color(0xFFCEB9C6);
     final label = Text(
-      '${name} ${score.toStringAsFixed(1)} ★',
+      '${name} ${score.toStringAsFixed(1)} ★${diamond ? ' ✦' : ''}',
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
@@ -42,8 +47,13 @@ class SaturnPersonalScore extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(9),
-        color: metal.withValues(alpha: .13),
-        border: Border.all(color: metal.withValues(alpha: .68)),
+        color: metal.withValues(alpha: diamond ? .19 : .13),
+        border: Border.all(color: metal.withValues(alpha: diamond ? .96 : .68),
+          width: diamond ? 1.4 : 1),
+        boxShadow: diamond ? [BoxShadow(
+          color: metal.withValues(alpha: .40),
+          blurRadius: 9, spreadRadius: .4,
+        )] : null,
       ),
       child: fillWidth
           ? FittedBox(fit: BoxFit.scaleDown, child: label)
