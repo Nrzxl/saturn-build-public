@@ -84,6 +84,9 @@ class SaturnReviewClassification {
   }
 
   static SaturnReviewTier? of(Object? row, {bool favorite = false}) {
+    // The user explicitly awards diamond with five stars AND a favorite;
+    // unlike the older metals this never requires a text review.
+    if (favorite && stars(row) == 5) return SaturnReviewTier.diamante;
     if (!hasWrittenReview(row)) return null;
     return fromRating(row, favorite: favorite);
   }
