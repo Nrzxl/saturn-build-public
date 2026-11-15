@@ -623,13 +623,30 @@ class _SaturnHomeState extends State<SaturnHome>
             continue;
           }
           if (!mounted || verified == null ||
+              verified.id != previous.id ||
               verified.year != previous.year ||
-              verified.description.trim().isEmpty) continue;
-          // Avoid overriding later edits or a concurrent cloud update.
+              !verified.posterUrl.startsWith('https://image.tmdb.org/t/p/')) {
+            continue;
+          }
+          // Preserve the original curated Portuguese synopsis and existing
+          // links when TMDB's PT-BR overview is empty. Poster must be a
+          // verified TMDB asset for this exact ID and premiere year.
           final current = savedWorks[previous.id];
           if (current == null || current.provider != 'TVmaze') continue;
           setState(() {
-            savedWorks[previous.id] = Work.fromCatalog(verified!);
+            savedWorks[previous.id] = Work.fromJson({
+              ...current.toJson(),
+              'provider': 'TMDB',
+              'posterUrl': verified!.posterUrl,
+              if (verified.backdropUrl.isNotEmpty)
+                'backdropUrl': verified.backdropUrl,
+              if (verified.description.trim().isNotEmpty)
+                'description': verified.description,
+              if (verified.runtimeMinutes != null)
+                'runtimeMinutes': verified.runtimeMinutes,
+              if (verified.seasonCount != null)
+                'seasonCount': verified.seasonCount,
+            });
           });
           updated = true;
         }
