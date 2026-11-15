@@ -31,7 +31,7 @@ void main() {
       });
       await tester.pumpWidget(const SaturnApp());
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Coleção'));
+      await tester.tap(find.text(work.kind == 'Livro' ? 'Livros' : 'Coleção'));
       await tester.pumpAndSettle();
       final card = find.byKey(Key('saturn-ranked-card-${work.id}'));
       await tester.ensureVisible(card);
