@@ -97,7 +97,7 @@ void main() {
     expect(SaturnReviewClassification.fromRating({'rating': null},
         favorite: true), isNull);
     expect(SaturnReviewClassification.of({'rating': 10, 'notes': ''},
-        favorite: true), isNull);
+        favorite: true), SaturnReviewTier.diamante);
     expect(SaturnReviewClassification.sameCoupleTier(
         perfect, perfect, mineFavorite: true, theirsFavorite: false), isFalse);
     expect(SaturnReviewClassification.sameCoupleTier(
