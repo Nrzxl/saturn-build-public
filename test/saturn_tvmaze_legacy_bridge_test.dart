@@ -90,7 +90,7 @@ void main() {
   };
 
   test('Verified crosswalk preserves both profiles and all linked lists', () {
-    expect(SaturnLegacyTvmazeBridge.exactIds.length, 10);
+    expect(SaturnLegacyTvmazeBridge.exactIds.length, 11);
     final migrated = SaturnLegacyTvmazeBridge.upgrade(legacy());
     final saved = migrated['catalogSaved'] as Map;
     expect(saved.containsKey(oldOffice), isFalse);
@@ -166,6 +166,51 @@ void main() {
         isTrue);
     expect((migrated['records'] as Map).containsKey('0:tvmaze:other'),
         isTrue);
+  });
+
+  test('Exact Demon Slayer AniList ID merges without losing the TMDB profile', () {
+    const legacyId = 'anilist:101922';
+    const canonicalId = 'tmdb:tv:85937';
+    final input = <String, dynamic>{
+      'schema': 1,
+      'catalogSaved': {
+        legacyId: {'id': legacyId, 'title': 'Demon Slayer: Kimetsu no Yaiba',
+          'provider': 'AniList', 'year': 2019},
+        canonicalId: {'id': canonicalId, 'title': 'Demon Slayer: Kimetsu no Yaiba',
+          'provider': 'TMDB', 'year': 2019,
+          'posterUrl': 'https://image.tmdb.org/t/p/w500/verified.jpg'},
+      },
+      'records': {
+        '0:$legacyId': {'status': 'Em andamento', 'updatedAt': 20},
+        '0:$canonicalId': {'status': 'Em andamento', 'updatedAt': 19},
+        '1:$legacyId': {'rating': 10,
+          'notes': 'Resenha própria', 'updatedAt': 22},
+      },
+      'favoriteOps': {
+        '1:$legacyId': {'present': true, 'updatedAt': 33},
+      },
+      'watchlistOps': {
+        '0:$legacyId': {'present': true, 'updatedAt': 44},
+      },
+      'sharedOps': {},
+    };
+    final migrated = SaturnLegacyTvmazeBridge.upgrade(input);
+    final saved = migrated['catalogSaved'] as Map;
+    final recs = migrated['records'] as Map;
+    expect(saved.containsKey(legacyId), false);
+    expect(saved[canonicalId]['provider'], 'TMDB');
+    expect(recs.containsKey('0:$legacyId'), false);
+    expect(recs['0:$canonicalId']['status'], 'Em andamento');
+    expect(recs['1:$canonicalId']['rating'], 10);
+    expect(recs['1:$canonicalId']['notes'], 'Resenha própria');
+    expect((migrated['favoriteOps'] as Map)
+        ['1:$canonicalId']['present'], true);
+    expect((migrated['watchlistOps'] as Map)
+        ['0:$canonicalId']['present'], true);
+    expect(jsonEncode(SaturnLegacyTvmazeBridge.upgrade(migrated)),
+        jsonEncode(migrated));
+    final synced = SaturnOrbitMerge.merge(input,migrated);
+    expect((synced['catalogSaved'] as Map).containsKey(legacyId), false);
   });
 
   test('Legacy fallback synopses are Portuguese and do not touch others', () {
