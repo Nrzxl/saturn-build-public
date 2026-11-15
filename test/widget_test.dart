@@ -7,9 +7,10 @@ import 'package:saturn_app/saturn_orbit_rituals.dart';
 
 void main() {
   Future<void> scrollPersonal(WidgetTester tester, Finder target,
-      {double step = 245}) async {
+      {double step = 245, bool books = false}) async {
     final scroller = find.descendant(
-      of: find.byKey(const PageStorageKey('saturn_personal_collection')),
+      of: find.byKey(PageStorageKey(books
+          ? 'saturn_personal_bookshelf' : 'saturn_personal_collection')),
       matching: find.byType(Scrollable),
     ).first;
     await tester.scrollUntilVisible(target, step,
@@ -348,17 +349,22 @@ void main() {
     await scrollPersonal(tester,
       find.byKey(Key('saturn-ranked-card-' + film.id)));
     expect(find.text('Filme em Conjunto'), findsOneWidget);
-    expect(find.text('Livro em Conjunto'), findsOneWidget);
+    expect(find.text('Livro em Conjunto'), findsNothing);
     await scrollPersonal(tester,
       find.byKey(const Key('saturn-collection-filter-menu')),
       step: -220);
     await tester.tap(
       find.byKey(const Key('saturn-collection-filter-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Livros').last);
+    expect(find.byKey(const Key('saturn-collection-filter-Livros')),
+        findsNothing);
+    await tester.tap(find.text('Filmes').last);
+    await tester.pumpAndSettle();
+    // The same saved book and review now live in the dedicated Books tab.
+    await tester.tap(find.text('Livros'));
     await tester.pumpAndSettle();
     await scrollPersonal(tester,
-      find.byKey(Key('saturn-ranked-card-' + book.id)));
+      find.byKey(Key('saturn-ranked-card-' + book.id)), books: true);
     expect(find.text('Livro em Conjunto'), findsOneWidget);
     expect(find.text('Filme em Conjunto'), findsNothing);
 
@@ -554,10 +560,10 @@ void main() {
       maxScrolls: 20,
     );
     expect(find.text('Livros • Minha estante'), findsOneWidget);
-    await tester.tap(find.text('Coleção'));
+    await tester.tap(find.text('Livros'));
     await tester.pumpAndSettle();
     final bookCard = find.byKey(Key('saturn-ranked-card-' + book.id));
-    await scrollPersonal(tester, bookCard);
+    await scrollPersonal(tester, bookCard, books: true);
     await tester.ensureVisible(bookCard);
     await tester.pumpAndSettle();
     await tester.tap(bookCard);
