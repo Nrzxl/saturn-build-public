@@ -209,7 +209,20 @@ class SaturnOrbitCloud {
             continue;
           }
         }
-        await apply(merged);
+        // The network round-trip may finish after another local edit.
+        // Reconcile against the latest snapshot before applying the cloud
+        // result, so slow phones do not overwrite a new review or favorite.
+        final latest = readLocal();
+        final reconciled = SaturnOrbitMerge.merge(latest, merged);
+        final finalCanonical = SaturnOrbitMerge.canonical(reconciled);
+        if (finalCanonical != SaturnOrbitMerge.canonical(merged)) {
+          _pending = true; // Flush edits made during the request.
+        }
+        // No redundant setState and ~13 SharedPreferences writes when
+        // Realtime merely echoed data already visible on this device.
+        if (finalCanonical != SaturnOrbitMerge.canonical(latest)) {
+          await apply(reconciled);
+        }
         lastSyncedAt = DateTime.now();
         onStatus();
         return;

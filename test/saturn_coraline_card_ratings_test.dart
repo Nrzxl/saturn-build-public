@@ -99,6 +99,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+
+  testWidgets('Perfect favorite is diamond while partner remains gold',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(home: Scaffold(
+      body: SizedBox(width: 160, height: 36,
+        child: SaturnCardCoupleScores(
+          workId: coraline,
+          records: {
+            '0:$coraline': {'rating': 10, 'notes': 'Amei'},
+            '1:$coraline': {'rating': 10, 'notes': 'Amei também'},
+          },
+          favorites: {
+            '0:$coraline': {'present': true, 'updatedAt': 42},
+            '1:$coraline': {'present': false, 'updatedAt': 43},
+          },
+          profileNames: const ['Eu','Ela'], viewerProfile: 0,
+        ),
+      ),
+    )));
+    final one = tester.widget<SaturnPersonalScore>(
+        find.byKey(const Key('saturn-library-person-0-$coraline')));
+    final two = tester.widget<SaturnPersonalScore>(
+        find.byKey(const Key('saturn-library-person-1-$coraline')));
+    expect(one.favorite, isTrue);
+    expect(two.favorite, isFalse);
+    expect(find.text('Você 5.0 ★ ✦'), findsOneWidget);
+    expect(find.text('Ela 5.0 ★'), findsOneWidget);
+    final first = tester.widget<Container>(find.descendant(
+      of: find.byKey(const Key('saturn-library-person-0-$coraline')),
+      matching: find.byType(Container)).first);
+    final second = tester.widget<Container>(find.descendant(
+      of: find.byKey(const Key('saturn-library-person-1-$coraline')),
+      matching: find.byType(Container)).first);
+    expect((first.decoration! as BoxDecoration).border!.top.color,
+        const Color(0xFFBCEBFF).withValues(alpha: .96));
+    expect((second.decoration! as BoxDecoration).border!.top.color,
+        const Color(0xFFE3BF70).withValues(alpha: .68));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('No rating results in no score widget',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(home: Scaffold(

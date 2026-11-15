@@ -623,13 +623,30 @@ class _SaturnHomeState extends State<SaturnHome>
             continue;
           }
           if (!mounted || verified == null ||
+              verified.id != previous.id ||
               verified.year != previous.year ||
-              verified.description.trim().isEmpty) continue;
-          // Avoid overriding later edits or a concurrent cloud update.
+              !verified.posterUrl.startsWith('https://image.tmdb.org/t/p/')) {
+            continue;
+          }
+          // Preserve the original curated Portuguese synopsis and existing
+          // links when TMDB's PT-BR overview is empty. Poster must be a
+          // verified TMDB asset for this exact ID and premiere year.
           final current = savedWorks[previous.id];
           if (current == null || current.provider != 'TVmaze') continue;
           setState(() {
-            savedWorks[previous.id] = Work.fromCatalog(verified!);
+            savedWorks[previous.id] = Work.fromJson({
+              ...current.toJson(),
+              'provider': 'TMDB',
+              'posterUrl': verified!.posterUrl,
+              if (verified.backdropUrl.isNotEmpty)
+                'backdropUrl': verified.backdropUrl,
+              if (verified.description.trim().isNotEmpty)
+                'description': verified.description,
+              if (verified.runtimeMinutes != null)
+                'runtimeMinutes': verified.runtimeMinutes,
+              if (verified.seasonCount != null)
+                'seasonCount': verified.seasonCount,
+            });
           });
           updated = true;
         }
@@ -3266,7 +3283,10 @@ class _SaturnHomeState extends State<SaturnHome>
   Widget _rankedPosterCard(Work work, {bool compact = false}) {
     final personal = entry(work);
     final technical = _technicalLabel(work);
-    final tier = SaturnReviewClassification.of(personal);
+    final favoriteForViewer = SaturnSmartCollections.isFavorite(
+        _favoriteOps, profile, work.id);
+    final tier = SaturnReviewClassification.of(personal,
+        favorite: favoriteForViewer);
     // Both authored ratings belong to this catalogue entry even before it
     // enters Nossa Órbita; never hide the other profile for that reason.
     final hasPersonalRatings = [0, 1].any((person) =>
@@ -3275,10 +3295,14 @@ class _SaturnHomeState extends State<SaturnHome>
     final comment = (personal['notes'] ?? '').toString().trim();
     final inOrbit = shared.contains(work.id);
     final firstTier = inOrbit
-        ? SaturnReviewClassification.fromRating(records['0:${work.id}'])
+        ? SaturnReviewClassification.fromRating(records['0:${work.id}'],
+            favorite: SaturnSmartCollections.isFavorite(
+                _favoriteOps, 0, work.id))
         : null;
     final secondTier = inOrbit
-        ? SaturnReviewClassification.fromRating(records['1:${work.id}'])
+        ? SaturnReviewClassification.fromRating(records['1:${work.id}'],
+            favorite: SaturnSmartCollections.isFavorite(
+                _favoriteOps, 1, work.id))
         : null;
     // The mutual zero effect also works in personal collections, even if
     // the film has not been added to Nossa Órbita.
@@ -3293,7 +3317,8 @@ class _SaturnHomeState extends State<SaturnHome>
         ? SaturnReviewTier.bronze.color : secondTier?.color;
     // Personal controls always follow the active profile's actual rating.
     // In Nossa Órbita, split rims/backgrounds retain both independent tiers.
-    final actionMetal = SaturnReviewClassification.fromRating(personal)?.color;
+    final actionMetal = SaturnReviewClassification.fromRating(personal,
+        favorite: favoriteForViewer)?.color;
     final selected = _selectedWorkIds.contains(work.id);
     final zeroStarMovie = SaturnReviewClassification.shouldShowFlies(
         work.kind, personal) ||
@@ -3345,6 +3370,10 @@ class _SaturnHomeState extends State<SaturnHome>
           color: metalColor,
           partnerColor: partnerMetalColor,
           intenseBronze: bothZero,
+          diamond: inOrbit ? firstTier == SaturnReviewTier.diamante
+              : tier == SaturnReviewTier.diamante,
+          partnerDiamond: inOrbit &&
+              secondTier == SaturnReviewTier.diamante,
           uniformInset: true,
           child: Material(
           borderRadius: BorderRadius.circular(15),
@@ -3428,6 +3457,7 @@ class _SaturnHomeState extends State<SaturnHome>
                               records: records,
                               profileNames: profiles,
                               viewerProfile: profile,
+                              favorites: _favoriteOps,
                             )
                           : Text(
                               [
@@ -4441,7 +4471,9 @@ class _SaturnHomeState extends State<SaturnHome>
     final score = SaturnReviewClassification.stars(record);
     // Unrated profiles do not render an empty score or a placeholder chip.
     if (score == null) return const SizedBox.shrink();
-    final tier = SaturnReviewClassification.fromRating(record);
+    final tier = SaturnReviewClassification.fromRating(record,
+        favorite: SaturnSmartCollections.isFavorite(
+            _favoriteOps, person, work.id));
     final tone = tier?.color ?? const Color(0xFFBFA9B8);
     final label = person == profile ? 'Você · $name' : name;
     return Container(
@@ -4504,9 +4536,17 @@ class _SaturnHomeState extends State<SaturnHome>
                   SaturnMetallicHalo(
                     key: Key('saturn-shared-halo-featured-' + work.id),
                     color: SaturnReviewClassification.fromRating(
-                        insights.profile(0, work.id))?.color,
+                        insights.profile(0, work.id), favorite:
+                        SaturnSmartCollections.isFavorite(_favoriteOps, 0, work.id))?.color,
                     partnerColor: SaturnReviewClassification.fromRating(
-                        insights.profile(1, work.id))?.color,
+                        insights.profile(1, work.id), favorite:
+                        SaturnSmartCollections.isFavorite(_favoriteOps, 1, work.id))?.color,
+                    diamond: SaturnReviewClassification.fromRating(
+                        insights.profile(0, work.id), favorite:
+                        SaturnSmartCollections.isFavorite(_favoriteOps, 0, work.id)) == SaturnReviewTier.diamante,
+                    partnerDiamond: SaturnReviewClassification.fromRating(
+                        insights.profile(1, work.id), favorite:
+                        SaturnSmartCollections.isFavorite(_favoriteOps, 1, work.id)) == SaturnReviewTier.diamante,
                     child: PosterThumbnail(
                         work: work, width: 103, height: 145),
                   ),
@@ -4555,9 +4595,17 @@ class _SaturnHomeState extends State<SaturnHome>
             SaturnMetallicHalo(
               key: Key('saturn-shared-halo-memory-' + work.id),
               color: SaturnReviewClassification.fromRating(
-                  insights.profile(0, work.id))?.color,
+                  insights.profile(0, work.id), favorite:
+                  SaturnSmartCollections.isFavorite(_favoriteOps, 0, work.id))?.color,
               partnerColor: SaturnReviewClassification.fromRating(
-                  insights.profile(1, work.id))?.color,
+                  insights.profile(1, work.id), favorite:
+                  SaturnSmartCollections.isFavorite(_favoriteOps, 1, work.id))?.color,
+              diamond: SaturnReviewClassification.fromRating(
+                  insights.profile(0, work.id), favorite:
+                  SaturnSmartCollections.isFavorite(_favoriteOps, 0, work.id)) == SaturnReviewTier.diamante,
+              partnerDiamond: SaturnReviewClassification.fromRating(
+                  insights.profile(1, work.id), favorite:
+                  SaturnSmartCollections.isFavorite(_favoriteOps, 1, work.id)) == SaturnReviewTier.diamante,
               child: PosterThumbnail(work: work, width: 62, height: 88),
             ),
             const SizedBox(width: 12),

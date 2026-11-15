@@ -7,12 +7,16 @@ import 'package:flutter/material.dart';
 class SaturnMetallicHalo extends StatefulWidget {
   const SaturnMetallicHalo({super.key, required this.color,
     this.partnerColor, this.intenseBronze = false,
+    this.diamond = false, this.partnerDiamond = false,
     this.uniformInset = false, required this.child});
   final Color? color;
   /// Second partner's real metallic tier. Left half is mine, right is hers.
   final Color? partnerColor;
   /// Stronger warm bronze glow only for two explicit zero-star reviews.
   final bool intenseBronze;
+  /// Brilliant icy-blue shimmer is reserved for personal 5-star favorites.
+  final bool diamond;
+  final bool partnerDiamond;
   /// Reserve the same 3.4px inset for every library card, even if it
   /// has no halo or its glowing tier changes after a personal review.
   final bool uniformInset;
@@ -36,7 +40,9 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
   void didUpdateWidget(covariant SaturnMetallicHalo oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.color != widget.color ||
-        oldWidget.partnerColor != widget.partnerColor) _configure();
+        oldWidget.partnerColor != widget.partnerColor ||
+        oldWidget.diamond != widget.diamond ||
+        oldWidget.partnerDiamond != widget.partnerDiamond) _configure();
   }
 
   void _configure() {
@@ -69,14 +75,17 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
           : widget.child;
     }
     final intense = widget.intenseBronze;
+    final diamond = widget.diamond || widget.partnerDiamond;
     final paired = widget.color != null && widget.partnerColor != null;
     final same = paired && widget.color == widget.partnerColor;
     final second = widget.partnerColor ?? metal;
     final reducedMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final moved = !reducedMotion && _shifted;
     final glint = Color.lerp(metal, Colors.white,
+        diamond ? (moved ? .98 : .88) :
         same ? (moved ? 0.90 : 0.80) : 0.62)!;
     final partnerGlint = Color.lerp(second, Colors.white,
+        diamond ? (moved ? .97 : .82) :
         same ? (moved ? 0.93 : 0.79) : 0.45)!;
     final duration = Duration(milliseconds: reducedMotion ? 0 : 1550);
     return RepaintBoundary(
@@ -116,13 +125,16 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
                 ),
           boxShadow: [
             BoxShadow(
-              color: metal.withValues(alpha: intense
-                  ? (moved ? 0.92 : 0.74)
+              color: metal.withValues(alpha: diamond
+                  ? (moved ? .94 : .71)
+                  : intense ? (moved ? 0.92 : 0.74)
                   : same ? (moved ? 0.75 : 0.53)
                   : moved ? 0.31 : 0.18),
-              blurRadius: intense ? (moved ? 36 : 29)
+              blurRadius: diamond ? (moved ? 37 : 27)
+                  : intense ? (moved ? 36 : 29)
                   : same ? (moved ? 30 : 22) : moved ? 21 : 14,
-              spreadRadius: intense ? (moved ? 4.0 : 2.7)
+              spreadRadius: diamond ? (moved ? 3.8 : 2.0)
+                  : intense ? (moved ? 4.0 : 2.7)
                   : same ? (moved ? 2.8 : 1.7)
                   : moved ? 1.1 : 0.4,
             ),
@@ -147,7 +159,7 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
                         colors: [
                           metal.withValues(alpha: 0.105),
                           Colors.transparent,
-                          glint.withValues(alpha: 0.06),
+                          glint.withValues(alpha: diamond ? .16 : 0.06),
                           Colors.transparent,
                           second.withValues(alpha: intense ? 0.25
                               : same ? 0.18 : 0.085),
