@@ -37,17 +37,43 @@ void main() {
     expect(find.text('Filtros: Tudo'), findsOneWidget);
     // Selection moved to Explorar; Coleção keeps its compact type filter.
     expect(find.text('Selecionar vários'), findsNothing);
+    // The personal media Collection no longer contains books.
     expect(find.byKey(Key('saturn-ranked-card-' + film.id)), findsOneWidget);
-    expect(find.byKey(Key('saturn-ranked-card-' + book.id)), findsOneWidget);
+    expect(find.byKey(Key('saturn-ranked-card-' + book.id)), findsNothing);
+    expect(find.text('Dados'), findsNothing);
 
     await tester.ensureVisible(filter);
     await tester.tap(filter);
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('saturn-collection-filter-Livros')),
+        findsNothing);
     await tester.tap(find.text('Filmes').last);
     await tester.pumpAndSettle();
     expect(find.text('Filtros: Filmes'), findsOneWidget);
     expect(find.byKey(Key('saturn-ranked-card-' + film.id)), findsOneWidget);
     expect(find.byKey(Key('saturn-ranked-card-' + book.id)), findsNothing);
+
+    // The newly dedicated tab reuses the SAME saved book and review.
+    await tester.tap(find.text('Livros'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('saturn-books-hero')), findsOneWidget);
+    expect(find.byKey(Key('saturn-ranked-card-' + book.id)), findsOneWidget);
+    expect(find.byKey(Key('saturn-ranked-card-' + film.id)), findsNothing);
+    expect(find.byKey(const Key('saturn-books-explore')), findsOneWidget);
+
+    final prefs = await SharedPreferences.getInstance();
+    final stored = jsonDecode(prefs.getString('catalog_saved')!) as Map;
+    final personal = jsonDecode(prefs.getString('records')!) as Map;
+    expect(stored.containsKey(book.id), isTrue);
+    expect((personal['0:' + book.id] as Map)['status'], 'Em andamento');
+    expect((personal['0:' + film.id] as Map)['status'], 'Concluído');
+
+    // Explore still has full catalogue search, including books.
+    await tester.tap(find.byKey(const Key('saturn-books-explore')));
+    await tester.pump();
+    expect(find.text('Histórias sem fim'), findsOneWidget);
+    expect(find.text('Filmes, séries, doramas, animes e livros.'),
+        findsOneWidget);
   });
 
   testWidgets('Favoritos inteligentes e criação de coleção preservam os dados',
