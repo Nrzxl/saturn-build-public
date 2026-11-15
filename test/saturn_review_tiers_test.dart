@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:saturn_app/saturn_review_tiers.dart';
 
@@ -52,8 +53,9 @@ void main() {
     final sorted = SaturnReviewClassification.sorted(rows, (r) => r);
     expect(sorted.map((e) => e['id']).toList(),
         ['ouro', 'ouro2', 'prata', 'prata2', 'bronze', 'sem']);
-    expect(SaturnReviewClassification.priority(SaturnReviewTier.ouro), 0);
-    expect(SaturnReviewClassification.priority(null), 3);
+    expect(SaturnReviewClassification.priority(SaturnReviewTier.diamante), 0);
+    expect(SaturnReviewClassification.priority(SaturnReviewTier.ouro), 1);
+    expect(SaturnReviewClassification.priority(null), 4);
   });
 
   test('Escala legada 0–10 é convertida corretamente para cinco estrelas', () {
@@ -78,6 +80,31 @@ void main() {
     expect(SaturnReviewClassification.sameCoupleTier(gold, null), isFalse);
     // Single-user halos still require a written review.
     expect(SaturnReviewClassification.of(gold), isNull);
+  });
+
+
+  test('Diamond requires exactly five stars AND personal favorite', () {
+    final perfect = {'rating': 10, 'notes': 'Uma obra inesquecível'};
+    final good = {'rating': 9, 'notes': 'Muito bom'};
+    expect(SaturnReviewClassification.fromRating(perfect),
+        SaturnReviewTier.ouro);
+    expect(SaturnReviewClassification.fromRating(perfect, favorite: true),
+        SaturnReviewTier.diamante);
+    expect(SaturnReviewClassification.of(perfect, favorite: true),
+        SaturnReviewTier.diamante);
+    expect(SaturnReviewClassification.fromRating(good, favorite: true),
+        SaturnReviewTier.ouro);
+    expect(SaturnReviewClassification.fromRating({'rating': null},
+        favorite: true), isNull);
+    expect(SaturnReviewClassification.of({'rating': 10, 'notes': ''},
+        favorite: true), isNull);
+    expect(SaturnReviewClassification.sameCoupleTier(
+        perfect, perfect, mineFavorite: true, theirsFavorite: false), isFalse);
+    expect(SaturnReviewClassification.sameCoupleTier(
+        perfect, perfect, mineFavorite: true, theirsFavorite: true), isTrue);
+    expect(SaturnReviewTier.diamante.label, 'DIAMANTE');
+    expect(SaturnReviewTier.diamante.color,
+        const Color(0xFFBCEBFF));
   });
 
   test('Funny flies are reserved for explicitly zero-rated movies', () {
