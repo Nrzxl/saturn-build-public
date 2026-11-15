@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'saturn_personal_score.dart';
 import 'saturn_review_tiers.dart';
+import 'saturn_smart_collections.dart';
 
 /// Displays every real score linked to this exact catalogue ID. A partner's
 /// rating is not restricted to sharedOps / Nossa Órbita membership: both
@@ -17,12 +18,14 @@ class SaturnCardCoupleScores extends StatelessWidget {
     required this.records,
     required this.profileNames,
     required this.viewerProfile,
+    this.favorites = const {},
   });
 
   final String workId;
   final Map<String, dynamic> records;
   final List<String> profileNames;
   final int viewerProfile;
+  final Map<String, dynamic> favorites;
 
   List<int> get ratedProfiles => [
     for (var person = 0; person < 2; person++)
@@ -53,6 +56,8 @@ class SaturnCardCoupleScores extends StatelessWidget {
           key: Key('saturn-library-person-$person-$workId'),
           name: label(person),
           record: records['$person:$workId'],
+          favorite: SaturnSmartCollections.isFavorite(
+              favorites, person, workId),
         ),
       );
     }
@@ -67,6 +72,8 @@ class SaturnCardCoupleScores extends StatelessWidget {
               key: Key('saturn-library-person-${rated[index]}-$workId'),
               name: label(rated[index]),
               record: records['${rated[index]}:$workId'],
+              favorite: SaturnSmartCollections.isFavorite(
+                  favorites, rated[index], workId),
               fillWidth: true,
             ),
           ),
