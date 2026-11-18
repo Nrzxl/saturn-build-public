@@ -1,0 +1,51 @@
+name: SATURN Web · Validar pull request
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'web/**'
+      - 'pubspec.yaml'
+      - 'scripts/**'
+      - '.github/workflows/pr-web-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: saturn-web-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    name: Analisar, testar e compilar Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar Flutter estável
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Preparar Flutter Web
+        run: flutter create --platforms=web --org com.nrzxl --project-name saturn_app .
+
+      - name: Preparar ícones da PWA
+        run: python3 scripts/create_pwa_icons.py
+
+      - name: Validar código e testes
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          flutter pub get
+          flutter analyze lib --no-fatal-infos
+          flutter test --reporter expanded
+
+      - name: Compilar Web sem credenciais
+        run: flutter build web --release --base-href /saturn-build-public/
