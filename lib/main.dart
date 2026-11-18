@@ -38,6 +38,8 @@ import 'saturn_book_cover.dart';
 import 'saturn_artwork.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
+import 'saturn_anniversary.dart';
+import 'saturn_orbit_playlists.dart';
 import 'saturn_notification_inbox.dart';
 import 'saturn_notification_card.dart';
 import 'saturn_web_push.dart';
@@ -577,6 +579,8 @@ class _SaturnHomeState extends State<SaturnHome>
   Map<String, dynamic> _sharedOps = {};
   Map<String, dynamic> _archivedOps = {};
   Map<String, dynamic> _ritualOps = {};
+  bool _anniversaryToday = SaturnAnniversary.isActive(DateTime.now());
+  Timer? _anniversaryClock;
   Map<String, dynamic> _profileOps = {};
   Map<String, dynamic> _favoriteOps = {};
   Map<String, dynamic> _collectionOps = {};
@@ -740,6 +744,10 @@ class _SaturnHomeState extends State<SaturnHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Reevaluate using LOCAL time after midnight as well as app resume.
+    _anniversaryClock = Timer.periodic(const Duration(minutes: 1), (_) {
+      _refreshAnniversary();
+    });
     _featuredTimer = Timer.periodic(const Duration(seconds: 7), (_) {
       if (!mounted || !_foreground || tab != 0 ||
           DateTime.now().isBefore(_featuredPausedUntil)) return;
@@ -775,12 +783,23 @@ class _SaturnHomeState extends State<SaturnHome>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
-    if (_foreground) _cloud?.scheduleSync();
+    if (_foreground) {
+      _refreshAnniversary();
+      _cloud?.scheduleSync();
+    }
+  }
+
+  void _refreshAnniversary() {
+    final active = SaturnAnniversary.isActive(DateTime.now());
+    if (mounted && active != _anniversaryToday) {
+      setState(() => _anniversaryToday = active);
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _anniversaryClock?.cancel();
     _cloud?.dispose();
     _featuredTimer?.cancel();
     _homeCatalog.close();
@@ -2659,7 +2678,11 @@ class _SaturnHomeState extends State<SaturnHome>
       read: _noticeRead[profile] ?? <String>{},
     );
     return Scaffold(
+      backgroundColor: _anniversaryToday
+          ? const Color(0xFF151729) : night,
       appBar: AppBar(
+        backgroundColor: _anniversaryToday
+            ? const Color(0xFF171A31) : night,
         titleSpacing: desktop ? NavigationToolbar.kMiddleSpacing : 8,
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2805,7 +2828,8 @@ class _SaturnHomeState extends State<SaturnHome>
           children: [
             if (desktop) ...[
               NavigationRail(
-                backgroundColor: const Color(0xFF17121B),
+                backgroundColor: _anniversaryToday
+                    ? const Color(0xFF17182F) : const Color(0xFF17121B),
                 indicatorColor: wine,
                 selectedIconTheme: const IconThemeData(color: gold),
                 unselectedIconTheme: const IconThemeData(
@@ -2859,6 +2883,8 @@ class _SaturnHomeState extends State<SaturnHome>
         ),
       ),
       bottomNavigationBar: desktop ? null : NavigationBar(
+        backgroundColor: _anniversaryToday
+            ? const Color(0xFF19172D) : const Color(0xFF17121B),
         animationDuration: const Duration(milliseconds: 180),
         selectedIndex: tab,
         onDestinationSelected: _navigateTab,
@@ -3617,6 +3643,7 @@ class _SaturnHomeState extends State<SaturnHome>
           entry(work)['status'] != null)).toList(growable: false);
     return ListView(
       children: [
+        if (_anniversaryToday) const SaturnAnniversaryBanner(),
         _cinematicHero(),
         _heading('Minha Watchlist'),
         _collectionSelectionToolbar(
@@ -5707,6 +5734,8 @@ class _SaturnHomeState extends State<SaturnHome>
       key: const PageStorageKey('saturn_shared_orbit'),
       slivers: [
         SliverList(delegate: SliverChildListDelegate([
+        if (_anniversaryToday)
+          const SaturnAnniversaryBanner(compact: true),
         _sharedUniverseHero(insights),
         _sharedCoverWall(),
         _coupleSuggestionsCard(),
