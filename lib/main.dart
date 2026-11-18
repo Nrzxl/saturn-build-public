@@ -6050,7 +6050,11 @@ class _SaturnHomeState extends State<SaturnHome>
                   final ids = items.map((item) => item.workId)
                       .toList(growable: false);
                   return ReorderableListView.builder(
-                    key: Key('saturn-playlist-order-${playlist.id}'),
+                    // ExpansionTile stores its bool expansion state in
+                    // PageStorage. Give the inner scrollable its OWN bucket
+                    // or ScrollPosition will mistake that bool for a double.
+                    key: PageStorageKey('saturn-playlist-order-${playlist.id}'),
+                    primary: false,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     buildDefaultDragHandles: false,
