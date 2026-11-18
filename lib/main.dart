@@ -580,6 +580,7 @@ class _SaturnHomeState extends State<SaturnHome>
   Map<String, dynamic> _archivedOps = {};
   Map<String, dynamic> _ritualOps = {};
   bool _anniversaryToday = SaturnAnniversary.isActive(DateTime.now());
+  int _relationshipMonths = SaturnAnniversary.completedMonths(DateTime.now());
   Timer? _anniversaryClock;
   Map<String, dynamic> _profileOps = {};
   Map<String, dynamic> _favoriteOps = {};
@@ -790,9 +791,15 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
   void _refreshAnniversary() {
-    final active = SaturnAnniversary.isActive(DateTime.now());
-    if (mounted && active != _anniversaryToday) {
-      setState(() => _anniversaryToday = active);
+    final localNow = DateTime.now();
+    final active = SaturnAnniversary.isActive(localNow);
+    final months = SaturnAnniversary.completedMonths(localNow);
+    if (mounted &&
+        (active != _anniversaryToday || months != _relationshipMonths)) {
+      setState(() {
+        _anniversaryToday = active;
+        _relationshipMonths = months;
+      });
     }
   }
 
@@ -1503,6 +1510,13 @@ class _SaturnHomeState extends State<SaturnHome>
     final state = entry(w)['status'];
     return state == 'Concluído' || state == 'Assistido' || state == 'Lido';
   }
+
+  bool _hasAnniversaryMemory(Work work) => _anniversaryToday &&
+      SaturnAnniversary.isMemoryFilm(
+        localDate: DateTime.now(), kind: work.kind,
+        mine: records['0:${work.id}'],
+        partner: records['1:${work.id}'],
+      );
 
   bool _isFavorite(Work work) =>
       SaturnSmartCollections.isFavorite(_favoriteOps, profile, work.id);
@@ -3184,7 +3198,9 @@ class _SaturnHomeState extends State<SaturnHome>
           return SaturnHoverLift(
             child: SizedBox(
               width: 137,
-              child: Material(
+              child: SaturnAnniversaryAura(
+                active: _hasAnniversaryMemory(work),
+                child: Material(
                 color: const Color(0xFF251B27),
                 borderRadius: BorderRadius.circular(14),
                 clipBehavior: Clip.antiAlias,
@@ -3299,6 +3315,7 @@ class _SaturnHomeState extends State<SaturnHome>
                   ),
                 ),
               ),
+              ),
             ),
           );
         },
@@ -3397,6 +3414,7 @@ class _SaturnHomeState extends State<SaturnHome>
           color: metalColor,
           partnerColor: partnerMetalColor,
           intenseBronze: bothZero,
+          anniversaryMemory: _hasAnniversaryMemory(work),
           diamond: inOrbit ? firstTier == SaturnReviewTier.diamante
               : tier == SaturnReviewTier.diamante,
           partnerDiamond: inOrbit &&
@@ -3843,6 +3861,7 @@ class _SaturnHomeState extends State<SaturnHome>
             _catalogEditionAction(work,
                 (edition) => _showCollectionPicker(edition)),
         onAddToCollections: _addExploredTitlesToCollections,
+        isAnniversaryMemory: _hasAnniversaryMemory,
         showZeroStarFlies: (work) =>
             SaturnReviewClassification.shouldShowFlies(
                 work.kind, records['${profile}:${work.id}']) ||
@@ -4430,6 +4449,8 @@ class _SaturnHomeState extends State<SaturnHome>
           'Filmes, séries e leituras que fazem parte da trajetória de vocês.',
           style: TextStyle(
             color: Color(0xFFE4CCD5), fontSize: 12, height: 1.4)),
+        const SizedBox(height: 14),
+        SaturnRelationshipTime(key: ValueKey(_relationshipMonths)),
         const SizedBox(height: 17),
         Container(
           padding: const EdgeInsets.symmetric(
@@ -4569,6 +4590,7 @@ class _SaturnHomeState extends State<SaturnHome>
                 const SizedBox(height: 12),
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   SaturnMetallicHalo(
+                    anniversaryMemory: _hasAnniversaryMemory(work),
                     key: Key('saturn-shared-halo-featured-' + work.id),
                     color: SaturnReviewClassification.fromRating(
                         insights.profile(0, work.id), favorite:
@@ -4628,6 +4650,7 @@ class _SaturnHomeState extends State<SaturnHome>
           padding: const EdgeInsets.all(13),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SaturnMetallicHalo(
+              anniversaryMemory: _hasAnniversaryMemory(work),
               key: Key('saturn-shared-halo-memory-' + work.id),
               color: SaturnReviewClassification.fromRating(
                   insights.profile(0, work.id), favorite:
@@ -5482,7 +5505,10 @@ class _SaturnHomeState extends State<SaturnHome>
           onTap: () => _details(w),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              PosterThumbnail(work: w, width: 119, height: 176),
+              SaturnAnniversaryAura(
+                active: _hasAnniversaryMemory(w),
+                child: PosterThumbnail(work: w, width: 119, height: 176),
+              ),
               const SizedBox(height: 6),
               Text(w.title, maxLines: 2, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -7284,6 +7310,7 @@ class CatalogExplore extends StatefulWidget {
   final String? Function(Work)? technicalLabel;
   final Future<bool> Function(List<Work> works) onAddToCollections;
   final bool Function(Work)? showZeroStarFlies;
+  final bool Function(Work)? isAnniversaryMemory;
 
   const CatalogExplore({
     super.key,
@@ -7306,6 +7333,7 @@ class CatalogExplore extends StatefulWidget {
     this.onManageCollections,
     this.initialResults = const <Work>[],
     this.showZeroStarFlies,
+    this.isAnniversaryMemory,
   });
 
   @override
@@ -7989,6 +8017,7 @@ class _CatalogExploreState extends State<CatalogExplore> {
     final alreadyCollected = widget.isInAnyCollection(work);
     final picked = _selectedForCollectionIds.contains(work.id);
     final watchlisted = widget.isWatchlisted(work);
+    final anniversaryMemory = widget.isAnniversaryMemory?.call(work) ?? false;
     final artUrl = SaturnArtwork.paletteUrl(
       SaturnBookCover.resolve(work.id, work.posterUrl));
     final genreLine = SaturnCatalogLabels.genreLine(work.genreIds);
@@ -8021,11 +8050,23 @@ class _CatalogExploreState extends State<CatalogExplore> {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: accent.withValues(alpha: .57)),
-                  boxShadow: [
-                    BoxShadow(color: tone.withValues(alpha: .20),
-                      blurRadius: 13, offset: const Offset(0, 5)),
-                  ],
+                  border: Border.all(
+                    color: anniversaryMemory
+                        ? const Color(0xFFA984FF)
+                        : accent.withValues(alpha: .57),
+                    width: anniversaryMemory ? 2.2 : 1,
+                  ),
+                  boxShadow: anniversaryMemory
+                      ? const [
+                          BoxShadow(color: Color(0xCB824AFF),
+                              blurRadius: 31, spreadRadius: 4),
+                          BoxShadow(color: Color(0xC9162B85),
+                              blurRadius: 49, spreadRadius: 7),
+                        ]
+                      : [
+                          BoxShadow(color: tone.withValues(alpha: .20),
+                            blurRadius: 13, offset: const Offset(0, 5)),
+                        ],
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Material(
