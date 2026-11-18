@@ -8,7 +8,8 @@ class SaturnAnniversary {
   static bool isActive(DateTime localDate) => localDate.day == 18;
 }
 
-/// A day-18-only celebration. The background is a lightweight CustomPainter;
+/// A day-18-only celebration: one smooth cosmic entrance, then a still sky.
+/// Finite animation also lets Flutter screens and widget tests settle.
 /// copy and the shared collection do not rebuild during each animation frame.
 class SaturnAnniversaryBanner extends StatefulWidget {
   const SaturnAnniversaryBanner({super.key, this.compact = false});
@@ -28,7 +29,7 @@ class _SaturnAnniversaryBannerState extends State<SaturnAnniversaryBanner>
     super.initState();
     _cosmicMotion = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 14),
+      duration: const Duration(seconds: 4),
     );
   }
 
@@ -39,8 +40,9 @@ class _SaturnAnniversaryBannerState extends State<SaturnAnniversaryBanner>
     final media = MediaQuery.of(context);
     final canAnimate = !media.disableAnimations && !media.reduceMotion &&
         TickerMode.of(context);
-    if (canAnimate && !_cosmicMotion.isAnimating) {
-      _cosmicMotion.repeat();
+    if (canAnimate && !_cosmicMotion.isAnimating &&
+        !_cosmicMotion.isCompleted) {
+      _cosmicMotion.forward();
     } else if (!canAnimate && _cosmicMotion.isAnimating) {
       _cosmicMotion.stop();
     }
