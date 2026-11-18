@@ -38,6 +38,8 @@ import 'saturn_book_cover.dart';
 import 'saturn_artwork.dart';
 import 'saturn_couple_insights.dart';
 import 'saturn_orbit_rituals.dart';
+import 'saturn_anniversary.dart';
+import 'saturn_orbit_playlists.dart';
 import 'saturn_notification_inbox.dart';
 import 'saturn_notification_card.dart';
 import 'saturn_web_push.dart';
@@ -577,6 +579,8 @@ class _SaturnHomeState extends State<SaturnHome>
   Map<String, dynamic> _sharedOps = {};
   Map<String, dynamic> _archivedOps = {};
   Map<String, dynamic> _ritualOps = {};
+  bool _anniversaryToday = SaturnAnniversary.isActive(DateTime.now());
+  Timer? _anniversaryClock;
   Map<String, dynamic> _profileOps = {};
   Map<String, dynamic> _favoriteOps = {};
   Map<String, dynamic> _collectionOps = {};
@@ -740,6 +744,10 @@ class _SaturnHomeState extends State<SaturnHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Reevaluate using LOCAL time after midnight as well as app resume.
+    _anniversaryClock = Timer.periodic(const Duration(minutes: 1), (_) {
+      _refreshAnniversary();
+    });
     _featuredTimer = Timer.periodic(const Duration(seconds: 7), (_) {
       if (!mounted || !_foreground || tab != 0 ||
           DateTime.now().isBefore(_featuredPausedUntil)) return;
@@ -775,12 +783,23 @@ class _SaturnHomeState extends State<SaturnHome>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
-    if (_foreground) _cloud?.scheduleSync();
+    if (_foreground) {
+      _refreshAnniversary();
+      _cloud?.scheduleSync();
+    }
+  }
+
+  void _refreshAnniversary() {
+    final active = SaturnAnniversary.isActive(DateTime.now());
+    if (mounted && active != _anniversaryToday) {
+      setState(() => _anniversaryToday = active);
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _anniversaryClock?.cancel();
     _cloud?.dispose();
     _featuredTimer?.cancel();
     _homeCatalog.close();
@@ -2659,7 +2678,11 @@ class _SaturnHomeState extends State<SaturnHome>
       read: _noticeRead[profile] ?? <String>{},
     );
     return Scaffold(
+      backgroundColor: _anniversaryToday
+          ? const Color(0xFF151729) : night,
       appBar: AppBar(
+        backgroundColor: _anniversaryToday
+            ? const Color(0xFF171A31) : night,
         titleSpacing: desktop ? NavigationToolbar.kMiddleSpacing : 8,
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2805,7 +2828,8 @@ class _SaturnHomeState extends State<SaturnHome>
           children: [
             if (desktop) ...[
               NavigationRail(
-                backgroundColor: const Color(0xFF17121B),
+                backgroundColor: _anniversaryToday
+                    ? const Color(0xFF17182F) : const Color(0xFF17121B),
                 indicatorColor: wine,
                 selectedIconTheme: const IconThemeData(color: gold),
                 unselectedIconTheme: const IconThemeData(
@@ -2859,6 +2883,8 @@ class _SaturnHomeState extends State<SaturnHome>
         ),
       ),
       bottomNavigationBar: desktop ? null : NavigationBar(
+        backgroundColor: _anniversaryToday
+            ? const Color(0xFF19172D) : const Color(0xFF17121B),
         animationDuration: const Duration(milliseconds: 180),
         selectedIndex: tab,
         onDestinationSelected: _navigateTab,
@@ -3617,6 +3643,7 @@ class _SaturnHomeState extends State<SaturnHome>
           entry(work)['status'] != null)).toList(growable: false);
     return ListView(
       children: [
+        if (_anniversaryToday) const SaturnAnniversaryBanner(),
         _cinematicHero(),
         _heading('Minha Watchlist'),
         _collectionSelectionToolbar(
@@ -5677,6 +5704,437 @@ class _SaturnHomeState extends State<SaturnHome>
     );
   }
 
+
+  Future<String?> _playlistAskName({String existing = ''}) {
+    // The dialog owns its text field until the route fade-out is finished.
+    var entered = existing;
+    return showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(existing.isEmpty ? 'Criar playlist de filmes'
+            : 'Renomear playlist'),
+        content: TextFormField(
+          key: const Key('saturn-playlist-name'),
+          autofocus: true,
+          initialValue: existing,
+          onChanged: (value) => entered = value,
+          maxLength: 64,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Nome da playlist',
+            hintText: 'Ex.: Saga Marvel na nossa ordem',
+          ),
+          onFieldSubmitted: (value) => Navigator.pop(dialog, value),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog),
+            child: const Text('Cancelar')),
+          FilledButton(
+            key: const Key('saturn-playlist-save-name'),
+            onPressed: () => Navigator.pop(dialog, entered),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _createFilmPlaylist() async {
+    final name = await _playlistAskName();
+    if (name == null || !mounted) return;
+    final clean = SaturnOrbitPlaylists.cleanName(name);
+    if (clean.isEmpty) return;
+    // Each member can create playlists even while offline. The ID cannot
+    // collide with an existing title, Supabase row, or partner's playlist.
+    final id = 'p_${DateTime.now().microsecondsSinceEpoch}_$profile';
+    setState(() => SaturnOrbitPlaylists.create(_ritualOps,
+        id: id, name: clean, at: DateTime.now().millisecondsSinceEpoch));
+    await _save();
+  }
+
+  Future<void> _renameFilmPlaylist(SaturnFilmPlaylist playlist) async {
+    final name = await _playlistAskName(existing: playlist.name);
+    if (name == null || !mounted || name.trim().isEmpty) return;
+    setState(() => SaturnOrbitPlaylists.rename(_ritualOps,
+        playlist.id, name, DateTime.now().millisecondsSinceEpoch));
+    await _save();
+  }
+
+  Future<void> _deleteFilmPlaylist(SaturnFilmPlaylist playlist) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Remover esta playlist?'),
+        content: Text('A playlist "${playlist.name}" será ocultada para '
+            'vocês dois. Filmes, avaliações e Watchlist não serão apagados.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog, false),
+              child: const Text('Manter')),
+          FilledButton(onPressed: () => Navigator.pop(dialog, true),
+              child: const Text('Remover playlist')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => SaturnOrbitPlaylists.delete(_ritualOps,
+        playlist.id, DateTime.now().millisecondsSinceEpoch));
+    await _save();
+  }
+
+  void _movePlaylistFilm(String playlistId,
+      List<String> current, int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= current.length) return;
+    if (newIndex < 0 || newIndex > current.length) return;
+    final reordered = current.toList();
+    if (oldIndex < newIndex) newIndex--;
+    reordered.insert(newIndex, reordered.removeAt(oldIndex));
+    setState(() => SaturnOrbitPlaylists.reorder(_ritualOps,
+        playlistId, reordered, DateTime.now().millisecondsSinceEpoch));
+    _save();
+  }
+
+  void _setPlaylistFilmPosition(String playlistId,
+      List<String> current, int from, int to) {
+    if (from < 0 || to < 0 ||
+        from >= current.length || to >= current.length) return;
+    final reordered = current.toList();
+    reordered.insert(to, reordered.removeAt(from));
+    setState(() => SaturnOrbitPlaylists.reorder(_ritualOps,
+        playlistId, reordered, DateTime.now().millisecondsSinceEpoch));
+    _save();
+  }
+
+  void _removePlaylistFilm(String playlistId, String workId) {
+    setState(() => SaturnOrbitPlaylists.remove(_ritualOps,
+        playlistId, workId, DateTime.now().millisecondsSinceEpoch));
+    _save();
+  }
+
+  /// Movies may be pulled from the user's saved library OR searched across
+  /// the entire real movie catalog. Adding to a playlist never silently
+  /// adds the film to either person's watchlist or their movie-of-week.
+  Future<void> _addPlaylistFilm(String playlistId) async {
+    var queryText = '';
+    var results = allWorks.where((w) => w.kind == 'Filme')
+        .take(80).toList(growable: false);
+    var busy = false;
+    String? error;
+    final chosen = await showModalBottomSheet<Work>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF211A2A),
+        builder: (sheet) => StatefulBuilder(
+          builder: (sheet, redraw) {
+            Future<void> search() async {
+              final query = queryText.trim();
+              if (query.length < 2) {
+                redraw(() { error = 'Digite pelo menos 2 letras.'; });
+                return;
+              }
+              redraw(() { busy = true; error = null; });
+              try {
+                final found = await _homeCatalog.search(
+                    query, CatalogFilter.movies, page: 1);
+                if (!sheet.mounted) return;
+                final unique = <String, Work>{
+                  for (final saved in savedWorks.values)
+                    if (saved.kind == 'Filme' &&
+                        saved.title.toLowerCase().contains(query.toLowerCase()))
+                      saved.id: saved,
+                  for (final row in found)
+                    if (row.kind == 'Filme') row.id: Work.fromCatalog(row),
+                };
+                redraw(() {
+                  results = unique.values.toList(growable: false);
+                  busy = false;
+                });
+              } catch (_) {
+                if (!sheet.mounted) return;
+                redraw(() {
+                  error = 'Não foi possível pesquisar agora. '
+                      'Seus filmes salvos continuam disponíveis.';
+                  busy = false;
+                });
+              }
+            }
+
+            final already = SaturnOrbitPlaylists.films(
+                    _ritualOps, playlistId)
+                .map((item) => item.workId).toSet();
+            return SafeArea(child: Padding(
+              padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(sheet).bottom),
+              child: SizedBox(
+                height: MediaQuery.sizeOf(sheet).height * .73,
+                child: Column(children: [
+                  const SizedBox(height: 14),
+                  const Text('Adicionar filme à playlist',
+                    style: TextStyle(fontSize: 20, fontFamily: 'serif',
+                        fontWeight: FontWeight.bold, color: ivory)),
+                  const SizedBox(height: 5),
+                  const Text('Escolha qualquer filme e organize depois.',
+                    style: TextStyle(color: Color(0xFFCDBBC9),
+                        fontSize: 12)),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(15, 15, 15, 6),
+                    child: Row(children: [
+                      Expanded(child: TextField(
+                        key: const Key('saturn-playlist-search'),
+                        onChanged: (value) => queryText = value,
+                        autofocus: false,
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (_) => search(),
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search_rounded),
+                          hintText: 'Buscar filme por título',
+                        ),
+                      )),
+                      const SizedBox(width: 7),
+                      IconButton(
+                        key: const Key('saturn-playlist-search-submit'),
+                        tooltip: 'Pesquisar filmes',
+                        onPressed: busy ? null : search,
+                        icon: const Icon(Icons.arrow_forward_rounded,
+                            color: gold),
+                      ),
+                    ]),
+                  ),
+                  if (busy) const LinearProgressIndicator(color: gold),
+                  if (error != null)
+                    Padding(padding: const EdgeInsets.all(8),
+                      child: Text(error!,
+                        style: const TextStyle(color: Color(0xFFFFB8BC)))),
+                  Expanded(child: ListView.builder(
+                    key: const Key('saturn-playlist-search-results'),
+                    itemCount: results.length,
+                    itemBuilder: (context, index) {
+                      final work = results[index];
+                      final inPlaylist = already.contains(work.id);
+                      return ListTile(
+                        key: Key('saturn-playlist-search-result-${work.id}'),
+                        leading: const Icon(Icons.local_movies_outlined,
+                            color: gold),
+                        title: Text(work.title, maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                        subtitle: Text(work.year > 0 ? '${work.year}' :
+                            'Filme'),
+                        trailing: Icon(inPlaylist
+                            ? Icons.check_circle_rounded
+                            : Icons.add_circle_outline_rounded,
+                            color: inPlaylist ? gold :
+                                const Color(0xFFE7D1BE)),
+                        onTap: inPlaylist ? null
+                            : () => Navigator.pop(sheet, work),
+                      );
+                    },
+                  )),
+                ]),
+              ),
+            ));
+          },
+        ),
+      );
+      if (chosen == null || !mounted || chosen.kind != 'Filme') return;
+      setState(() {
+        savedWorks.putIfAbsent(chosen.id, () => chosen);
+        SaturnOrbitPlaylists.add(_ritualOps, playlistId, chosen.id,
+            DateTime.now().millisecondsSinceEpoch);
+      });
+      await _save();
+  }
+
+  Widget _filmPlaylistSection() {
+    final playlists = SaturnOrbitPlaylists.playlists(_ritualOps);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 13, 16, 15),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.queue_play_next_rounded, color: gold),
+          const SizedBox(width: 9),
+          const Expanded(child: Text('Nossas playlists',
+            style: TextStyle(fontFamily: 'serif', fontSize: 20,
+                color: ivory, fontWeight: FontWeight.bold))),
+          TextButton.icon(
+            key: const Key('saturn-playlist-create'),
+            onPressed: _createFilmPlaylist,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Criar'),
+          ),
+        ]),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(1, 3, 0, 10),
+          child: Text(
+            'Sagas e maratonas na ordem que vocês escolherem. '
+            'Arraste um filme ou escolha a posição exata — '
+            'sem depender da cronologia ou da data de lançamento.',
+            style: TextStyle(color: Color(0xFFD1BFCB),
+                height: 1.45, fontSize: 12),
+          ),
+        ),
+        if (playlists.isEmpty)
+          Container(
+            key: const Key('saturn-playlists-empty'),
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF261E31),
+              borderRadius: BorderRadius.circular(17),
+              border: Border.all(color: const Color(0x666B506B)),
+            ),
+            child: const Text(
+              'Criem uma sequência para acompanhar suas histórias, '
+              'um universo de filmes de cada vez.',
+              style: TextStyle(color: Color(0xFFD1C2CF),
+                  fontSize: 13, height: 1.4),
+            ),
+          ),
+        for (final playlist in playlists)
+          Card(
+            key: Key('saturn-playlist-card-${playlist.id}'),
+            color: const Color(0xFF2A2032),
+            margin: const EdgeInsets.fromLTRB(0, 3, 0, 10),
+            child: ExpansionTile(
+              key: PageStorageKey('saturn-playlist-expanded-${playlist.id}'),
+              collapsedIconColor: gold,
+              iconColor: gold,
+              tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+              leading: const Icon(Icons.movie_filter_outlined, color: gold),
+              title: Text(playlist.name, maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontFamily: 'serif',
+                    fontWeight: FontWeight.w700)),
+              subtitle: Text(
+                '${SaturnOrbitPlaylists.films(_ritualOps,playlist.id).length} filmes'
+                ' · ordem personalizada',
+                style: const TextStyle(fontSize: 11)),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 9),
+                  child: Row(children: [
+                    Expanded(child: OutlinedButton.icon(
+                      key: Key('saturn-playlist-add-${playlist.id}'),
+                      onPressed: () => _addPlaylistFilm(playlist.id),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Adicionar filme'),
+                    )),
+                    PopupMenuButton<String>(
+                      key: Key('saturn-playlist-menu-${playlist.id}'),
+                      tooltip: 'Gerenciar playlist',
+                      onSelected: (action) {
+                        if (action == 'rename') {
+                          _renameFilmPlaylist(playlist);
+                        } else if (action == 'remove') {
+                          _deleteFilmPlaylist(playlist);
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'rename',
+                          child: Text('Renomear playlist')),
+                        PopupMenuItem(value: 'remove',
+                          child: Text('Remover playlist')),
+                      ],
+                    ),
+                  ]),
+                ),
+                Builder(builder: (context) {
+                  final items = SaturnOrbitPlaylists.films(
+                      _ritualOps, playlist.id);
+                  if (items.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.fromLTRB(18, 0, 18, 16),
+                      child: Text('Nenhum filme por enquanto. '
+                        'Adicionem o primeiro para montar a ordem.',
+                        style: TextStyle(color: Color(0xFFBAA9B9))),
+                    );
+                  }
+                  final ids = items.map((item) => item.workId)
+                      .toList(growable: false);
+                  return ReorderableListView.builder(
+                    // ExpansionTile stores its bool expansion state in
+                    // PageStorage. Give the inner scrollable its OWN bucket
+                    // or ScrollPosition will mistake that bool for a double.
+                    key: PageStorageKey('saturn-playlist-order-${playlist.id}'),
+                    primary: false,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    itemCount: items.length,
+                    onReorder: (oldIndex, newIndex) =>
+                        _movePlaylistFilm(playlist.id, ids, oldIndex,
+                          newIndex),
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      final work = savedWorks[item.workId];
+                      return ListTile(
+                        key: ValueKey('saturn-playlist-item-${item.workId}'),
+                        dense: true,
+                        contentPadding: const EdgeInsets.fromLTRB(9, 2, 6, 2),
+                        leading: CircleAvatar(
+                          radius: 17,
+                          backgroundColor: const Color(0xFF41324E),
+                          child: Text('${index + 1}', style: const TextStyle(
+                            fontSize: 12, color: gold,
+                            fontWeight: FontWeight.w700)),
+                        ),
+                        title: Text(work?.title ?? 'Filme não carregado',
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(work?.year != null && work!.year > 0
+                          ? '${work.year}' : 'Ordem escolhida por vocês',
+                          style: const TextStyle(fontSize: 11)),
+                        onTap: work == null ? null : () => _details(work),
+                        trailing: Row(mainAxisSize: MainAxisSize.min,
+                            children: [
+                          PopupMenuButton<String>(
+                            key: Key('saturn-playlist-position-${item.workId}'),
+                            tooltip: 'Mover filme para outra posição',
+                            icon: const Icon(Icons.format_list_numbered,
+                                color: gold, size: 21),
+                            onSelected: (action) {
+                              if (action == 'remove') {
+                                _removePlaylistFilm(playlist.id, item.workId);
+                              } else if (action.startsWith('position:')) {
+                                final desired = int.tryParse(
+                                    action.substring('position:'.length));
+                                if (desired != null) {
+                                  _setPlaylistFilmPosition(playlist.id,
+                                      ids, index, desired);
+                                }
+                              }
+                            },
+                            itemBuilder: (_) => [
+                              for (var position = 0;
+                                  position < ids.length; position++)
+                                PopupMenuItem(
+                                  value: 'position:$position',
+                                  child: Text('Posição ${position + 1}'),
+                                ),
+                              const PopupMenuDivider(),
+                              const PopupMenuItem(
+                                value: 'remove',
+                                child: Text('Retirar desta playlist'),
+                              ),
+                            ],
+                          ),
+                          ReorderableDragStartListener(
+                            index: index,
+                            child: const Padding(
+                              padding: EdgeInsets.all(8),
+                              child: Icon(Icons.drag_indicator_rounded,
+                                  color: Color(0xFFBCA5BC), size: 23),
+                            ),
+                          ),
+                        ]),
+                      );
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+      ]),
+    );
+  }
+
   Widget _shared() {
     final sharedIds = shared.toSet();
     final all = allWorks.where((work) => sharedIds.contains(work.id)).toList();
@@ -5707,12 +6165,15 @@ class _SaturnHomeState extends State<SaturnHome>
       key: const PageStorageKey('saturn_shared_orbit'),
       slivers: [
         SliverList(delegate: SliverChildListDelegate([
+        if (_anniversaryToday)
+          const SaturnAnniversaryBanner(compact: true),
         _sharedUniverseHero(insights),
         _sharedCoverWall(),
         _coupleSuggestionsCard(),
         _sharedYearRecap(DateTime.now()),
         _heading('Nossos encontros'),
         _sharedSeriesRotationCard(),
+        _filmPlaylistSection(),
         _ritualCard(
           period: SaturnOrbitRituals.weekendPeriod(DateTime.now()),
           title: 'Filme do fim de semana',

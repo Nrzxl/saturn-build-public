@@ -399,6 +399,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('EVERY STORY HAS ITS ORBIT'), findsOneWidget);
     expect(find.text('Descobrir histórias'), findsNothing);
+    // Day 18's anniversary banner can push the normal watchlist below
+    // the first viewport, without removing it from the app.
+    await tester.scrollUntilVisible(
+      find.text('Minha Watchlist'), 310,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 15,
+    );
     expect(find.text('Minha Watchlist'), findsOneWidget);
   });
 
@@ -698,6 +705,13 @@ void main() {
     expect(find.byTooltip('Sincronizar e verificar atualizações'), findsOneWidget);
     expect(find.byTooltip('Atualizar SATURN'), findsNothing);
     expect(find.text('Nossos streamings'), findsNothing);
+    // Day 18's anniversary banner can push the normal watchlist below
+    // the first viewport, without removing it from the app.
+    await tester.scrollUntilVisible(
+      find.text('Minha Watchlist'), 310,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 15,
+    );
     expect(find.text('Minha Watchlist'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Livros • Minha estante'), 350,
