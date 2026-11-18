@@ -5705,40 +5705,38 @@ class _SaturnHomeState extends State<SaturnHome>
   }
 
 
-  Future<String?> _playlistAskName({String existing = ''}) async {
-    final controller = TextEditingController(text: existing);
-    try {
-      return await showDialog<String>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-          title: Text(existing.isEmpty ? 'Criar playlist de filmes'
-              : 'Renomear playlist'),
-          content: TextField(
-            key: const Key('saturn-playlist-name'),
-            autofocus: true,
-            controller: controller,
-            maxLength: 64,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'Nome da playlist',
-              hintText: 'Ex.: Saga Marvel na nossa ordem',
-            ),
-            onSubmitted: (_) => Navigator.pop(dialog, controller.text),
+  Future<String?> _playlistAskName({String existing = ''}) {
+    // The dialog owns its text field until the route fade-out is finished.
+    var entered = existing;
+    return showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(existing.isEmpty ? 'Criar playlist de filmes'
+            : 'Renomear playlist'),
+        content: TextFormField(
+          key: const Key('saturn-playlist-name'),
+          autofocus: true,
+          initialValue: existing,
+          onChanged: (value) => entered = value,
+          maxLength: 64,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Nome da playlist',
+            hintText: 'Ex.: Saga Marvel na nossa ordem',
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialog),
-              child: const Text('Cancelar')),
-            FilledButton(
-              key: const Key('saturn-playlist-save-name'),
-              onPressed: () => Navigator.pop(dialog, controller.text),
-              child: const Text('Salvar'),
-            ),
-          ],
+          onFieldSubmitted: (value) => Navigator.pop(dialog, value),
         ),
-      );
-    } finally {
-      controller.dispose();
-    }
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog),
+            child: const Text('Cancelar')),
+          FilledButton(
+            key: const Key('saturn-playlist-save-name'),
+            onPressed: () => Navigator.pop(dialog, entered),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _createFilmPlaylist() async {
@@ -5816,20 +5814,19 @@ class _SaturnHomeState extends State<SaturnHome>
   /// the entire real movie catalog. Adding to a playlist never silently
   /// adds the film to either person's watchlist or their movie-of-week.
   Future<void> _addPlaylistFilm(String playlistId) async {
-    final controller = TextEditingController();
+    var queryText = '';
     var results = allWorks.where((w) => w.kind == 'Filme')
         .take(80).toList(growable: false);
     var busy = false;
     String? error;
-    try {
-      final chosen = await showModalBottomSheet<Work>(
+    final chosen = await showModalBottomSheet<Work>(
         context: context,
         isScrollControlled: true,
         backgroundColor: const Color(0xFF211A2A),
         builder: (sheet) => StatefulBuilder(
           builder: (sheet, redraw) {
             Future<void> search() async {
-              final query = controller.text.trim();
+              final query = queryText.trim();
               if (query.length < 2) {
                 redraw(() { error = 'Digite pelo menos 2 letras.'; });
                 return;
@@ -5883,7 +5880,7 @@ class _SaturnHomeState extends State<SaturnHome>
                     child: Row(children: [
                       Expanded(child: TextField(
                         key: const Key('saturn-playlist-search'),
-                        controller: controller,
+                        onChanged: (value) => queryText = value,
                         autofocus: false,
                         textInputAction: TextInputAction.search,
                         onSubmitted: (_) => search(),
@@ -5944,9 +5941,6 @@ class _SaturnHomeState extends State<SaturnHome>
             DateTime.now().millisecondsSinceEpoch);
       });
       await _save();
-    } finally {
-      controller.dispose();
-    }
   }
 
   Widget _filmPlaylistSection() {
