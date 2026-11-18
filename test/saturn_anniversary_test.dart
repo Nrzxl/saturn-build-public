@@ -22,7 +22,25 @@ void main() {
     expect(find.byKey(const Key('saturn-anniversary-home')), findsOneWidget);
     expect(find.byKey(const Key('saturn-anniversary-shared')), findsOneWidget);
     expect(find.text('Mais um capítulo na nossa órbita.'), findsOneWidget);
-    expect(find.text('Feliz dia 18, meu amor.'), findsOneWidget);
+    expect(find.text('Feliz aniversário, meu amor.'), findsOneWidget);
+    expect(find.text('ANIVERSÁRIO  ·  A NOSSA CONSTELAÇÃO'),
+        findsOneWidget);
+    expect(find.text('DIA 18  ·  A NOSSA CONSTELAÇÃO'),
+        findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  
+  testWidgets('Accessibility reduced motion remains static and settles',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: MediaQuery(
+      data: MediaQueryData(disableAnimations: true, reduceMotion: true),
+      child: Scaffold(body: Center(
+        child: SaturnAnniversaryBanner(compact: true),
+      )),
+    )));
+    await tester.pumpAndSettle();
+    expect(find.text('Feliz aniversário, meu amor.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
