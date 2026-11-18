@@ -19,6 +19,9 @@ void main() {
         SaturnAnniversaryBanner(compact: true),
       ]),
     )));
+    // The day-18 effect must finish; infinite tickers break the full app UI tests.
+    await tester.pumpAndSettle();
+    expect(tester.binding.hasScheduledFrame, isFalse);
     expect(find.byKey(const Key('saturn-anniversary-home')), findsOneWidget);
     expect(find.byKey(const Key('saturn-anniversary-shared')), findsOneWidget);
     expect(find.text('Mais um capítulo na nossa órbita.'), findsOneWidget);
