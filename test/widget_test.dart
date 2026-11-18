@@ -109,7 +109,11 @@ void main() {
     expect(find.byKey(const Key('saturn-series-next-choice')),
         findsOneWidget);
     final done = find.byKey(const Key('saturn-series-finish'));
-    await tester.ensureVisible(done);
+    // The relationship timeline makes this action fall below the fold.
+    // Scroll in the actual series scrollview before tapping.
+    await tester.scrollUntilVisible(done, 180,
+        scrollable: find.byType(Scrollable).first, maxScrolls: 20);
+    await tester.pumpAndSettle();
     await tester.tap(done);
     await tester.pumpAndSettle();
     final prefs = await SharedPreferences.getInstance();

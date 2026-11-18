@@ -8,6 +8,7 @@ class SaturnMetallicHalo extends StatefulWidget {
   const SaturnMetallicHalo({super.key, required this.color,
     this.partnerColor, this.intenseBronze = false,
     this.diamond = false, this.partnerDiamond = false,
+    this.anniversaryMemory = false,
     this.uniformInset = false, required this.child});
   final Color? color;
   /// Second partner's real metallic tier. Left half is mine, right is hers.
@@ -17,6 +18,10 @@ class SaturnMetallicHalo extends StatefulWidget {
   /// Brilliant icy-blue shimmer is reserved for personal 5-star favorites.
   final bool diamond;
   final bool partnerDiamond;
+  /// Day-18-only purple/deep-blue aura around a complete authored film memory.
+  /// This is a visual overlay; the existing bronze/silver/gold/diamond tier
+  /// and each partner's independent personal score remain unchanged.
+  final bool anniversaryMemory;
   /// Reserve the same 3.4px inset for every library card, even if it
   /// has no halo or its glowing tier changes after a personal review.
   final bool uniformInset;
@@ -96,7 +101,18 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
           widget.uniformInset ? 3.4 : intense ? 3.4 : 2.4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(17),
-          gradient: paired
+          gradient: widget.anniversaryMemory
+              ? LinearGradient(
+                  begin: moved ? Alignment.bottomRight : Alignment.topLeft,
+                  end: moved ? Alignment.topLeft : Alignment.bottomRight,
+                  stops: const [0, 0.24, 0.48, 0.73, 1],
+                  colors: const [
+                    Color(0xFF101E59), Color(0xFF5A2CBD),
+                    Color(0xFFC39AFF), Color(0xFF6038E0),
+                    Color(0xFF101B51),
+                  ],
+                )
+              : paired
               ? LinearGradient(
                   // Real split rim: left = profile 0, right = profile 1.
                   begin: moved ? Alignment.bottomLeft : Alignment.topLeft,
@@ -124,6 +140,12 @@ class _SaturnMetallicHaloState extends State<SaturnMetallicHalo> {
                   ],
                 ),
           boxShadow: [
+            if (widget.anniversaryMemory) ...const [
+              BoxShadow(color: Color(0xCF172D87), blurRadius: 57,
+                  spreadRadius: 8),
+              BoxShadow(color: Color(0xDB8446FE), blurRadius: 40,
+                  spreadRadius: 5),
+            ],
             BoxShadow(
               color: metal.withValues(alpha: diamond
                   ? (moved ? .94 : .71)

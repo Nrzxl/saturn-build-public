@@ -1,11 +1,133 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
+import 'saturn_review_tiers.dart';
+
 /// The SATURN couple's monthly anniversary, by the device's LOCAL calendar.
 /// Nothing is stored remotely and the celebration never changes ratings.
 class SaturnAnniversary {
   const SaturnAnniversary._();
+
+  /// Date of the couple's first official relationship anniversary.
+  static DateTime get startedAt => DateTime(2025, 1, 18);
   static bool isActive(DateTime localDate) => localDate.day == 18;
+
+  /// Completed calendar months, not approximate days / 30.
+  static int completedMonths(DateTime localDate) {
+    final wholeMonths = (localDate.year - 2025) * 12 +
+        localDate.month - 1 - (localDate.day < 18 ? 1 : 0);
+    return wholeMonths < 0 ? 0 : wholeMonths;
+  }
+
+  static String relationshipDuration(DateTime localDate) {
+    final months = completedMonths(localDate);
+    final years = months ~/ 12;
+    final remainder = months % 12;
+    final yearText = '$years ${years == 1 ? 'ano' : 'anos'}';
+    final monthText = '$remainder ${remainder == 1 ? 'mês' : 'meses'}';
+    if (years == 0) return monthText;
+    if (remainder == 0) return yearText;
+    return '$yearText e $monthText';
+  }
+
+  /// Personal, authored memories only. A TMDB synopsis and public rating
+  /// never qualify. A partner's status cannot complete the other's review.
+  static bool isMemoryFilm({
+    required DateTime localDate,
+    required String kind,
+    required Object? mine,
+    Object? partner,
+  }) {
+    if (!isActive(localDate) || kind != 'Filme') return false;
+    for (final row in [mine, partner]) {
+      if (row is! Map) continue;
+      final status = (row['status'] ?? '').toString().trim().toLowerCase();
+      final watched = status == 'concluído' ||
+          status == 'assistido' || status == 'visto';
+      if (watched &&
+          SaturnReviewClassification.stars(row) != null &&
+          SaturnReviewClassification.hasWrittenReview(row)) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+/// A permanent, read-only relationship timeline in the Nós Dois header.
+class SaturnRelationshipTime extends StatelessWidget {
+  const SaturnRelationshipTime({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = SaturnAnniversary.relationshipDuration(DateTime.now());
+    return Semantics(
+      label: '$duration juntos. Desde 18 de janeiro de 2025.',
+      child: Container(
+        key: const Key('saturn-relationship-time'),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: const Color(0xAA9C7DB2)),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF34264F), Color(0xFF202A49)],
+          ),
+        ),
+        child: Row(children: [
+          const Icon(Icons.auto_awesome_rounded,
+              color: Color(0xFFF1D6BC), size: 21),
+          const SizedBox(width: 11),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('NOSSO TEMPO JUNTOS', style: TextStyle(
+                color: Color(0xFFDCC2EE), fontSize: 10,
+                fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+              const SizedBox(height: 3),
+              Text('$duration juntos',
+                key: const Key('saturn-relationship-duration'),
+                maxLines: 2,
+                style: const TextStyle(
+                  color: Color(0xFFFFF5EC), fontFamily: 'serif',
+                  fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 3),
+              const Text('Desde 18 de janeiro de 2025',
+                style: TextStyle(color: Color(0xFFD6C2D9),
+                  fontSize: 11, height: 1.3)),
+            ],
+          )),
+        ]),
+      ),
+    );
+  }
+}
+
+/// A static glow for posters shown without a metallic rating frame.
+class SaturnAnniversaryAura extends StatelessWidget {
+  const SaturnAnniversaryAura({
+    super.key, required this.active, required this.child,
+  });
+  final bool active;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!active) return child;
+    return DecoratedBox(
+      key: const Key('saturn-anniversary-memory-aura'),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: const Color(0xFFAE80FF), width: 2),
+        boxShadow: const [
+          BoxShadow(color: Color(0xB48B4BFF),
+            blurRadius: 26, spreadRadius: 3),
+          BoxShadow(color: Color(0xBF132B83),
+            blurRadius: 38, spreadRadius: 6),
+        ],
+      ),
+      child: child,
+    );
+  }
 }
 
 /// A day-18-only celebration: one smooth cosmic entrance, then a still sky.
@@ -124,6 +246,15 @@ class _SaturnAnniversaryBannerState extends State<SaturnAnniversaryBanner>
                   style: TextStyle(color: Color(0xFFE5D8E5),
                     fontSize: 12, height: 1.5),
                 ),
+                const SizedBox(height: 12),
+                Text('${SaturnAnniversary.relationshipDuration(DateTime.now())} juntos',
+                  key: const Key('saturn-anniversary-elapsed'),
+                  maxLines: 2,
+                  style: const TextStyle(color: Color(0xFFF4D8B5),
+                    fontSize: 13, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                const Text('Desde 18 de janeiro de 2025',
+                  style: TextStyle(color: Color(0xFFE2CADA), fontSize: 10)),
               ],
             ),
           ),
