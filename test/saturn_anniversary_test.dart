@@ -69,17 +69,31 @@ void main() {
     final now = DateTime(2026, 11, 18);
     final watched = <String, dynamic>{
       'status': 'Concluído', 'rating': 8, 'notes': 'Nosso filme!',
+      'completedOn': '2026-11-18',
     };
     bool eligible(DateTime date, String kind, Object? mine,
         [Object? partner]) => SaturnAnniversary.isMemoryFilm(
           localDate: date, kind: kind, mine: mine, partner: partner);
     expect(eligible(now, 'Filme', watched), isTrue);
+    // Bug regression: older watched/rated/commented movies must NOT turn blue.
+    expect(eligible(now, 'Filme', {
+      'status': 'Concluído', 'rating': 8, 'notes': 'Comentário antigo',
+      'updatedAt': DateTime(2026, 11, 18).millisecondsSinceEpoch,
+    }), isFalse);
+    expect(eligible(now, 'Filme', {
+      'status': 'Concluído', 'rating': 9, 'notes': 'Outra data',
+      'completedOn': '2026-11-17',
+    }), isFalse);
+    expect(eligible(DateTime(2026, 12, 18), 'Filme', watched), isFalse);
+    expect(eligible(DateTime(2026, 11, 23), 'Filme', watched), isFalse);
     expect(eligible(now, 'Filme', null, watched), isTrue);
     expect(eligible(now, 'Filme', {
       'status': 'Assistido', 'rating': 0, 'notes': 'Não gostei!',
+      'completedOn': '2026-11-18',
     }), isTrue);
     expect(eligible(now, 'Filme', {
       'status': 'Visto', 'rating': 10, 'notes': 'Favorito',
+      'completedOn': '2026-11-18',
     }), isTrue);
     expect(eligible(DateTime(2026, 11, 17), 'Filme', watched), isFalse);
     expect(eligible(DateTime(2026, 11, 19), 'Filme', watched), isFalse);
@@ -145,6 +159,38 @@ void main() {
     expect(decorations.any((d) => (d.boxShadow?.length ?? 0) >= 3),
         isTrue);
     expect(tester.takeException(), isNull);
+  });
+
+  test('CompletedOn is only assigned when status really becomes watched', () {
+    final day18 = DateTime(2026, 11, 18);
+    final day19 = DateTime(2026, 11, 19);
+    expect(SaturnAnniversary.calendarDay(day18), '2026-11-18');
+    expect(SaturnAnniversary.completedOnAfter(
+      previous: {}, nextStatus: 'Concluído', localNow: day18,
+    ), '2026-11-18');
+    expect(SaturnAnniversary.completedOnAfter(
+      previous: {'status': 'Em andamento'}, nextStatus: 'Assistido',
+      localNow: day18,
+    ), '2026-11-18');
+    // Reviewing an old completed title is not a new "watched" event.
+    expect(SaturnAnniversary.completedOnAfter(
+      previous: {'status': 'Concluído', 'updatedAt': 123456789},
+      nextStatus: 'Concluído', localNow: day18,
+    ), isNull);
+    // Later edits preserve the ORIGINAL completion date.
+    expect(SaturnAnniversary.completedOnAfter(
+      previous: {'status': 'Concluído', 'completedOn': '2026-11-18'},
+      nextStatus: 'Concluído', localNow: day19,
+    ), '2026-11-18');
+    // Unwatching resets the date; marking watched again gets a new date.
+    expect(SaturnAnniversary.completedOnAfter(
+      previous: {'status': 'Concluído', 'completedOn': '2026-11-18'},
+      nextStatus: 'Em andamento', localNow: day19,
+    ), isNull);
+    expect(SaturnAnniversary.completedOnAfter(
+      previous: {'status': 'Em andamento', 'completedOn': null},
+      nextStatus: 'Concluído', localNow: day19,
+    ), '2026-11-19');
   });
 
 }

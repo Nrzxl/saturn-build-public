@@ -11,6 +11,28 @@ class SaturnAnniversary {
   /// Date of the couple's first official relationship anniversary.
   static DateTime get startedAt => DateTime(2025, 1, 18);
   static bool isActive(DateTime localDate) => localDate.day == 18;
+  /// Explicit local day of transition into watched status. Do not infer from
+  /// generic updatedAt, which also changes on edits to notes and ratings.
+  static String calendarDay(DateTime day) =>
+      '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+
+  static bool isWatchedStatus(Object? status) {
+    final value = (status ?? '').toString().trim().toLowerCase();
+    return value == 'concluído' || value == 'assistido' || value == 'visto';
+  }
+
+  static String? completedOnAfter({
+    required Object? previous,
+    required Object? nextStatus,
+    required DateTime localNow,
+  }) {
+    if (!isWatchedStatus(nextStatus)) return null;
+    final old = previous is Map ? previous : const <String, Object?>{};
+    if (!isWatchedStatus(old['status'])) return calendarDay(localNow);
+    final stored = old['completedOn'];
+    return stored is String && stored.length == 10 ? stored : null;
+  }
+
 
   /// Completed calendar months, not approximate days / 30.
   static int completedMonths(DateTime localDate) {
@@ -41,10 +63,8 @@ class SaturnAnniversary {
     if (!isActive(localDate) || kind != 'Filme') return false;
     for (final row in [mine, partner]) {
       if (row is! Map) continue;
-      final status = (row['status'] ?? '').toString().trim().toLowerCase();
-      final watched = status == 'concluído' ||
-          status == 'assistido' || status == 'visto';
-      if (watched &&
+      if (isWatchedStatus(row['status']) &&
+          row['completedOn'] == calendarDay(localDate) &&
           SaturnReviewClassification.stars(row) != null &&
           SaturnReviewClassification.hasWrittenReview(row)) {
         return true;

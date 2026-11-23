@@ -1982,7 +1982,12 @@ class _SaturnHomeState extends State<SaturnHome>
     final selectedMonthly = w.kind == 'Livro' &&
         SaturnOrbitRituals.workId(_ritualOps, monthlyKey) == w.id;
     final done = _isDone(w);
-    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final localNow = DateTime.now();
+    final stamp = localNow.millisecondsSinceEpoch;
+    final completedOn = SaturnAnniversary.completedOnAfter(
+      previous: old, nextStatus: done ? 'Em andamento' : 'Concluído',
+      localNow: localNow,
+    );
     setState(() {
       if (!savedWorks.containsKey(w.id)) savedWorks[w.id] = w;
       _archivedFromCollection.remove('${profile}:${w.id}');
@@ -1992,6 +1997,7 @@ class _SaturnHomeState extends State<SaturnHome>
       records['${profile}:${w.id}'] = {
         ...old,
         'status': done ? 'Em andamento' : 'Concluído',
+        'completedOn': completedOn,
         'updatedAt': stamp,
       };
       if (!done) {
@@ -2010,7 +2016,11 @@ class _SaturnHomeState extends State<SaturnHome>
 
   void update(Work w, Map<String, dynamic> value) {
     final old = entry(w);
-    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final localNow = DateTime.now();
+    final stamp = localNow.millisecondsSinceEpoch;
+    final completedOn = SaturnAnniversary.completedOnAfter(
+      previous: old, nextStatus: value['status'], localNow: localNow,
+    );
     final note = (value['notes'] ?? '').toString().trim();
     final rating = value['rating'];
     final reviewChanged = rating is num && note.isNotEmpty &&
@@ -2028,7 +2038,7 @@ class _SaturnHomeState extends State<SaturnHome>
         'present': false, 'updatedAt': stamp,
       };
       records['${profile}:${w.id}'] = {
-        ...value, 'updatedAt': stamp,
+        ...value, 'completedOn': completedOn, 'updatedAt': stamp,
       };
       if (value['status'] == 'Concluído') {
         currentWatchlist.remove(w.id);
@@ -3893,18 +3903,24 @@ class _SaturnHomeState extends State<SaturnHome>
   void _applyBulkIds(String action, Iterable<String> workIds) {
     final selected = workIds.toSet().toList(growable: false);
     if (selected.isEmpty) return;
-    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final localNow = DateTime.now();
+    final stamp = localNow.millisecondsSinceEpoch;
     setState(() {
       for (final id in selected) {
         if (!savedWorks.containsKey(id)) continue;
         final recordId = '$profile:$id';
         switch (action) {
           case 'watched':
+            final previous = records[recordId] is Map
+                ? Map<String, dynamic>.from(records[recordId] as Map)
+                : <String, dynamic>{};
             records[recordId] = {
-              ...(records[recordId] is Map
-                  ? Map<String, dynamic>.from(records[recordId] as Map)
-                  : <String, dynamic>{}),
+              ...previous,
               'status': 'Concluído',
+              'completedOn': SaturnAnniversary.completedOnAfter(
+                previous: previous, nextStatus: 'Concluído',
+                localNow: localNow,
+              ),
               'updatedAt': stamp,
             };
             currentWatchlist.remove(id);
