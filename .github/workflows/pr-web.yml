@@ -64,3 +64,11 @@ jobs:
           flutter test --reporter expanded
       - name: Compilar APK debug sem publicar uma release
         run: flutter build apk --debug
+
+      - name: Disponibilizar APK de teste para homologação
+        uses: actions/upload-artifact@v4
+        with:
+          name: saturn-android-qa-pr-${{ github.event.pull_request.number }}
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
