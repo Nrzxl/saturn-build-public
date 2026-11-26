@@ -13,7 +13,7 @@ class SaturnTechnicalMetadata {
         url = url ?? defaultUrl;
 
   static const defaultUrl =
-      'https://raw.githubusercontent.com/Nrzxl/saturn-downloads/main/catalog/v1/technical.json';
+      'https://nrzxl.github.io/saturn-build-public/catalog/v1/technical.json';
   static const _cacheKey = 'saturn_technical_v1';
   static const _updatedKey = 'saturn_technical_checked_at_v1';
   static const _refreshMs = 24 * 60 * 60 * 1000;
