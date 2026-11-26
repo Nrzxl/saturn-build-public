@@ -90,6 +90,10 @@ jobs:
           echo "$PUBLIC_BUILD_SHA" > build/web/saturn-build.txt
           touch build/web/.nojekyll
           test -f build/web/manifest.json
+          # The catalog must ship with the site: releases are private now.
+          for part in movies series dramas anime technical backdrops-fallback manifest; do
+            test -s "build/web/catalog/v1/${part}.json"
+          done
           test -f build/web/apple-touch-icon.png
           test -f build/web/main.dart.js
           test -f build/web/flutter_bootstrap.js
