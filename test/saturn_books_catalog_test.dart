@@ -330,7 +330,7 @@ void main() {
     var googleCalls = 0;
     final catalog = CatalogClient(
       client: MockClient((request) async {
-        if (request.url.path.startsWith('/Nrzxl/saturn-downloads/') &&
+        if (request.url.path.startsWith('/saturn-build-public/catalog/v1/') &&
             request.url.path.endsWith('.json')) {
           final movie = request.url.path.endsWith('/movies.json');
           return http.Response(jsonEncode({
