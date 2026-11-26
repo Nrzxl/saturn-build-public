@@ -1,4 +1,4 @@
-name: SATURN · APK público assinado
+name: SATURN · APK público legado (desativado)
 
 # Publicação explícita: manual ou commit principal com [SATURN-RELEASE].
 # Pushes normais nunca publicam APKs. Reusa a chave SATURN 0.6.0.
@@ -23,7 +23,8 @@ concurrency:
 jobs:
   signed-android:
     name: Testar, assinar e publicar SATURN.apk
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[SATURN-RELEASE]')))
+    # Production signing and publishing now belong exclusively to the private runner.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
