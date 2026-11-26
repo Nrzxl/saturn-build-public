@@ -35,8 +35,8 @@ void main() {
   test('TMDB Brazil: filtra assinatura verificada, pagina sem duplicar',
       () async {
     final client = MockClient((request) async {
-      expect(request.url.host, 'raw.githubusercontent.com');
-      expect(request.url.path, contains('saturn-downloads/main/catalog/v1'));
+      expect(request.url.host, 'nrzxl.github.io');
+      expect(request.url.path, contains('/saturn-build-public/catalog/v1'));
       if (request.url.path.endsWith('/movies.json')) {
         return http.Response(jsonEncode({
           'schema': 1,
@@ -314,15 +314,15 @@ void main() {
     expect(a.first['runtimeMinutes'], 121);
   });
 
-  test('When raw GitHub fails, real TMDB ratings use the public CDN mirror',
+  test('When Pages fails, real TMDB ratings use the public raw mirror',
       () async {
     final calls = <String>[];
     final client = MockClient((request) async {
       calls.add(request.url.host);
-      if (request.url.host == 'raw.githubusercontent.com') {
+      if (request.url.host == 'nrzxl.github.io') {
         return http.Response('Temporarily unavailable', 503);
       }
-      if (request.url.host == 'cdn.jsdelivr.net') {
+      if (request.url.host == 'raw.githubusercontent.com') {
         return http.Response(jsonEncode({
           'schema': 1, 'country': 'BR',
           'results': [{
@@ -350,9 +350,9 @@ void main() {
     expect(roundtrip.runtimeMinutes, 109);
     await catalog.discover(CatalogFilter.movies, genreId: 35);
     expect(calls.where((host) =>
-        host == 'raw.githubusercontent.com').length, 1);
+        host == 'nrzxl.github.io').length, 1);
     expect(calls.where((host) =>
-        host == 'cdn.jsdelivr.net').length, 1);
+        host == 'raw.githubusercontent.com').length, 1);
   });
 
   test('Real TVmaze genres survive TMDB outages without invented results',
