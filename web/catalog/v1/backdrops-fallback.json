@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "country": "BR",
+  "source": "TMDB backdrop paths, exact catalog IDs",
+  "updatedAt": "2026-11-10",
+  "overrides": {
+    "tmdb:movie:24": "https://image.tmdb.org/t/p/w1280/iffzIhuLAO38Po6sh1s6ZEVwlNL.jpg",
+    "tmdb:movie:22": "https://image.tmdb.org/t/p/w1280/wW7Wt5bXzPy4VOEE4LTIUDyDgBo.jpg"
+  }
+}

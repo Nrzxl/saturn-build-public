@@ -15,9 +15,19 @@ Os artefatos de testes aparecem nas execuções, por tempo limitado. Nenhum dess
 
 ## O que não está neste repositório
 
-Não contém histórico Git privado, chaves de assinatura Android, chaves Apple, secrets TMDB/OMDb, credenciais Supabase, banco de dados pessoal, catálogos exportados ou workflows de publicação de produção.
+Não contém histórico Git privado, chaves de assinatura Android, chaves Apple, secrets TMDB/OMDb, credenciais Supabase, banco de dados pessoal ou workflows de publicação de produção.
 
-O catálogo de títulos é obtido de serviços externos pelos caminhos públicos do aplicativo. A sincronização privada de dados do casal permanece desativada sem um projeto Supabase dedicado.
+O catálogo público em `web/catalog/v1/` contém somente metadados TMDB/JustWatch de obras, sem avaliações, contas ou listas do casal. As notas e coleções pessoais continuam sob autenticação/sincronização privada ou no dispositivo.
+
+## Catálogo de filmes após privatizar o repositório de downloads
+
+O repositório `saturn-downloads` é **privado** e não pode ser usado para fornecer arquivos JSON diretamente a navegadores anônimos. Para manter Explorar, recomendações e notas TMDB funcionando, os **dados públicos de obras** ficam em `web/catalog/v1/` e são copiados para `build/web/catalog/v1/` no deploy GitHub Pages.
+
+- Fonte da Web/PWA e Android: `https://nrzxl.github.io/saturn-build-public/catalog/v1/`.
+- Espelho: `https://raw.githubusercontent.com/Nrzxl/saturn-build-public/main/web/catalog/v1/`.
+- Arquivos: `movies.json`, `series.json`, `dramas.json`, `anime.json`, `technical.json`, `backdrops-fallback.json` e `manifest.json`.
+- Os snapshots são públicos e datados: `generatedAt` no manifesto informa a última geração; **não são consultas TMDB ao vivo**. Futuras atualizações do catálogo exigem sincronizar **somente** os dados públicos, nunca a pasta de APKs, credenciais ou avaliações.
+- O workflow Pages verifica a presença dos sete arquivos antes de publicar; `scripts/test_catalog_publication.py` valida formato, contagens e separação da área privada.
 
 ## Transparência sobre visibilidade
 

@@ -2,15 +2,16 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-/// Read-only TMDB snapshots published by SATURN's private CI.
+/// Public-only TMDB snapshots, published as static SATURN Pages assets.
+/// The downloads and release repository remains private.
 /// The TMDB API secret never travels to mobile clients.
 /// Each response is an attributed snapshot, not live availability.
 class TmdbCatalogData {
   static const String baseUrl =
-      'https://raw.githubusercontent.com/Nrzxl/saturn-downloads/main/catalog/v1';
+      'https://nrzxl.github.io/saturn-build-public/catalog/v1';
   static const groups = ['movies', 'series', 'dramas', 'anime'];
   static const mirrorUrl =
-      'https://cdn.jsdelivr.net/gh/Nrzxl/saturn-downloads@main/catalog/v1';
+      'https://raw.githubusercontent.com/Nrzxl/saturn-build-public/main/web/catalog/v1';
 
   final http.Client client;
   final String base;
